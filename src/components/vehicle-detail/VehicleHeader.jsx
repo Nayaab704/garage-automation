@@ -78,7 +78,7 @@ function DetailItem({ label, value }) {
   );
 }
 
-function VehicleHeader({ onEdit, vehicle }) {
+function VehicleHeader({ isSold, onEdit, onSell, vehicle }) {
   return (
     <section className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -112,13 +112,25 @@ function VehicleHeader({ onEdit, vehicle }) {
             </span>
           </div>
 
-          <button
-            className="w-fit rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
-            onClick={onEdit}
-            type="button"
-          >
-            Edit Vehicle
-          </button>
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <button
+              className="w-fit rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
+              onClick={onEdit}
+              type="button"
+            >
+              Edit Vehicle
+            </button>
+
+            {!isSold && (
+              <button
+                className="w-fit rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
+                onClick={onSell}
+                type="button"
+              >
+                Sell Vehicle
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
