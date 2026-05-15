@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import InvestmentSummary from "../components/vehicle-detail/InvestmentSummary";
+import LaborLogsSection from "../components/vehicle-detail/LaborLogsSection";
 import PartRequestsSection from "../components/vehicle-detail/PartRequestsSection";
 import PurchaseOrdersSection from "../components/vehicle-detail/PurchaseOrdersSection";
 import RepairJobsSection from "../components/vehicle-detail/RepairJobsSection";
@@ -29,12 +30,16 @@ async function fetchVehicleDetails(vehicleId) {
     vehicleResponse,
     repairJobsResponse,
     partRequestsResponse,
+    laborLogsResponse,
+    profilesResponse,
     purchaseOrdersResponse,
     vendorsResponse,
   ] = await Promise.all([
     supabase.from("vehicles").select("*").eq("id", vehicleId).single(),
     supabase.from("repair_jobs").select("*").eq("vehicle_id", vehicleId),
     supabase.from("part_requests").select("*").eq("vehicle_id", vehicleId),
+    supabase.from("labor_logs").select("*").eq("vehicle_id", vehicleId),
+    supabase.from("profiles").select("*"),
     supabase.from("purchase_orders").select("*").eq("vehicle_id", vehicleId),
     supabase.from("vendors").select("*"),
   ]);
@@ -57,7 +62,9 @@ async function fetchVehicleDetails(vehicleId) {
 
   return {
     investmentSummaryResponse,
+    laborLogsResponse,
     partRequestsResponse,
+    profilesResponse,
     purchaseOrderItemsResponse,
     purchaseOrdersResponse,
     repairJobsResponse,
@@ -71,6 +78,8 @@ function findFirstError(responses) {
     responses.vehicleResponse.error ??
     responses.repairJobsResponse.error ??
     responses.partRequestsResponse.error ??
+    responses.laborLogsResponse.error ??
+    responses.profilesResponse.error ??
     responses.purchaseOrdersResponse.error ??
     responses.purchaseOrderItemsResponse.error ??
     responses.vendorsResponse.error ??
@@ -86,6 +95,8 @@ function applyVehicleDetails(responses, setters) {
     setters.setVehicle(null);
     setters.setRepairJobs([]);
     setters.setPartRequests([]);
+    setters.setLaborLogs([]);
+    setters.setProfiles([]);
     setters.setPurchaseOrders([]);
     setters.setPurchaseOrderItems([]);
     setters.setVendors([]);
@@ -96,6 +107,8 @@ function applyVehicleDetails(responses, setters) {
   setters.setVehicle(responses.vehicleResponse.data);
   setters.setRepairJobs(responses.repairJobsResponse.data ?? []);
   setters.setPartRequests(responses.partRequestsResponse.data ?? []);
+  setters.setLaborLogs(responses.laborLogsResponse.data ?? []);
+  setters.setProfiles(responses.profilesResponse.data ?? []);
   setters.setPurchaseOrders(responses.purchaseOrdersResponse.data ?? []);
   setters.setPurchaseOrderItems(responses.purchaseOrderItemsResponse.data ?? []);
   setters.setVendors(responses.vendorsResponse.data ?? []);
@@ -106,6 +119,8 @@ function VehicleDetailPage({ vehicleId, onBack }) {
   const [vehicle, setVehicle] = useState(null);
   const [repairJobs, setRepairJobs] = useState([]);
   const [partRequests, setPartRequests] = useState([]);
+  const [laborLogs, setLaborLogs] = useState([]);
+  const [profiles, setProfiles] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [purchaseOrderItems, setPurchaseOrderItems] = useState([]);
   const [vendors, setVendors] = useState([]);
@@ -137,7 +152,9 @@ function VehicleDetailPage({ vehicleId, onBack }) {
         applyVehicleDetails(responses, {
           setErrorMessage,
           setInvestmentSummary,
+          setLaborLogs,
           setPartRequests,
+          setProfiles,
           setPurchaseOrderItems,
           setPurchaseOrders,
           setRepairJobs,
@@ -150,6 +167,8 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           setVehicle(null);
           setRepairJobs([]);
           setPartRequests([]);
+          setLaborLogs([]);
+          setProfiles([]);
           setPurchaseOrders([]);
           setPurchaseOrderItems([]);
           setVendors([]);
@@ -241,6 +260,14 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           <RepairJobsSection
             onRepairJobAdded={refreshVehicleDetails}
             onRepairJobStatusUpdated={handleRepairJobStatusUpdated}
+            repairJobs={repairJobs}
+            vehicleId={vehicleId}
+          />
+
+          <LaborLogsSection
+            laborLogs={laborLogs}
+            onLaborLogAdded={refreshVehicleDetails}
+            profiles={profiles}
             repairJobs={repairJobs}
             vehicleId={vehicleId}
           />
