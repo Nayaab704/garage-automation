@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import InvestmentSummary from "../components/vehicle-detail/InvestmentSummary";
 import PartRequestsSection from "../components/vehicle-detail/PartRequestsSection";
+import PurchaseOrdersSection from "../components/vehicle-detail/PurchaseOrdersSection";
 import RepairJobsSection from "../components/vehicle-detail/RepairJobsSection";
 import VehicleHeader from "../components/vehicle-detail/VehicleHeader";
 import { supabase } from "../lib/supabaseClient";
@@ -24,12 +25,31 @@ async function fetchInvestmentSummary(vehicleId, stockNumber) {
 }
 
 async function fetchVehicleDetails(vehicleId) {
-  const [vehicleResponse, repairJobsResponse, partRequestsResponse] =
-    await Promise.all([
-      supabase.from("vehicles").select("*").eq("id", vehicleId).single(),
-      supabase.from("repair_jobs").select("*").eq("vehicle_id", vehicleId),
-      supabase.from("part_requests").select("*").eq("vehicle_id", vehicleId),
-    ]);
+  const [
+    vehicleResponse,
+    repairJobsResponse,
+    partRequestsResponse,
+    purchaseOrdersResponse,
+    vendorsResponse,
+  ] = await Promise.all([
+    supabase.from("vehicles").select("*").eq("id", vehicleId).single(),
+    supabase.from("repair_jobs").select("*").eq("vehicle_id", vehicleId),
+    supabase.from("part_requests").select("*").eq("vehicle_id", vehicleId),
+    supabase.from("purchase_orders").select("*").eq("vehicle_id", vehicleId),
+    supabase.from("vendors").select("*"),
+  ]);
+
+  const purchaseOrderIds = (purchaseOrdersResponse.data ?? [])
+    .map((purchaseOrder) => purchaseOrder.id)
+    .filter(Boolean);
+
+  const purchaseOrderItemsResponse =
+    purchaseOrdersResponse.error || purchaseOrderIds.length === 0
+      ? { data: [], error: null }
+      : await supabase
+          .from("purchase_order_items")
+          .select("*")
+          .in("purchase_order_id", purchaseOrderIds);
 
   const investmentSummaryResponse = vehicleResponse.error
     ? { data: null, error: null }
@@ -38,7 +58,10 @@ async function fetchVehicleDetails(vehicleId) {
   return {
     investmentSummaryResponse,
     partRequestsResponse,
+    purchaseOrderItemsResponse,
+    purchaseOrdersResponse,
     repairJobsResponse,
+    vendorsResponse,
     vehicleResponse,
   };
 }
@@ -48,6 +71,9 @@ function findFirstError(responses) {
     responses.vehicleResponse.error ??
     responses.repairJobsResponse.error ??
     responses.partRequestsResponse.error ??
+    responses.purchaseOrdersResponse.error ??
+    responses.purchaseOrderItemsResponse.error ??
+    responses.vendorsResponse.error ??
     responses.investmentSummaryResponse.error
   );
 }
@@ -60,6 +86,9 @@ function applyVehicleDetails(responses, setters) {
     setters.setVehicle(null);
     setters.setRepairJobs([]);
     setters.setPartRequests([]);
+    setters.setPurchaseOrders([]);
+    setters.setPurchaseOrderItems([]);
+    setters.setVendors([]);
     setters.setInvestmentSummary(null);
     return;
   }
@@ -67,6 +96,9 @@ function applyVehicleDetails(responses, setters) {
   setters.setVehicle(responses.vehicleResponse.data);
   setters.setRepairJobs(responses.repairJobsResponse.data ?? []);
   setters.setPartRequests(responses.partRequestsResponse.data ?? []);
+  setters.setPurchaseOrders(responses.purchaseOrdersResponse.data ?? []);
+  setters.setPurchaseOrderItems(responses.purchaseOrderItemsResponse.data ?? []);
+  setters.setVendors(responses.vendorsResponse.data ?? []);
   setters.setInvestmentSummary(responses.investmentSummaryResponse.data);
 }
 
@@ -74,6 +106,9 @@ function VehicleDetailPage({ vehicleId, onBack }) {
   const [vehicle, setVehicle] = useState(null);
   const [repairJobs, setRepairJobs] = useState([]);
   const [partRequests, setPartRequests] = useState([]);
+  const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [purchaseOrderItems, setPurchaseOrderItems] = useState([]);
+  const [vendors, setVendors] = useState([]);
   const [investmentSummary, setInvestmentSummary] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -103,7 +138,10 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           setErrorMessage,
           setInvestmentSummary,
           setPartRequests,
+          setPurchaseOrderItems,
+          setPurchaseOrders,
           setRepairJobs,
+          setVendors,
           setVehicle,
         });
       } catch (error) {
@@ -112,6 +150,9 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           setVehicle(null);
           setRepairJobs([]);
           setPartRequests([]);
+          setPurchaseOrders([]);
+          setPurchaseOrderItems([]);
+          setVendors([]);
           setInvestmentSummary(null);
         }
       } finally {
@@ -210,6 +251,15 @@ function VehicleDetailPage({ vehicleId, onBack }) {
             partRequests={partRequests}
             repairJobs={repairJobs}
             vehicleId={vehicleId}
+          />
+
+          <PurchaseOrdersSection
+            onPurchaseOrderCreated={refreshVehicleDetails}
+            partRequests={partRequests}
+            purchaseOrderItems={purchaseOrderItems}
+            purchaseOrders={purchaseOrders}
+            vehicleId={vehicleId}
+            vendors={vendors}
           />
         </>
       )}
