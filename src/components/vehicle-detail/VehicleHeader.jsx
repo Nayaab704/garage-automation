@@ -78,7 +78,7 @@ function DetailItem({ label, value }) {
   );
 }
 
-function VehicleHeader({ vehicle }) {
+function VehicleHeader({ onEdit, vehicle }) {
   return (
     <section className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -96,19 +96,29 @@ function VehicleHeader({ vehicle }) {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2 sm:justify-end">
-          {vehicle.color && (
-            <span className="w-fit rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-200">
-              {vehicle.color}
+        <div className="flex flex-col gap-3 sm:items-end">
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            {vehicle.color && (
+              <span className="w-fit rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-200">
+                {vehicle.color}
+              </span>
+            )}
+            <span
+              className={`w-fit rounded-full px-3 py-1 text-sm font-medium ring-1 ring-inset ${titleStatusClassName(
+                vehicle.title_status
+              )}`}
+            >
+              {formatTitleStatus(vehicle.title_status)}
             </span>
-          )}
-          <span
-            className={`w-fit rounded-full px-3 py-1 text-sm font-medium ring-1 ring-inset ${titleStatusClassName(
-              vehicle.title_status
-            )}`}
+          </div>
+
+          <button
+            className="w-fit rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
+            onClick={onEdit}
+            type="button"
           >
-            {formatTitleStatus(vehicle.title_status)}
-          </span>
+            Edit Vehicle
+          </button>
         </div>
       </div>
 

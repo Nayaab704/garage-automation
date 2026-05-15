@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import EditVehicleForm from "../components/EditVehicleForm";
 import ExtraCostsSection from "../components/vehicle-detail/ExtraCostsSection";
 import InvestmentSummary from "../components/vehicle-detail/InvestmentSummary";
 import LaborLogsSection from "../components/vehicle-detail/LaborLogsSection";
@@ -135,6 +136,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
   const [investmentSummary, setInvestmentSummary] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isEditFormOpen, setIsEditFormOpen] = useState(false);
   const [refreshCount, setRefreshCount] = useState(0);
 
   useEffect(() => {
@@ -260,7 +262,10 @@ function VehicleDetailPage({ vehicleId, onBack }) {
 
       {!isLoading && !errorMessage && vehicle && (
         <>
-          <VehicleHeader vehicle={vehicle} />
+          <VehicleHeader
+            onEdit={() => setIsEditFormOpen(true)}
+            vehicle={vehicle}
+          />
 
           <InvestmentSummary
             investmentSummary={investmentSummary}
@@ -304,6 +309,14 @@ function VehicleDetailPage({ vehicleId, onBack }) {
             vehicleId={vehicleId}
             vendors={vendors}
           />
+
+          {isEditFormOpen && (
+            <EditVehicleForm
+              onClose={() => setIsEditFormOpen(false)}
+              onVehicleUpdated={refreshVehicleDetails}
+              vehicle={vehicle}
+            />
+          )}
         </>
       )}
     </div>
