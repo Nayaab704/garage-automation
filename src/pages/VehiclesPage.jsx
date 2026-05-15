@@ -3,7 +3,7 @@ import AddVehicleForm from "../components/AddVehicleForm";
 import { supabase } from "../lib/supabaseClient";
 
 const vehicleColumns =
-  "stock_number, vin, year, make, model, trim, mileage, color, purchase_price, target_sale_price, notes";
+  "id, stock_number, vin, year, make, model, trim, mileage, color, purchase_price, target_sale_price, notes";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -46,7 +46,7 @@ function formatNumber(value) {
   return numberFormatter.format(numberValue);
 }
 
-function VehiclesPage() {
+function VehiclesPage({ onSelectVehicle }) {
   const [vehicles, setVehicles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -215,6 +215,15 @@ function VehiclesPage() {
                     </p>
                   </div>
                 )}
+
+                <button
+                  className="mt-5 w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!vehicle.id}
+                  onClick={() => onSelectVehicle(vehicle.id)}
+                  type="button"
+                >
+                  View Details
+                </button>
               </article>
             ))}
           </div>

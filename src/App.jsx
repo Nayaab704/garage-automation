@@ -1,6 +1,7 @@
 import { useState } from "react";
 import AppLayout from "./layouts/AppLayout";
 import Dashboard from "./pages/Dashboard";
+import VehicleDetailPage from "./pages/VehicleDetailPage";
 import VehiclesPage from "./pages/VehiclesPage";
 
 const pageDetails = {
@@ -32,6 +33,10 @@ const pageDetails = {
     title: "Settings",
     description: "Workspace preferences and system settings will live here.",
   },
+  vehicleDetail: {
+    title: "Vehicle Detail",
+    description: "Review vehicle information, repairs, parts, and investment totals.",
+  },
 };
 
 function PlaceholderPage({ title }) {
@@ -52,7 +57,24 @@ function PlaceholderPage({ title }) {
 
 function App() {
   const [activePage, setActivePage] = useState("Vehicles");
+  const [selectedVehicleId, setSelectedVehicleId] = useState(null);
   const currentPage = pageDetails[activePage];
+  const navigationPage = activePage === "vehicleDetail" ? "Vehicles" : activePage;
+
+  function handlePageChange(pageName) {
+    setSelectedVehicleId(null);
+    setActivePage(pageName);
+  }
+
+  function handleSelectVehicle(vehicleId) {
+    setSelectedVehicleId(vehicleId);
+    setActivePage("vehicleDetail");
+  }
+
+  function handleBackToVehicles() {
+    setSelectedVehicleId(null);
+    setActivePage("Vehicles");
+  }
 
   function renderActivePage() {
     if (activePage === "Dashboard") {
@@ -60,7 +82,16 @@ function App() {
     }
 
     if (activePage === "Vehicles") {
-      return <VehiclesPage />;
+      return <VehiclesPage onSelectVehicle={handleSelectVehicle} />;
+    }
+
+    if (activePage === "vehicleDetail") {
+      return (
+        <VehicleDetailPage
+          onBack={handleBackToVehicles}
+          vehicleId={selectedVehicleId}
+        />
+      );
     }
 
     return <PlaceholderPage title={activePage} />;
@@ -68,9 +99,9 @@ function App() {
 
   return (
     <AppLayout
-      activePage={activePage}
+      activePage={navigationPage}
       description={currentPage.description}
-      onPageChange={setActivePage}
+      onPageChange={handlePageChange}
       title={currentPage.title}
     >
       {renderActivePage()}
