@@ -1,6 +1,8 @@
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 });
 
 function formatCurrency(value) {
@@ -15,6 +17,34 @@ function formatCurrency(value) {
   }
 
   return currencyFormatter.format(numberValue);
+}
+
+function formatTitleStatus(status) {
+  const labels = {
+    clean: "Clean Title",
+    salvage: "Salvage",
+    rebuilt: "Rebuilt",
+    flood: "Flood",
+    unknown: "Unknown",
+  };
+
+  return labels[status] ?? "Unknown";
+}
+
+function titleStatusClassName(status) {
+  if (status === "clean") {
+    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  }
+
+  if (status === "salvage" || status === "flood") {
+    return "bg-red-50 text-red-700 ring-red-200";
+  }
+
+  if (status === "rebuilt") {
+    return "bg-blue-50 text-blue-700 ring-blue-200";
+  }
+
+  return "bg-slate-100 text-slate-700 ring-slate-200";
 }
 
 function VehicleCard({ vehicle }) {
@@ -34,9 +64,20 @@ function VehicleCard({ vehicle }) {
           </h2>
         </div>
 
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-          {vehicle.make}
-        </span>
+        <div className="flex flex-wrap justify-end gap-2">
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
+            {vehicle.make}
+          </span>
+          {vehicle.title_status && (
+            <span
+              className={`rounded-full px-3 py-1 text-sm font-medium ring-1 ring-inset ${titleStatusClassName(
+                vehicle.title_status
+              )}`}
+            >
+              {formatTitleStatus(vehicle.title_status)}
+            </span>
+          )}
+        </div>
       </div>
 
       <p className="mt-4 text-lg font-semibold text-slate-800">

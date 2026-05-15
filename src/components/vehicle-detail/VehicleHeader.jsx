@@ -1,6 +1,8 @@
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 });
 
 const numberFormatter = new Intl.NumberFormat("en-US");
@@ -39,6 +41,34 @@ function formatNumber(value) {
   return numberFormatter.format(numberValue);
 }
 
+function formatTitleStatus(status) {
+  const labels = {
+    clean: "Clean Title",
+    salvage: "Salvage",
+    rebuilt: "Rebuilt",
+    flood: "Flood",
+    unknown: "Unknown",
+  };
+
+  return labels[status] ?? "Unknown";
+}
+
+function titleStatusClassName(status) {
+  if (status === "clean") {
+    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  }
+
+  if (status === "salvage" || status === "flood") {
+    return "bg-red-50 text-red-700 ring-red-200";
+  }
+
+  if (status === "rebuilt") {
+    return "bg-blue-50 text-blue-700 ring-blue-200";
+  }
+
+  return "bg-zinc-100 text-zinc-700 ring-zinc-200";
+}
+
 function DetailItem({ label, value }) {
   return (
     <div>
@@ -66,9 +96,20 @@ function VehicleHeader({ vehicle }) {
           </p>
         </div>
 
-        <span className="w-fit rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
-          {displayValue(vehicle.color)}
-        </span>
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          {vehicle.color && (
+            <span className="w-fit rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-200">
+              {vehicle.color}
+            </span>
+          )}
+          <span
+            className={`w-fit rounded-full px-3 py-1 text-sm font-medium ring-1 ring-inset ${titleStatusClassName(
+              vehicle.title_status
+            )}`}
+          >
+            {formatTitleStatus(vehicle.title_status)}
+          </span>
+        </div>
       </div>
 
       <dl className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

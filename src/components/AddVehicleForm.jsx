@@ -10,6 +10,7 @@ const emptyForm = {
   trim: "",
   mileage: "",
   color: "",
+  title_status: "unknown",
   purchase_price: "",
   target_sale_price: "",
   notes: "",
@@ -41,6 +42,14 @@ const numberFields = [
   },
 ];
 
+const titleStatusOptions = [
+  { value: "clean", label: "Clean Title" },
+  { value: "salvage", label: "Salvage" },
+  { value: "rebuilt", label: "Rebuilt" },
+  { value: "flood", label: "Flood" },
+  { value: "unknown", label: "Unknown" },
+];
+
 function emptyToNull(value) {
   const trimmedValue = value.trim();
   return trimmedValue === "" ? null : trimmedValue;
@@ -55,6 +64,15 @@ function numberOrNull(value) {
   return Number.isFinite(numberValue) ? numberValue : null;
 }
 
+function decimalOrNull(value) {
+  if (value === "") {
+    return null;
+  }
+
+  const numberValue = parseFloat(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
 function buildVehiclePayload(formData) {
   return {
     stock_number: emptyToNull(formData.stock_number),
@@ -65,8 +83,9 @@ function buildVehiclePayload(formData) {
     trim: emptyToNull(formData.trim),
     mileage: numberOrNull(formData.mileage),
     color: emptyToNull(formData.color),
-    purchase_price: numberOrNull(formData.purchase_price),
-    target_sale_price: numberOrNull(formData.target_sale_price),
+    title_status: formData.title_status,
+    purchase_price: decimalOrNull(formData.purchase_price),
+    target_sale_price: decimalOrNull(formData.target_sale_price),
     notes: emptyToNull(formData.notes),
   };
 }
@@ -167,6 +186,25 @@ function AddVehicleForm({ onVehicleAdded }) {
             </label>
           ))}
         </div>
+
+        <label className="block" htmlFor="title_status">
+          <span className="text-sm font-medium text-slate-700">
+            Title Status
+          </span>
+          <select
+            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+            id="title_status"
+            name="title_status"
+            onChange={handleChange}
+            value={formData.title_status}
+          >
+            {titleStatusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <label className="block" htmlFor="notes">
           <span className="text-sm font-medium text-slate-700">Notes</span>
