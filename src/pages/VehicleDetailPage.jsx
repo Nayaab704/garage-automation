@@ -9,6 +9,7 @@ import RepairJobsSection from "../components/vehicle-detail/RepairJobsSection";
 import SaleWarrantySection from "../components/vehicle-detail/SaleWarrantySection";
 import SellVehicleForm from "../components/vehicle-detail/SellVehicleForm";
 import VehicleHeader from "../components/vehicle-detail/VehicleHeader";
+import VehiclePhotosSection from "../components/vehicle-detail/VehiclePhotosSection";
 import { supabase } from "../lib/supabaseClient";
 
 async function fetchInvestmentSummary(vehicleId, stockNumber) {
@@ -37,6 +38,7 @@ async function fetchVehicleDetails(vehicleId) {
     laborLogsResponse,
     profilesResponse,
     costEntriesResponse,
+    vehiclePhotosResponse,
     purchaseOrdersResponse,
     vendorsResponse,
     salesResponse,
@@ -47,6 +49,11 @@ async function fetchVehicleDetails(vehicleId) {
     supabase.from("labor_logs").select("*").eq("vehicle_id", vehicleId),
     supabase.from("profiles").select("*"),
     supabase.from("cost_entries").select("*").eq("vehicle_id", vehicleId),
+    supabase
+      .from("vehicle_photos")
+      .select("*")
+      .eq("vehicle_id", vehicleId)
+      .order("created_at", { ascending: false }),
     supabase.from("purchase_orders").select("*").eq("vehicle_id", vehicleId),
     supabase.from("vendors").select("*"),
     supabase.from("sales").select("*").eq("vehicle_id", vehicleId),
@@ -86,6 +93,7 @@ async function fetchVehicleDetails(vehicleId) {
     laborLogsResponse,
     partRequestsResponse,
     profilesResponse,
+    vehiclePhotosResponse,
     purchaseOrderItemsResponse,
     purchaseOrdersResponse,
     repairJobsResponse,
@@ -104,6 +112,7 @@ function findFirstError(responses) {
     responses.laborLogsResponse.error ??
     responses.profilesResponse.error ??
     responses.costEntriesResponse.error ??
+    responses.vehiclePhotosResponse.error ??
     responses.purchaseOrdersResponse.error ??
     responses.purchaseOrderItemsResponse.error ??
     responses.vendorsResponse.error ??
@@ -124,6 +133,7 @@ function applyVehicleDetails(responses, setters) {
     setters.setLaborLogs([]);
     setters.setProfiles([]);
     setters.setCostEntries([]);
+    setters.setVehiclePhotos([]);
     setters.setPurchaseOrders([]);
     setters.setPurchaseOrderItems([]);
     setters.setVendors([]);
@@ -139,6 +149,7 @@ function applyVehicleDetails(responses, setters) {
   setters.setLaborLogs(responses.laborLogsResponse.data ?? []);
   setters.setProfiles(responses.profilesResponse.data ?? []);
   setters.setCostEntries(responses.costEntriesResponse.data ?? []);
+  setters.setVehiclePhotos(responses.vehiclePhotosResponse.data ?? []);
   setters.setPurchaseOrders(responses.purchaseOrdersResponse.data ?? []);
   setters.setPurchaseOrderItems(responses.purchaseOrderItemsResponse.data ?? []);
   setters.setVendors(responses.vendorsResponse.data ?? []);
@@ -154,6 +165,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
   const [laborLogs, setLaborLogs] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [costEntries, setCostEntries] = useState([]);
+  const [vehiclePhotos, setVehiclePhotos] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [purchaseOrderItems, setPurchaseOrderItems] = useState([]);
   const [vendors, setVendors] = useState([]);
@@ -196,6 +208,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           setLaborLogs,
           setPartRequests,
           setProfiles,
+          setVehiclePhotos,
           setPurchaseOrderItems,
           setPurchaseOrders,
           setRepairJobs,
@@ -213,6 +226,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           setLaborLogs([]);
           setProfiles([]);
           setCostEntries([]);
+          setVehiclePhotos([]);
           setPurchaseOrders([]);
           setPurchaseOrderItems([]);
           setVendors([]);
@@ -364,6 +378,12 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           <InvestmentSummary
             investmentSummary={investmentSummary}
             vehicle={vehicle}
+          />
+
+          <VehiclePhotosSection
+            onVehiclePhotoChanged={refreshVehicleDetails}
+            vehicleId={vehicleId}
+            vehiclePhotos={vehiclePhotos}
           />
 
           <RepairJobsSection
