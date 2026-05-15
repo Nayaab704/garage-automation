@@ -162,6 +162,8 @@ function VehicleDetailPage({ vehicleId, onBack }) {
   const [investmentSummary, setInvestmentSummary] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [vehicleStatusError, setVehicleStatusError] = useState("");
+  const [isVehicleStatusUpdating, setIsVehicleStatusUpdating] = useState(false);
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
   const [isSellFormOpen, setIsSellFormOpen] = useState(false);
   const [refreshCount, setRefreshCount] = useState(0);
@@ -178,6 +180,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
 
       setIsLoading(true);
       setErrorMessage("");
+      setVehicleStatusError("");
 
       try {
         const responses = await fetchVehicleDetails(vehicleId);
@@ -255,6 +258,53 @@ function VehicleDetailPage({ vehicleId, onBack }) {
     );
   }
 
+  async function handleVehicleStatusChange(newStatus) {
+    if (!vehicle?.id) {
+      setVehicleStatusError("Unable to update a vehicle without an ID.");
+      return;
+    }
+
+    if (newStatus === vehicle.status) {
+      return;
+    }
+
+    const previousStatus = vehicle.status;
+
+    setVehicleStatusError("");
+    setIsVehicleStatusUpdating(true);
+    setVehicle((currentVehicle) =>
+      currentVehicle ? { ...currentVehicle, status: newStatus } : currentVehicle
+    );
+
+    try {
+      const { error } = await supabase
+        .from("vehicles")
+        .update({ status: newStatus })
+        .eq("id", vehicle.id);
+
+      if (error) {
+        setVehicle((currentVehicle) =>
+          currentVehicle
+            ? { ...currentVehicle, status: previousStatus }
+            : currentVehicle
+        );
+        setVehicleStatusError(error.message);
+        return;
+      }
+
+      refreshVehicleDetails();
+    } catch (error) {
+      setVehicle((currentVehicle) =>
+        currentVehicle
+          ? { ...currentVehicle, status: previousStatus }
+          : currentVehicle
+      );
+      setVehicleStatusError(error.message ?? "Something went wrong.");
+    } finally {
+      setIsVehicleStatusUpdating(false);
+    }
+  }
+
   const isVehicleSold =
     String(vehicle?.status ?? "").toLowerCase() === "sold" || sales.length > 0;
 
@@ -298,10 +348,18 @@ function VehicleDetailPage({ vehicleId, onBack }) {
         <>
           <VehicleHeader
             isSold={isVehicleSold}
+            isStatusUpdating={isVehicleStatusUpdating}
             onEdit={() => setIsEditFormOpen(true)}
             onSell={() => setIsSellFormOpen(true)}
+            onStatusChange={handleVehicleStatusChange}
             vehicle={vehicle}
           />
+
+          {vehicleStatusError && (
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {vehicleStatusError}
+            </div>
+          )}
 
           <InvestmentSummary
             investmentSummary={investmentSummary}

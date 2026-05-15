@@ -2,6 +2,17 @@ import { useEffect, useState } from "react";
 import VehicleCard from "../components/VehicleCard";
 import { supabase } from "../lib/supabaseClient";
 
+function mergeVehicleDetails(summaries, vehicles) {
+  const vehiclesByStockNumber = new Map(
+    vehicles.map((vehicle) => [vehicle.stock_number, vehicle])
+  );
+
+  return summaries.map((summary) => ({
+    ...summary,
+    ...(vehiclesByStockNumber.get(summary.stock_number) ?? {}),
+  }));
+}
+
 function Dashboard() {
   const [vehicles, setVehicles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,7 +41,35 @@ function Dashboard() {
           setErrorMessage(error.message);
           setVehicles([]);
         } else {
-          setVehicles(data ?? []);
+          const summaries = data ?? [];
+          const stockNumbers = [
+            ...new Set(
+              summaries
+                .map((vehicle) => vehicle.stock_number)
+                .filter(Boolean)
+            ),
+          ];
+          const vehicleDetailsResponse =
+            stockNumbers.length === 0
+              ? { data: [], error: null }
+              : await supabase
+                  .from("vehicles")
+                  .select("stock_number, status, title_status")
+                  .in("stock_number", stockNumbers);
+
+          if (!isMounted) {
+            return;
+          }
+
+          if (vehicleDetailsResponse.error) {
+            setErrorMessage(vehicleDetailsResponse.error.message);
+            setVehicles([]);
+            return;
+          }
+
+          setVehicles(
+            mergeVehicleDetails(summaries, vehicleDetailsResponse.data ?? [])
+          );
         }
       } catch (error) {
         if (isMounted) {

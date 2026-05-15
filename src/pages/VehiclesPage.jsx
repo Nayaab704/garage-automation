@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import AddVehicleForm from "../components/AddVehicleForm";
+import VehicleStatusBadge from "../components/VehicleStatusBadge";
 import { supabase } from "../lib/supabaseClient";
 
 const vehicleColumns =
-  "id, stock_number, vin, year, make, model, trim, mileage, color, title_status, purchase_price, target_sale_price, notes";
+  "id, stock_number, vin, year, make, model, trim, mileage, color, title_status, status, purchase_price, target_sale_price, notes";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -193,6 +194,7 @@ function VehiclesPage({ onSelectVehicle }) {
                   </div>
 
                   <div className="flex flex-wrap justify-end gap-2">
+                    <VehicleStatusBadge status={vehicle.status} />
                     {vehicle.color && (
                       <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
                         {vehicle.color}

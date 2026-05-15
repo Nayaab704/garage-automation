@@ -1,3 +1,5 @@
+import VehicleStatusDropdown from "./VehicleStatusDropdown";
+
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -78,7 +80,14 @@ function DetailItem({ label, value }) {
   );
 }
 
-function VehicleHeader({ isSold, onEdit, onSell, vehicle }) {
+function VehicleHeader({
+  isSold,
+  isStatusUpdating,
+  onEdit,
+  onSell,
+  onStatusChange,
+  vehicle,
+}) {
   return (
     <section className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -98,6 +107,11 @@ function VehicleHeader({ isSold, onEdit, onSell, vehicle }) {
 
         <div className="flex flex-col gap-3 sm:items-end">
           <div className="flex flex-wrap gap-2 sm:justify-end">
+            <VehicleStatusDropdown
+              currentStatus={vehicle.status}
+              isUpdating={isStatusUpdating}
+              onChange={onStatusChange}
+            />
             {vehicle.color && (
               <span className="w-fit rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-200">
                 {vehicle.color}
