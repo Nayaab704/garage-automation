@@ -1,3 +1,6 @@
+import { useState } from "react";
+import AddPartRequestForm from "./AddPartRequestForm";
+
 const numberFormatter = new Intl.NumberFormat("en-US");
 
 function displayValue(value) {
@@ -95,10 +98,17 @@ function PartRequestCard({ partRequest }) {
   );
 }
 
-function PartRequestsSection({ partRequests }) {
+function PartRequestsSection({
+  onPartRequestAdded,
+  partRequests = [],
+  repairJobs = [],
+  vehicleId,
+}) {
+  const [isFormOpen, setIsFormOpen] = useState(false);
+
   return (
     <section className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-5">
-      <div className="mb-4 flex items-center justify-between gap-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-bold text-zinc-950">Part Requests</h2>
           <p className="mt-1 text-sm text-zinc-500">
@@ -107,9 +117,18 @@ function PartRequestsSection({ partRequests }) {
           </p>
         </div>
 
-        <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-600">
-          {partRequests.length}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-600">
+            {partRequests.length}
+          </span>
+          <button
+            className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
+            onClick={() => setIsFormOpen(true)}
+            type="button"
+          >
+            Add Part Request
+          </button>
+        </div>
       </div>
 
       {partRequests.length === 0 ? (
@@ -125,6 +144,15 @@ function PartRequestsSection({ partRequests }) {
             />
           ))}
         </div>
+      )}
+
+      {isFormOpen && (
+        <AddPartRequestForm
+          onClose={() => setIsFormOpen(false)}
+          onPartRequestAdded={onPartRequestAdded}
+          repairJobs={repairJobs}
+          vehicleId={vehicleId}
+        />
       )}
     </section>
   );

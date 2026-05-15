@@ -1,0 +1,218 @@
+import { useState } from "react";
+import { supabase } from "../../lib/supabaseClient";
+
+const emptyForm = {
+  part_name: "",
+  quantity: "1",
+  repair_job_id: "",
+  notes: "",
+};
+
+function emptyToNull(value) {
+  const trimmedValue = value.trim();
+  return trimmedValue === "" ? null : trimmedValue;
+}
+
+function getRepairJobTitle(repairJob) {
+  return (
+    repairJob.title ??
+    repairJob.name ??
+    repairJob.job_title ??
+    repairJob.repair_title ??
+    "Untitled Repair Job"
+  );
+}
+
+function AddPartRequestForm({
+  onClose,
+  onPartRequestAdded,
+  repairJobs = [],
+  vehicleId,
+}) {
+  const [formData, setFormData] = useState(emptyForm);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
+  function handleChange(event) {
+    const { name, value } = event.target;
+
+    setFormData((currentFormData) => ({
+      ...currentFormData,
+      [name]: value,
+    }));
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    setIsSubmitting(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const partName = emptyToNull(formData.part_name);
+      const quantity = Number(formData.quantity);
+
+      if (!partName) {
+        setErrorMessage("Part name is required.");
+        return;
+      }
+
+      if (!Number.isInteger(quantity) || quantity < 1) {
+        setErrorMessage("Quantity must be a whole number of at least 1.");
+        return;
+      }
+
+      const partRequest = {
+        vehicle_id: vehicleId,
+        part_name: partName,
+        quantity,
+        repair_job_id: formData.repair_job_id || null,
+        notes: emptyToNull(formData.notes),
+      };
+
+      const { error } = await supabase
+        .from("part_requests")
+        .insert([partRequest]);
+
+      if (error) {
+        setErrorMessage(error.message);
+      } else {
+        setFormData(emptyForm);
+        setSuccessMessage("Part request added successfully.");
+        await onPartRequestAdded();
+      }
+    } catch (error) {
+      setErrorMessage(error.message ?? "Something went wrong.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 px-4 py-6">
+      <div className="w-full max-w-xl rounded-lg border border-zinc-200 bg-white p-6 shadow-xl">
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold text-zinc-950">
+              Add Part Request
+            </h3>
+            <p className="mt-1 text-sm text-zinc-500">
+              Request a part for this vehicle.
+            </p>
+          </div>
+
+          <button
+            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isSubmitting}
+            onClick={onClose}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <form className="space-y-5" onSubmit={handleSubmit}>
+          <label className="block" htmlFor="part-name">
+            <span className="text-sm font-medium text-zinc-700">
+              Part Name
+            </span>
+            <input
+              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              id="part-name"
+              name="part_name"
+              onChange={handleChange}
+              required
+              type="text"
+              value={formData.part_name}
+            />
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block" htmlFor="part-quantity">
+              <span className="text-sm font-medium text-zinc-700">
+                Quantity
+              </span>
+              <input
+                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                id="part-quantity"
+                min="1"
+                name="quantity"
+                onChange={handleChange}
+                required
+                step="1"
+                type="number"
+                value={formData.quantity}
+              />
+            </label>
+
+            <label className="block" htmlFor="part-repair-job">
+              <span className="text-sm font-medium text-zinc-700">
+                Repair Job
+              </span>
+              <select
+                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                id="part-repair-job"
+                name="repair_job_id"
+                onChange={handleChange}
+                value={formData.repair_job_id}
+              >
+                <option value="">No repair job selected</option>
+                {repairJobs.map((repairJob) => (
+                  <option key={repairJob.id} value={repairJob.id}>
+                    {getRepairJobTitle(repairJob)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <label className="block" htmlFor="part-notes">
+            <span className="text-sm font-medium text-zinc-700">Notes</span>
+            <textarea
+              className="mt-1 min-h-28 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              id="part-notes"
+              name="notes"
+              onChange={handleChange}
+              value={formData.notes}
+            />
+          </label>
+
+          {errorMessage && (
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {errorMessage}
+            </div>
+          )}
+
+          {successMessage && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+              {successMessage}
+            </div>
+          )}
+
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button
+              className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isSubmitting}
+              onClick={onClose}
+              type="button"
+            >
+              Cancel
+            </button>
+
+            <button
+              className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+              disabled={isSubmitting}
+              type="submit"
+            >
+              {isSubmitting ? "Adding..." : "Add Part Request"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default AddPartRequestForm;

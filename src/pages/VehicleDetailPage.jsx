@@ -183,7 +183,12 @@ function VehicleDetailPage({ vehicleId, onBack }) {
             vehicleId={vehicleId}
           />
 
-          <PartRequestsSection partRequests={partRequests} />
+          <PartRequestsSection
+            onPartRequestAdded={refreshVehicleDetails}
+            partRequests={partRequests}
+            repairJobs={repairJobs}
+            vehicleId={vehicleId}
+          />
         </>
       )}
     </div>
