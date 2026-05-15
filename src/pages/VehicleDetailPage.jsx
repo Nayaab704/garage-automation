@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import ExtraCostsSection from "../components/vehicle-detail/ExtraCostsSection";
 import InvestmentSummary from "../components/vehicle-detail/InvestmentSummary";
 import LaborLogsSection from "../components/vehicle-detail/LaborLogsSection";
 import PartRequestsSection from "../components/vehicle-detail/PartRequestsSection";
@@ -32,6 +33,7 @@ async function fetchVehicleDetails(vehicleId) {
     partRequestsResponse,
     laborLogsResponse,
     profilesResponse,
+    costEntriesResponse,
     purchaseOrdersResponse,
     vendorsResponse,
   ] = await Promise.all([
@@ -40,6 +42,7 @@ async function fetchVehicleDetails(vehicleId) {
     supabase.from("part_requests").select("*").eq("vehicle_id", vehicleId),
     supabase.from("labor_logs").select("*").eq("vehicle_id", vehicleId),
     supabase.from("profiles").select("*"),
+    supabase.from("cost_entries").select("*").eq("vehicle_id", vehicleId),
     supabase.from("purchase_orders").select("*").eq("vehicle_id", vehicleId),
     supabase.from("vendors").select("*"),
   ]);
@@ -62,6 +65,7 @@ async function fetchVehicleDetails(vehicleId) {
 
   return {
     investmentSummaryResponse,
+    costEntriesResponse,
     laborLogsResponse,
     partRequestsResponse,
     profilesResponse,
@@ -80,6 +84,7 @@ function findFirstError(responses) {
     responses.partRequestsResponse.error ??
     responses.laborLogsResponse.error ??
     responses.profilesResponse.error ??
+    responses.costEntriesResponse.error ??
     responses.purchaseOrdersResponse.error ??
     responses.purchaseOrderItemsResponse.error ??
     responses.vendorsResponse.error ??
@@ -97,6 +102,7 @@ function applyVehicleDetails(responses, setters) {
     setters.setPartRequests([]);
     setters.setLaborLogs([]);
     setters.setProfiles([]);
+    setters.setCostEntries([]);
     setters.setPurchaseOrders([]);
     setters.setPurchaseOrderItems([]);
     setters.setVendors([]);
@@ -109,6 +115,7 @@ function applyVehicleDetails(responses, setters) {
   setters.setPartRequests(responses.partRequestsResponse.data ?? []);
   setters.setLaborLogs(responses.laborLogsResponse.data ?? []);
   setters.setProfiles(responses.profilesResponse.data ?? []);
+  setters.setCostEntries(responses.costEntriesResponse.data ?? []);
   setters.setPurchaseOrders(responses.purchaseOrdersResponse.data ?? []);
   setters.setPurchaseOrderItems(responses.purchaseOrderItemsResponse.data ?? []);
   setters.setVendors(responses.vendorsResponse.data ?? []);
@@ -121,6 +128,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
   const [partRequests, setPartRequests] = useState([]);
   const [laborLogs, setLaborLogs] = useState([]);
   const [profiles, setProfiles] = useState([]);
+  const [costEntries, setCostEntries] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [purchaseOrderItems, setPurchaseOrderItems] = useState([]);
   const [vendors, setVendors] = useState([]);
@@ -150,6 +158,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
         }
 
         applyVehicleDetails(responses, {
+          setCostEntries,
           setErrorMessage,
           setInvestmentSummary,
           setLaborLogs,
@@ -169,6 +178,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           setPartRequests([]);
           setLaborLogs([]);
           setProfiles([]);
+          setCostEntries([]);
           setPurchaseOrders([]);
           setPurchaseOrderItems([]);
           setVendors([]);
@@ -269,6 +279,12 @@ function VehicleDetailPage({ vehicleId, onBack }) {
             onLaborLogAdded={refreshVehicleDetails}
             profiles={profiles}
             repairJobs={repairJobs}
+            vehicleId={vehicleId}
+          />
+
+          <ExtraCostsSection
+            costEntries={costEntries}
+            onExtraCostChanged={refreshVehicleDetails}
             vehicleId={vehicleId}
           />
 
