@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import AddVehicleForm from "../components/AddVehicleForm";
 import VehicleStatusBadge from "../components/VehicleStatusBadge";
 import { supabase } from "../lib/supabaseClient";
+import { formatVehicleStatus, vehicleStatusOptions } from "../lib/vehicleStatus";
 
 const vehicleColumns =
   "id, stock_number, vin, year, make, model, trim, mileage, color, title_status, status, purchase_price, target_sale_price, notes";
@@ -14,6 +15,14 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
 });
 
 const numberFormatter = new Intl.NumberFormat("en-US");
+
+const titleStatusOptions = [
+  { value: "clean", label: "Clean Title" },
+  { value: "salvage", label: "Salvage" },
+  { value: "rebuilt", label: "Rebuilt" },
+  { value: "flood", label: "Flood" },
+  { value: "unknown", label: "Unknown" },
+];
 
 function displayValue(value) {
   return value === null || value === undefined || value === ""
@@ -77,8 +86,44 @@ function titleStatusClassName(status) {
   return "bg-slate-100 text-slate-700 ring-slate-200";
 }
 
+function valueMatchesSearch(value, searchText) {
+  return String(value ?? "")
+    .toLowerCase()
+    .includes(searchText);
+}
+
+function vehicleMatchesSearch(vehicle, searchText) {
+  if (!searchText) {
+    return true;
+  }
+
+  return (
+    valueMatchesSearch(vehicle.stock_number, searchText) ||
+    valueMatchesSearch(vehicle.vin, searchText) ||
+    valueMatchesSearch(vehicle.make, searchText) ||
+    valueMatchesSearch(vehicle.model, searchText)
+  );
+}
+
+function getFilteredVehicles(vehicles, searchText, statusFilter, titleFilter) {
+  const normalizedSearchText = searchText.trim().toLowerCase();
+
+  return vehicles.filter((vehicle) => {
+    const matchesSearch = vehicleMatchesSearch(vehicle, normalizedSearchText);
+    const matchesStatus =
+      statusFilter === "all" || vehicle.status === statusFilter;
+    const matchesTitleStatus =
+      titleFilter === "all" || vehicle.title_status === titleFilter;
+
+    return matchesSearch && matchesStatus && matchesTitleStatus;
+  });
+}
+
 function VehiclesPage({ onSelectVehicle }) {
   const [vehicles, setVehicles] = useState([]);
+  const [searchText, setSearchText] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [titleStatusFilter, setTitleStatusFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [refreshCount, setRefreshCount] = useState(0);
@@ -129,6 +174,23 @@ function VehiclesPage({ onSelectVehicle }) {
     setRefreshCount((currentCount) => currentCount + 1);
   }
 
+  function clearFilters() {
+    setSearchText("");
+    setStatusFilter("all");
+    setTitleStatusFilter("all");
+  }
+
+  const filteredVehicles = getFilteredVehicles(
+    vehicles,
+    searchText,
+    statusFilter,
+    titleStatusFilter
+  );
+  const hasActiveFilters =
+    searchText.trim() !== "" ||
+    statusFilter !== "all" ||
+    titleStatusFilter !== "all";
+
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(320px,420px)_1fr] lg:items-start">
       <AddVehicleForm onVehicleAdded={refreshVehicles} />
@@ -138,7 +200,8 @@ function VehiclesPage({ onSelectVehicle }) {
           <div>
             <h2 className="text-xl font-bold text-slate-900">Vehicle List</h2>
             <p className="mt-1 text-sm text-slate-600">
-              {vehicles.length} vehicle{vehicles.length === 1 ? "" : "s"}
+              Showing {filteredVehicles.length} of {vehicles.length} vehicle
+              {vehicles.length === 1 ? "" : "s"}
             </p>
           </div>
 
@@ -151,6 +214,73 @@ function VehiclesPage({ onSelectVehicle }) {
             Refresh
           </button>
         </div>
+
+        {!isLoading && !errorMessage && vehicles.length > 0 && (
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="grid gap-4 lg:grid-cols-[minmax(220px,1fr)_220px_220px_auto] lg:items-end">
+              <label className="block" htmlFor="vehicle-search">
+                <span className="text-sm font-medium text-slate-700">
+                  Search
+                </span>
+                <input
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+                  id="vehicle-search"
+                  onChange={(event) => setSearchText(event.target.value)}
+                  placeholder="Stock, VIN, make, or model"
+                  type="search"
+                  value={searchText}
+                />
+              </label>
+
+              <label className="block" htmlFor="vehicle-status-filter">
+                <span className="text-sm font-medium text-slate-700">
+                  Status
+                </span>
+                <select
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+                  id="vehicle-status-filter"
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                  value={statusFilter}
+                >
+                  <option value="all">All Statuses</option>
+                  {vehicleStatusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {formatVehicleStatus(status)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block" htmlFor="vehicle-title-status-filter">
+                <span className="text-sm font-medium text-slate-700">
+                  Title Status
+                </span>
+                <select
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+                  id="vehicle-title-status-filter"
+                  onChange={(event) => setTitleStatusFilter(event.target.value)}
+                  value={titleStatusFilter}
+                >
+                  <option value="all">All Titles</option>
+                  {titleStatusOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <button
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!hasActiveFilters}
+                onClick={clearFilters}
+                type="button"
+              >
+                Clear Filters
+              </button>
+            </div>
+          </div>
+        )}
 
         {isLoading && (
           <div className="rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm">
@@ -176,9 +306,23 @@ function VehiclesPage({ onSelectVehicle }) {
           </div>
         )}
 
-        {!isLoading && !errorMessage && vehicles.length > 0 && (
+        {!isLoading &&
+          !errorMessage &&
+          vehicles.length > 0 &&
+          filteredVehicles.length === 0 && (
+            <div className="rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm">
+              <h3 className="text-lg font-semibold text-slate-900">
+                No matching vehicles
+              </h3>
+              <p className="mt-2 text-slate-600">
+                Clear filters or try a different search.
+              </p>
+            </div>
+          )}
+
+        {!isLoading && !errorMessage && filteredVehicles.length > 0 && (
           <div className="grid gap-4 xl:grid-cols-2">
-            {vehicles.map((vehicle, index) => (
+            {filteredVehicles.map((vehicle, index) => (
               <article
                 className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
                 key={`${vehicle.stock_number}-${vehicle.vin ?? index}`}
