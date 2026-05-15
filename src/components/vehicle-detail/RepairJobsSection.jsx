@@ -1,5 +1,17 @@
 import { useState } from "react";
 import AddRepairJobForm from "./AddRepairJobForm";
+import StatusDropdown from "./StatusDropdown";
+import { supabase } from "../../lib/supabaseClient";
+
+const repairJobStatuses = [
+  "needed",
+  "approved",
+  "in_progress",
+  "waiting_parts",
+  "blocked",
+  "completed",
+  "cancelled",
+];
 
 function displayValue(value) {
   return value === null || value === undefined || value === ""
@@ -45,24 +57,6 @@ function getTechnicianName(repairJob) {
   );
 }
 
-function statusClassName(status) {
-  const normalizedStatus = String(status ?? "").toLowerCase();
-
-  if (normalizedStatus.includes("complete") || normalizedStatus === "done") {
-    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-  }
-
-  if (normalizedStatus.includes("hold") || normalizedStatus.includes("wait")) {
-    return "bg-amber-50 text-amber-700 ring-amber-200";
-  }
-
-  if (normalizedStatus.includes("cancel")) {
-    return "bg-red-50 text-red-700 ring-red-200";
-  }
-
-  return "bg-zinc-100 text-zinc-700 ring-zinc-200";
-}
-
 function priorityClassName(priority) {
   const normalizedPriority = String(priority ?? "").toLowerCase();
 
@@ -96,7 +90,7 @@ function DetailItem({ label, value }) {
   );
 }
 
-function RepairJobCard({ repairJob }) {
+function RepairJobCard({ onStatusChange, repairJob, updatingStatusId }) {
   const title =
     getFirstValue(repairJob, ["title", "name", "job_title", "repair_title"]) ??
     "Repair Job";
@@ -120,9 +114,12 @@ function RepairJobCard({ repairJob }) {
           <Badge className={priorityClassName(priority)}>
             {displayValue(priority)}
           </Badge>
-          <Badge className={statusClassName(status)}>
-            {displayValue(status)}
-          </Badge>
+          <StatusDropdown
+            currentStatus={status}
+            isUpdating={updatingStatusId === repairJob.id}
+            onChange={(newStatus) => onStatusChange(repairJob.id, newStatus)}
+            statuses={repairJobStatuses}
+          />
         </div>
       </div>
 
@@ -149,8 +146,51 @@ function RepairJobCard({ repairJob }) {
   );
 }
 
-function RepairJobsSection({ onRepairJobAdded, repairJobs, vehicleId }) {
+function RepairJobsSection({
+  onRepairJobAdded,
+  onRepairJobStatusUpdated,
+  repairJobs = [],
+  vehicleId,
+}) {
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [statusError, setStatusError] = useState("");
+  const [updatingStatusId, setUpdatingStatusId] = useState(null);
+
+  async function handleStatusChange(repairJobId, newStatus) {
+    if (!repairJobId) {
+      setStatusError("Unable to update a repair job without an ID.");
+      return;
+    }
+
+    const currentRepairJob = repairJobs.find(
+      (repairJob) => repairJob.id === repairJobId
+    );
+    const previousStatus = currentRepairJob
+      ? getFirstValue(currentRepairJob, ["status"])
+      : null;
+
+    setStatusError("");
+    setUpdatingStatusId(repairJobId);
+    onRepairJobStatusUpdated(repairJobId, newStatus);
+
+    try {
+      const { error } = await supabase
+        .from("repair_jobs")
+        .update({ status: newStatus })
+        .eq("id", repairJobId);
+
+      if (error) {
+        onRepairJobStatusUpdated(repairJobId, previousStatus);
+        setStatusError(error.message);
+        return;
+      }
+    } catch (error) {
+      onRepairJobStatusUpdated(repairJobId, previousStatus);
+      setStatusError(error.message ?? "Something went wrong.");
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  }
 
   return (
     <section className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-5">
@@ -186,9 +226,17 @@ function RepairJobsSection({ onRepairJobAdded, repairJobs, vehicleId }) {
           {repairJobs.map((repairJob, index) => (
             <RepairJobCard
               key={repairJob.id ?? index}
+              onStatusChange={handleStatusChange}
               repairJob={repairJob}
+              updatingStatusId={updatingStatusId}
             />
           ))}
+        </div>
+      )}
+
+      {statusError && (
+        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          {statusError}
         </div>
       )}
 

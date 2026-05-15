@@ -1,13 +1,11 @@
 import { useState } from "react";
 import AddPartRequestForm from "./AddPartRequestForm";
+import StatusDropdown from "./StatusDropdown";
+import { supabase } from "../../lib/supabaseClient";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
-function displayValue(value) {
-  return value === null || value === undefined || value === ""
-    ? "Not available"
-    : value;
-}
+const partRequestStatuses = ["requested", "ordered", "received", "installed"];
 
 function formatNumber(value) {
   if (value === null || value === undefined) {
@@ -35,35 +33,7 @@ function getFirstValue(record, fieldNames) {
   return null;
 }
 
-function statusClassName(status) {
-  const normalizedStatus = String(status ?? "").toLowerCase();
-
-  if (normalizedStatus.includes("complete") || normalizedStatus === "done") {
-    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-  }
-
-  if (normalizedStatus.includes("hold") || normalizedStatus.includes("wait")) {
-    return "bg-amber-50 text-amber-700 ring-amber-200";
-  }
-
-  if (normalizedStatus.includes("cancel")) {
-    return "bg-red-50 text-red-700 ring-red-200";
-  }
-
-  return "bg-zinc-100 text-zinc-700 ring-zinc-200";
-}
-
-function Badge({ className, children }) {
-  return (
-    <span
-      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${className}`}
-    >
-      {children}
-    </span>
-  );
-}
-
-function PartRequestCard({ partRequest }) {
+function PartRequestCard({ onStatusChange, partRequest, updatingStatusId }) {
   const partName =
     getFirstValue(partRequest, ["part_name", "name", "part"]) ??
     "Part Request";
@@ -81,9 +51,12 @@ function PartRequestCard({ partRequest }) {
           </p>
         </div>
 
-        <Badge className={statusClassName(status)}>
-          {displayValue(status)}
-        </Badge>
+        <StatusDropdown
+          currentStatus={status}
+          isUpdating={updatingStatusId === partRequest.id}
+          onChange={(newStatus) => onStatusChange(partRequest.id, newStatus)}
+          statuses={partRequestStatuses}
+        />
       </div>
 
       {notes && (
@@ -100,11 +73,50 @@ function PartRequestCard({ partRequest }) {
 
 function PartRequestsSection({
   onPartRequestAdded,
+  onPartRequestStatusUpdated,
   partRequests = [],
   repairJobs = [],
   vehicleId,
 }) {
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [statusError, setStatusError] = useState("");
+  const [updatingStatusId, setUpdatingStatusId] = useState(null);
+
+  async function handleStatusChange(partRequestId, newStatus) {
+    if (!partRequestId) {
+      setStatusError("Unable to update a part request without an ID.");
+      return;
+    }
+
+    const currentPartRequest = partRequests.find(
+      (partRequest) => partRequest.id === partRequestId
+    );
+    const previousStatus = currentPartRequest
+      ? getFirstValue(currentPartRequest, ["status"])
+      : null;
+
+    setStatusError("");
+    setUpdatingStatusId(partRequestId);
+    onPartRequestStatusUpdated(partRequestId, newStatus);
+
+    try {
+      const { error } = await supabase
+        .from("part_requests")
+        .update({ status: newStatus })
+        .eq("id", partRequestId);
+
+      if (error) {
+        onPartRequestStatusUpdated(partRequestId, previousStatus);
+        setStatusError(error.message);
+        return;
+      }
+    } catch (error) {
+      onPartRequestStatusUpdated(partRequestId, previousStatus);
+      setStatusError(error.message ?? "Something went wrong.");
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  }
 
   return (
     <section className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-5">
@@ -140,9 +152,17 @@ function PartRequestsSection({
           {partRequests.map((partRequest, index) => (
             <PartRequestCard
               key={partRequest.id ?? index}
+              onStatusChange={handleStatusChange}
               partRequest={partRequest}
+              updatingStatusId={updatingStatusId}
             />
           ))}
+        </div>
+      )}
+
+      {statusError && (
+        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          {statusError}
         </div>
       )}
 

@@ -132,6 +132,26 @@ function VehicleDetailPage({ vehicleId, onBack }) {
     setRefreshCount((currentCount) => currentCount + 1);
   }
 
+  function handleRepairJobStatusUpdated(repairJobId, newStatus) {
+    setRepairJobs((currentRepairJobs) =>
+      currentRepairJobs.map((repairJob) =>
+        repairJob.id === repairJobId
+          ? { ...repairJob, status: newStatus }
+          : repairJob
+      )
+    );
+  }
+
+  function handlePartRequestStatusUpdated(partRequestId, newStatus) {
+    setPartRequests((currentPartRequests) =>
+      currentPartRequests.map((partRequest) =>
+        partRequest.id === partRequestId
+          ? { ...partRequest, status: newStatus }
+          : partRequest
+      )
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -179,12 +199,14 @@ function VehicleDetailPage({ vehicleId, onBack }) {
 
           <RepairJobsSection
             onRepairJobAdded={refreshVehicleDetails}
+            onRepairJobStatusUpdated={handleRepairJobStatusUpdated}
             repairJobs={repairJobs}
             vehicleId={vehicleId}
           />
 
           <PartRequestsSection
             onPartRequestAdded={refreshVehicleDetails}
+            onPartRequestStatusUpdated={handlePartRequestStatusUpdated}
             partRequests={partRequests}
             repairJobs={repairJobs}
             vehicleId={vehicleId}
