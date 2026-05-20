@@ -46,6 +46,15 @@ function countVehiclesByStatus(vehicles) {
   return counts;
 }
 
+function isSoldVehicle(vehicle) {
+  return String(vehicle.status ?? "").toLowerCase() === "sold";
+}
+
+function isActiveVehicle(vehicle) {
+  const status = String(vehicle.status ?? "").toLowerCase();
+  return status !== "sold" && status !== "archived";
+}
+
 function getStatusOverviewRows(statusCounts) {
   const customStatuses = Object.keys(statusCounts).filter(
     (status) => !vehicleStatusOptions.includes(status)
@@ -57,17 +66,19 @@ function getStatusOverviewRows(statusCounts) {
   }));
 }
 
-function mergeSummariesWithVehicles(summaries, vehicles) {
-  const vehiclesByStockNumber = new Map(
-    vehicles.map((vehicle) => [vehicle.stock_number, vehicle])
+function mergeVehiclesWithSummaries(vehicles, summaries) {
+  const summariesByStockNumber = new Map(
+    summaries.map((summary) => [summary.stock_number, summary])
   );
 
-  return summaries.map((summary) => {
-    const vehicle = vehiclesByStockNumber.get(summary.stock_number) ?? {};
+  return vehicles.map((vehicle) => {
+    const summary = summariesByStockNumber.get(vehicle.stock_number) ?? {};
 
     return {
-      ...vehicle,
       ...summary,
+      ...vehicle,
+      estimated_profit: summary.estimated_profit ?? 0,
+      total_invested: summary.total_invested ?? 0,
       status: vehicle.status ?? summary.status,
       title_status: vehicle.title_status ?? summary.title_status,
       vehicle_origin: vehicle.vehicle_origin ?? summary.vehicle_origin,
@@ -75,14 +86,42 @@ function mergeSummariesWithVehicles(summaries, vehicles) {
   });
 }
 
-function getTopInvestmentVehicles(summaries, vehicles) {
-  return mergeSummariesWithVehicles(summaries, vehicles)
+function getActiveInvestmentRows(summaries, vehicles) {
+  return mergeVehiclesWithSummaries(vehicles, summaries).filter((vehicle) =>
+    isActiveVehicle(vehicle)
+  );
+}
+
+function getTopInvestmentActiveVehicles(summaries, vehicles) {
+  return getActiveInvestmentRows(summaries, vehicles)
     .sort(
       (firstVehicle, secondVehicle) =>
         numberOrZero(secondVehicle.total_invested) -
         numberOrZero(firstVehicle.total_invested)
     )
     .slice(0, 5);
+}
+
+function getSalesTotal(sales) {
+  return sales.reduce((total, sale) => total + numberOrZero(sale.sale_price), 0);
+}
+
+function getSalePriceByVehicleId(sales) {
+  const salePriceByVehicleId = new Map();
+
+  sales.forEach((sale) => {
+    if (!sale.vehicle_id) {
+      return;
+    }
+
+    const currentTotal = salePriceByVehicleId.get(sale.vehicle_id) ?? 0;
+    salePriceByVehicleId.set(
+      sale.vehicle_id,
+      currentTotal + numberOrZero(sale.sale_price)
+    );
+  });
+
+  return salePriceByVehicleId;
 }
 
 function SummaryCard({ label, value, valueClassName = "text-slate-950" }) {
@@ -99,10 +138,10 @@ function HighestInvestmentVehicles({ vehicles }) {
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4">
         <h2 className="text-lg font-bold text-slate-950">
-          Highest Investment Vehicles
+          Highest Investment Active Vehicles
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Top 5 vehicles by total invested.
+          Top 5 active vehicles by total invested.
         </p>
       </div>
 
@@ -147,6 +186,58 @@ function HighestInvestmentVehicles({ vehicles }) {
   );
 }
 
+function SoldVehiclesSummary({ salePriceByVehicleId, vehicles }) {
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
+      <div className="mb-4">
+        <h2 className="text-lg font-bold text-slate-950">
+          Sold Vehicles Summary
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Sold inventory with recorded sale prices.
+        </p>
+      </div>
+
+      {vehicles.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
+          No sold vehicles found yet.
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {vehicles.map((vehicle, index) => {
+            const salePrice = salePriceByVehicleId.get(vehicle.id);
+
+            return (
+              <div
+                className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                key={vehicle.id ?? `${vehicle.stock_number}-${index}`}
+              >
+                <div>
+                  <p className="font-bold text-slate-950">
+                    {vehicle.stock_number ?? "No Stock Number"}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {vehicle.make ?? "Unknown"} {vehicle.model ?? "Vehicle"}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                  <VehicleStatusBadge status={vehicle.status} />
+                  <span className="rounded-md bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                    {salePrice === undefined
+                      ? "Sale price not recorded"
+                      : formatCurrency(salePrice)}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function StatusOverview({ rows }) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -182,6 +273,7 @@ function StatusOverview({ rows }) {
 
 function Dashboard() {
   const [investmentSummaries, setInvestmentSummaries] = useState([]);
+  const [sales, setSales] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -194,20 +286,25 @@ function Dashboard() {
       setErrorMessage("");
 
       try {
-        const [summaryResponse, vehiclesResponse] = await Promise.all([
-          supabase
-            .from("vehicle_investment_summary")
-            .select(
-              "stock_number, make, model, purchase_price, total_invested, estimated_profit"
-            )
-            .order("stock_number", { ascending: true }),
-          supabase
-            .from("vehicles")
-            .select(
-              "id, stock_number, make, model, status, title_status, vehicle_origin"
-            )
-            .order("stock_number", { ascending: true }),
-        ]);
+        const [summaryResponse, vehiclesResponse, salesResponse] =
+          await Promise.all([
+            supabase
+              .from("vehicle_investment_summary")
+              .select(
+                "stock_number, make, model, purchase_price, total_invested, estimated_profit"
+              )
+              .order("stock_number", { ascending: true }),
+            supabase
+              .from("vehicles")
+              .select(
+                "id, stock_number, make, model, status, title_status, vehicle_origin"
+              )
+              .order("stock_number", { ascending: true }),
+            supabase
+              .from("sales")
+              .select("id, vehicle_id, sale_price, sale_date")
+              .order("sale_date", { ascending: false }),
+          ]);
 
         if (!isMounted) {
           return;
@@ -216,6 +313,7 @@ function Dashboard() {
         if (summaryResponse.error) {
           setErrorMessage(summaryResponse.error.message);
           setInvestmentSummaries([]);
+          setSales([]);
           setVehicles([]);
           return;
         }
@@ -223,16 +321,27 @@ function Dashboard() {
         if (vehiclesResponse.error) {
           setErrorMessage(vehiclesResponse.error.message);
           setInvestmentSummaries([]);
+          setSales([]);
+          setVehicles([]);
+          return;
+        }
+
+        if (salesResponse.error) {
+          setErrorMessage(salesResponse.error.message);
+          setInvestmentSummaries([]);
+          setSales([]);
           setVehicles([]);
           return;
         }
 
         setInvestmentSummaries(summaryResponse.data ?? []);
+        setSales(salesResponse.data ?? []);
         setVehicles(vehiclesResponse.data ?? []);
       } catch (error) {
         if (isMounted) {
           setErrorMessage(error.message ?? "Something went wrong.");
           setInvestmentSummaries([]);
+          setSales([]);
           setVehicles([]);
         }
       } finally {
@@ -249,16 +358,24 @@ function Dashboard() {
     };
   }, []);
 
-  const totalInvested = investmentSummaries.reduce(
+  const activeVehicles = vehicles.filter(isActiveVehicle);
+  const soldVehicles = vehicles.filter(isSoldVehicle);
+  const activeInvestmentRows = getActiveInvestmentRows(
+    investmentSummaries,
+    vehicles
+  );
+  const activeInventoryInvestment = activeInvestmentRows.reduce(
     (total, vehicle) => total + numberOrZero(vehicle.total_invested),
     0
   );
-  const estimatedProfit = investmentSummaries.reduce(
+  const activeEstimatedProfit = activeInvestmentRows.reduce(
     (total, vehicle) => total + numberOrZero(vehicle.estimated_profit),
     0
   );
+  const totalRevenue = getSalesTotal(sales);
+  const salePriceByVehicleId = getSalePriceByVehicleId(sales);
   const statusCounts = countVehiclesByStatus(vehicles);
-  const topInvestmentVehicles = getTopInvestmentVehicles(
+  const topInvestmentActiveVehicles = getTopInvestmentActiveVehicles(
     investmentSummaries,
     vehicles
   );
@@ -289,27 +406,30 @@ function Dashboard() {
               value={formatNumber(vehicles.length)}
             />
             <SummaryCard
-              label="Total Invested"
-              value={formatCurrency(totalInvested)}
+              label="Active Inventory Count"
+              value={formatNumber(activeVehicles.length)}
             />
             <SummaryCard
-              label="Estimated Profit"
-              value={formatCurrency(estimatedProfit)}
+              label="Sold Vehicles Count"
+              value={formatNumber(soldVehicles.length)}
+            />
+            <SummaryCard
+              label="Active Inventory Investment"
+              value={formatCurrency(activeInventoryInvestment)}
+            />
+            <SummaryCard
+              label="Total Revenue from Sold Vehicles"
+              value={formatCurrency(totalRevenue)}
+              valueClassName="text-emerald-700"
+            />
+            <SummaryCard
+              label="Estimated Profit for Active Inventory"
+              value={formatCurrency(activeEstimatedProfit)}
               valueClassName={
-                estimatedProfit < 0 ? "text-red-700" : "text-emerald-700"
+                activeEstimatedProfit < 0
+                  ? "text-red-700"
+                  : "text-emerald-700"
               }
-            />
-            <SummaryCard
-              label="Ready For Sale Count"
-              value={formatNumber(statusCounts.ready_for_sale ?? 0)}
-            />
-            <SummaryCard
-              label="In Repair Count"
-              value={formatNumber(statusCounts.repairing ?? 0)}
-            />
-            <SummaryCard
-              label="Sold Count"
-              value={formatNumber(statusCounts.sold ?? 0)}
             />
           </section>
 
@@ -324,8 +444,14 @@ function Dashboard() {
             </section>
           ) : (
             <section className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
-              <HighestInvestmentVehicles vehicles={topInvestmentVehicles} />
+              <HighestInvestmentVehicles
+                vehicles={topInvestmentActiveVehicles}
+              />
               <StatusOverview rows={statusOverviewRows} />
+              <SoldVehiclesSummary
+                salePriceByVehicleId={salePriceByVehicleId}
+                vehicles={soldVehicles}
+              />
             </section>
           )}
         </>
