@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { vehicleOriginOptions } from "../lib/vehicleOrigin";
 
 const emptyForm = {
   stock_number: "",
@@ -11,6 +12,7 @@ const emptyForm = {
   mileage: "",
   color: "",
   title_status: "unknown",
+  vehicle_origin: "unknown",
   purchase_price: "",
   target_sale_price: "",
   notes: "",
@@ -84,6 +86,7 @@ function buildVehiclePayload(formData) {
     mileage: numberOrNull(formData.mileage),
     color: emptyToNull(formData.color),
     title_status: formData.title_status,
+    vehicle_origin: formData.vehicle_origin,
     purchase_price: decimalOrNull(formData.purchase_price),
     target_sale_price: decimalOrNull(formData.target_sale_price),
     notes: emptyToNull(formData.notes),
@@ -187,24 +190,45 @@ function AddVehicleForm({ onVehicleAdded }) {
           ))}
         </div>
 
-        <label className="block" htmlFor="title_status">
-          <span className="text-sm font-medium text-slate-700">
-            Title Status
-          </span>
-          <select
-            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-            id="title_status"
-            name="title_status"
-            onChange={handleChange}
-            value={formData.title_status}
-          >
-            {titleStatusOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block" htmlFor="title_status">
+            <span className="text-sm font-medium text-slate-700">
+              Title Status
+            </span>
+            <select
+              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+              id="title_status"
+              name="title_status"
+              onChange={handleChange}
+              value={formData.title_status}
+            >
+              {titleStatusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block" htmlFor="vehicle_origin">
+            <span className="text-sm font-medium text-slate-700">
+              Vehicle Origin
+            </span>
+            <select
+              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+              id="vehicle_origin"
+              name="vehicle_origin"
+              onChange={handleChange}
+              value={formData.vehicle_origin}
+            >
+              {vehicleOriginOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
 
         <label className="block" htmlFor="notes">
           <span className="text-sm font-medium text-slate-700">Notes</span>

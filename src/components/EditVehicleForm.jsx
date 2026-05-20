@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { vehicleOriginOptions } from "../lib/vehicleOrigin";
 
 const titleStatusOptions = [
   { value: "clean", label: "Clean Title" },
@@ -77,6 +78,7 @@ function getInitialFormData(vehicle) {
     mileage: valueToString(vehicle.mileage),
     color: valueToString(vehicle.color),
     title_status: vehicle.title_status ?? "unknown",
+    vehicle_origin: vehicle.vehicle_origin ?? "unknown",
     purchase_price: valueToString(vehicle.purchase_price),
     target_sale_price: valueToString(vehicle.target_sale_price),
     notes: valueToString(vehicle.notes),
@@ -94,6 +96,7 @@ function buildVehiclePayload(formData) {
     mileage: numberOrNull(formData.mileage),
     color: emptyToNull(formData.color),
     title_status: formData.title_status,
+    vehicle_origin: formData.vehicle_origin,
     purchase_price: decimalOrNull(formData.purchase_price),
     target_sale_price: decimalOrNull(formData.target_sale_price),
     notes: emptyToNull(formData.notes),
@@ -215,24 +218,45 @@ function EditVehicleForm({ onClose, onVehicleUpdated, vehicle }) {
             ))}
           </div>
 
-          <label className="block" htmlFor="edit-title-status">
-            <span className="text-sm font-medium text-zinc-700">
-              Title Status
-            </span>
-            <select
-              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
-              id="edit-title-status"
-              name="title_status"
-              onChange={handleChange}
-              value={formData.title_status}
-            >
-              {titleStatusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block" htmlFor="edit-title-status">
+              <span className="text-sm font-medium text-zinc-700">
+                Title Status
+              </span>
+              <select
+                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                id="edit-title-status"
+                name="title_status"
+                onChange={handleChange}
+                value={formData.title_status}
+              >
+                {titleStatusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block" htmlFor="edit-vehicle-origin">
+              <span className="text-sm font-medium text-zinc-700">
+                Vehicle Origin
+              </span>
+              <select
+                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                id="edit-vehicle-origin"
+                name="vehicle_origin"
+                onChange={handleChange}
+                value={formData.vehicle_origin}
+              >
+                {vehicleOriginOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           <label className="block" htmlFor="edit-notes">
             <span className="text-sm font-medium text-zinc-700">Notes</span>

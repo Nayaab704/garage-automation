@@ -1,3 +1,4 @@
+import VehicleOriginBadge from "../VehicleOriginBadge";
 import VehicleStatusDropdown from "./VehicleStatusDropdown";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -112,6 +113,7 @@ function VehicleHeader({
               isUpdating={isStatusUpdating}
               onChange={onStatusChange}
             />
+            <VehicleOriginBadge origin={vehicle.vehicle_origin} />
             {vehicle.color && (
               <span className="w-fit rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-200">
                 {vehicle.color}

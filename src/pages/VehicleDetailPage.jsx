@@ -5,6 +5,7 @@ import InvestmentSummary from "../components/vehicle-detail/InvestmentSummary";
 import LaborLogsSection from "../components/vehicle-detail/LaborLogsSection";
 import PartRequestsSection from "../components/vehicle-detail/PartRequestsSection";
 import PurchaseOrdersSection from "../components/vehicle-detail/PurchaseOrdersSection";
+import RepairProcessesSection from "../components/vehicle-detail/RepairProcessesSection";
 import RepairJobsSection from "../components/vehicle-detail/RepairJobsSection";
 import SaleWarrantySection from "../components/vehicle-detail/SaleWarrantySection";
 import SellVehicleForm from "../components/vehicle-detail/SellVehicleForm";
@@ -39,6 +40,8 @@ async function fetchVehicleDetails(vehicleId) {
     profilesResponse,
     costEntriesResponse,
     vehiclePhotosResponse,
+    repairProcessesResponse,
+    repairProcessItemsResponse,
     purchaseOrdersResponse,
     vendorsResponse,
     salesResponse,
@@ -54,6 +57,16 @@ async function fetchVehicleDetails(vehicleId) {
       .select("*")
       .eq("vehicle_id", vehicleId)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("repair_processes")
+      .select("*")
+      .eq("vehicle_id", vehicleId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("repair_process_items")
+      .select("*")
+      .eq("vehicle_id", vehicleId)
+      .order("created_at", { ascending: true }),
     supabase.from("purchase_orders").select("*").eq("vehicle_id", vehicleId),
     supabase.from("vendors").select("*"),
     supabase.from("sales").select("*").eq("vehicle_id", vehicleId),
@@ -94,6 +107,8 @@ async function fetchVehicleDetails(vehicleId) {
     partRequestsResponse,
     profilesResponse,
     vehiclePhotosResponse,
+    repairProcessesResponse,
+    repairProcessItemsResponse,
     purchaseOrderItemsResponse,
     purchaseOrdersResponse,
     repairJobsResponse,
@@ -113,6 +128,8 @@ function findFirstError(responses) {
     responses.profilesResponse.error ??
     responses.costEntriesResponse.error ??
     responses.vehiclePhotosResponse.error ??
+    responses.repairProcessesResponse.error ??
+    responses.repairProcessItemsResponse.error ??
     responses.purchaseOrdersResponse.error ??
     responses.purchaseOrderItemsResponse.error ??
     responses.vendorsResponse.error ??
@@ -134,6 +151,8 @@ function applyVehicleDetails(responses, setters) {
     setters.setProfiles([]);
     setters.setCostEntries([]);
     setters.setVehiclePhotos([]);
+    setters.setRepairProcesses([]);
+    setters.setRepairProcessItems([]);
     setters.setPurchaseOrders([]);
     setters.setPurchaseOrderItems([]);
     setters.setVendors([]);
@@ -150,6 +169,8 @@ function applyVehicleDetails(responses, setters) {
   setters.setProfiles(responses.profilesResponse.data ?? []);
   setters.setCostEntries(responses.costEntriesResponse.data ?? []);
   setters.setVehiclePhotos(responses.vehiclePhotosResponse.data ?? []);
+  setters.setRepairProcesses(responses.repairProcessesResponse.data ?? []);
+  setters.setRepairProcessItems(responses.repairProcessItemsResponse.data ?? []);
   setters.setPurchaseOrders(responses.purchaseOrdersResponse.data ?? []);
   setters.setPurchaseOrderItems(responses.purchaseOrderItemsResponse.data ?? []);
   setters.setVendors(responses.vendorsResponse.data ?? []);
@@ -166,6 +187,8 @@ function VehicleDetailPage({ vehicleId, onBack }) {
   const [profiles, setProfiles] = useState([]);
   const [costEntries, setCostEntries] = useState([]);
   const [vehiclePhotos, setVehiclePhotos] = useState([]);
+  const [repairProcesses, setRepairProcesses] = useState([]);
+  const [repairProcessItems, setRepairProcessItems] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [purchaseOrderItems, setPurchaseOrderItems] = useState([]);
   const [vendors, setVendors] = useState([]);
@@ -209,6 +232,8 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           setPartRequests,
           setProfiles,
           setVehiclePhotos,
+          setRepairProcesses,
+          setRepairProcessItems,
           setPurchaseOrderItems,
           setPurchaseOrders,
           setRepairJobs,
@@ -227,6 +252,8 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           setProfiles([]);
           setCostEntries([]);
           setVehiclePhotos([]);
+          setRepairProcesses([]);
+          setRepairProcessItems([]);
           setPurchaseOrders([]);
           setPurchaseOrderItems([]);
           setVendors([]);
@@ -384,6 +411,15 @@ function VehicleDetailPage({ vehicleId, onBack }) {
             onVehiclePhotoChanged={refreshVehicleDetails}
             vehicleId={vehicleId}
             vehiclePhotos={vehiclePhotos}
+          />
+
+          <RepairProcessesSection
+            onRepairProcessAdded={refreshVehicleDetails}
+            onRepairProcessItemAdded={refreshVehicleDetails}
+            repairProcessItems={repairProcessItems}
+            repairProcesses={repairProcesses}
+            vehicleId={vehicleId}
+            vendors={vendors}
           />
 
           <RepairJobsSection

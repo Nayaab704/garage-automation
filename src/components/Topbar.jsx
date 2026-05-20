@@ -1,3 +1,5 @@
+import AuthHeader from "./AuthHeader";
+
 const mobileItems = [
   "Dashboard",
   "Vehicles",
@@ -10,9 +12,12 @@ const mobileItems = [
 
 function Topbar({
   activePage = "Vehicles",
+  isLoggingOut = false,
   onPageChange,
+  onLogout,
   title = "Vehicles",
   description = "Manage garage inventory and operations.",
+  userEmail,
 }) {
   return (
     <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/95 backdrop-blur">
@@ -33,6 +38,11 @@ function Topbar({
           <div className="hidden rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 md:block">
             Production View
           </div>
+          <AuthHeader
+            isLoggingOut={isLoggingOut}
+            onLogout={onLogout}
+            userEmail={userEmail}
+          />
           <div className="flex size-9 items-center justify-center rounded-md bg-emerald-600 text-sm font-bold text-white lg:hidden">
             GM
           </div>

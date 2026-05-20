@@ -70,6 +70,7 @@ function mergeSummariesWithVehicles(summaries, vehicles) {
       ...summary,
       status: vehicle.status ?? summary.status,
       title_status: vehicle.title_status ?? summary.title_status,
+      vehicle_origin: vehicle.vehicle_origin ?? summary.vehicle_origin,
     };
   });
 }
@@ -202,7 +203,9 @@ function Dashboard() {
             .order("stock_number", { ascending: true }),
           supabase
             .from("vehicles")
-            .select("id, stock_number, make, model, status, title_status")
+            .select(
+              "id, stock_number, make, model, status, title_status, vehicle_origin"
+            )
             .order("stock_number", { ascending: true }),
         ]);
 

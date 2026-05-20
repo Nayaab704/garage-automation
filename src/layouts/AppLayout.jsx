@@ -4,9 +4,12 @@ import Topbar from "../components/Topbar";
 function AppLayout({
   activePage = "Vehicles",
   children,
+  isLoggingOut = false,
   onPageChange,
+  onLogout,
   title = "Vehicles",
   description = "Manage garage inventory and operations.",
+  userEmail,
 }) {
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -19,8 +22,11 @@ function AppLayout({
         <Topbar
           activePage={activePage}
           description={description}
+          isLoggingOut={isLoggingOut}
           onPageChange={onPageChange}
+          onLogout={onLogout}
           title={title}
+          userEmail={userEmail}
         />
 
         <main className="px-4 py-6 sm:px-6 lg:px-8">

@@ -1,3 +1,4 @@
+import VehicleOriginBadge from "./VehicleOriginBadge";
 import VehicleStatusBadge from "./VehicleStatusBadge";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -68,6 +69,7 @@ function VehicleCard({ vehicle }) {
 
         <div className="flex flex-wrap justify-end gap-2">
           <VehicleStatusBadge status={vehicle.status} />
+          <VehicleOriginBadge origin={vehicle.vehicle_origin} />
           <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
             {vehicle.make}
           </span>
