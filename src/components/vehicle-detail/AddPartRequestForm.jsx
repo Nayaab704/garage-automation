@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { logVehicleActivity } from "../../lib/activityLogger";
 import { formatRepairProcessType } from "../../lib/repairProcess";
 import { supabase } from "../../lib/supabaseClient";
 
@@ -27,6 +28,7 @@ function getRepairJobTitle(repairJob) {
 
 function AddPartRequestForm({
   onClose,
+  onActivityLogged,
   onPartRequestAdded,
   repairProcesses = [],
   repairJobs = [],
@@ -85,6 +87,15 @@ function AddPartRequestForm({
       } else {
         setFormData(emptyForm);
         setSuccessMessage("Part request added successfully.");
+        await logVehicleActivity({
+          vehicleId,
+          action: "Part request created",
+          details: {
+            part_name: partRequest.part_name,
+            quantity: partRequest.quantity,
+          },
+        });
+        onActivityLogged?.();
         await onPartRequestAdded();
       }
     } catch (error) {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import AddRepairJobForm from "./AddRepairJobForm";
 import StatusDropdown from "./StatusDropdown";
+import { logVehicleActivity } from "../../lib/activityLogger";
 import { formatRepairProcessType } from "../../lib/repairProcess";
 import { supabase } from "../../lib/supabaseClient";
 
@@ -176,6 +177,7 @@ function RepairJobCard({
 }
 
 function RepairJobsSection({
+  onActivityLogged,
   onRepairJobAdded,
   onRepairJobStatusUpdated,
   repairProcesses = [],
@@ -214,6 +216,23 @@ function RepairJobsSection({
         setStatusError(error.message);
         return;
       }
+
+      await logVehicleActivity({
+        vehicleId,
+        action: "Repair job status changed",
+        details: {
+          title:
+            getFirstValue(currentRepairJob ?? {}, [
+              "title",
+              "name",
+              "job_title",
+              "repair_title",
+            ]) ?? "Repair Job",
+          from: previousStatus,
+          to: newStatus,
+        },
+      });
+      onActivityLogged?.();
     } catch (error) {
       onRepairJobStatusUpdated(repairJobId, previousStatus);
       setStatusError(error.message ?? "Something went wrong.");
@@ -274,6 +293,7 @@ function RepairJobsSection({
       {isFormOpen && (
         <AddRepairJobForm
           onClose={() => setIsFormOpen(false)}
+          onActivityLogged={onActivityLogged}
           onRepairJobAdded={onRepairJobAdded}
           repairProcesses={repairProcesses}
           vehicleId={vehicleId}

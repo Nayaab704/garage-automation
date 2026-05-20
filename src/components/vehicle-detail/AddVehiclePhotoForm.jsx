@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 
 const photoTypeOptions = [
@@ -31,7 +32,12 @@ function buildPhotoPath(vehicleId, fileName) {
   return `vehicles/${vehicleId}/${timestamp}-${cleanFileName(fileName)}`;
 }
 
-function AddVehiclePhotoForm({ onClose, onPhotoAdded, vehicleId }) {
+function AddVehiclePhotoForm({
+  onActivityLogged,
+  onClose,
+  onPhotoAdded,
+  vehicleId,
+}) {
   const [formData, setFormData] = useState(emptyForm);
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileInputKey, setFileInputKey] = useState(0);
@@ -122,6 +128,16 @@ function AddVehiclePhotoForm({ onClose, onPhotoAdded, vehicleId }) {
       setSelectedFile(null);
       setFileInputKey((currentKey) => currentKey + 1);
       setSuccessMessage("Photo uploaded successfully.");
+      await logVehicleActivity({
+        vehicleId,
+        action: "Photo uploaded",
+        details: {
+          photo_type: photo.photo_type,
+          caption: photo.caption,
+          file_name: selectedFile.name,
+        },
+      });
+      onActivityLogged?.();
       await onPhotoAdded();
     } catch (error) {
       setErrorMessage(error.message ?? "Something went wrong.");

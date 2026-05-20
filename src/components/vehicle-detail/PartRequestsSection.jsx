@@ -1,6 +1,7 @@
 import { useState } from "react";
 import AddPartRequestForm from "./AddPartRequestForm";
 import StatusDropdown from "./StatusDropdown";
+import { logVehicleActivity } from "../../lib/activityLogger";
 import { formatRepairProcessType } from "../../lib/repairProcess";
 import { supabase } from "../../lib/supabaseClient";
 
@@ -113,6 +114,7 @@ function PartRequestCard({
 }
 
 function PartRequestsSection({
+  onActivityLogged,
   onPartRequestAdded,
   onPartRequestStatusUpdated,
   partRequests = [],
@@ -152,6 +154,22 @@ function PartRequestsSection({
         setStatusError(error.message);
         return;
       }
+
+      await logVehicleActivity({
+        vehicleId,
+        action: "Part request status changed",
+        details: {
+          part_name:
+            getFirstValue(currentPartRequest ?? {}, [
+              "part_name",
+              "name",
+              "part",
+            ]) ?? "Part Request",
+          from: previousStatus,
+          to: newStatus,
+        },
+      });
+      onActivityLogged?.();
     } catch (error) {
       onPartRequestStatusUpdated(partRequestId, previousStatus);
       setStatusError(error.message ?? "Something went wrong.");
@@ -212,6 +230,7 @@ function PartRequestsSection({
       {isFormOpen && (
         <AddPartRequestForm
           onClose={() => setIsFormOpen(false)}
+          onActivityLogged={onActivityLogged}
           onPartRequestAdded={onPartRequestAdded}
           repairProcesses={repairProcesses}
           repairJobs={repairJobs}

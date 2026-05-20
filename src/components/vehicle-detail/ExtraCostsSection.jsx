@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AddExtraCostForm from "./AddExtraCostForm";
+import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -101,6 +102,7 @@ function ExtraCostCard({ costEntry, isDeleting, onDelete }) {
 
 function ExtraCostsSection({
   costEntries = [],
+  onActivityLogged,
   onExtraCostChanged,
   vehicleId,
 }) {
@@ -126,6 +128,7 @@ function ExtraCostsSection({
     setDeletingCostEntryId(costEntryId);
 
     try {
+      const costEntry = costEntries.find((entry) => entry.id === costEntryId);
       const { error } = await supabase
         .from("cost_entries")
         .delete()
@@ -136,6 +139,19 @@ function ExtraCostsSection({
         return;
       }
 
+      await logVehicleActivity({
+        vehicleId,
+        action: "Extra cost deleted",
+        details: {
+          amount: getFirstValue(costEntry ?? {}, ["amount", "cost"]),
+          cost_type: getFirstValue(costEntry ?? {}, ["cost_type", "type"]),
+          description: getFirstValue(costEntry ?? {}, [
+            "description",
+            "notes",
+          ]),
+        },
+      });
+      onActivityLogged?.();
       await onExtraCostChanged();
     } catch (error) {
       setDeleteError(error.message ?? "Something went wrong.");
@@ -195,6 +211,7 @@ function ExtraCostsSection({
       {isFormOpen && (
         <AddExtraCostForm
           onClose={() => setIsFormOpen(false)}
+          onActivityLogged={onActivityLogged}
           onExtraCostAdded={onExtraCostChanged}
           vehicleId={vehicleId}
         />

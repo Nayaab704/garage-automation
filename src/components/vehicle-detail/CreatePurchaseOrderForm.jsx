@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 
 const emptyForm = {
@@ -67,6 +68,7 @@ function parseOptionalNumber(value, label) {
 
 function CreatePurchaseOrderForm({
   onClose,
+  onActivityLogged,
   onPurchaseOrderCreated,
   partRequests = [],
   vehicleId,
@@ -227,6 +229,9 @@ function CreatePurchaseOrderForm({
         .eq("id", formData.part_request_id);
 
       let statusWarning = "";
+      const selectedPartRequest = partRequests.find(
+        (partRequest) => partRequest.id === formData.part_request_id
+      );
 
       if (partRequestResponse.error) {
         statusWarning = `Purchase order created, but the part request status could not be updated: ${partRequestResponse.error.message}`;
@@ -235,10 +240,35 @@ function CreatePurchaseOrderForm({
       setFormData(emptyForm);
       setSuccessMessage("Purchase order created successfully.");
       setWarningMessage(statusWarning);
-
-      if (statusWarning) {
-        return;
+      await logVehicleActivity({
+        vehicleId,
+        action: "Purchase order created",
+        details: {
+          description: validation.values.description,
+          quantity: validation.values.quantity,
+          unit_cost: validation.values.unitCost,
+          vendor: getVendorName(
+            vendors.find((vendor) => vendor.id === formData.vendor_id) ?? {}
+          ),
+          part_name: getPartRequestName(
+            partRequests.find(
+              (partRequest) => partRequest.id === formData.part_request_id
+            ) ?? {}
+          ),
+        },
+      });
+      if (!partRequestResponse.error) {
+        await logVehicleActivity({
+          vehicleId,
+          action: "Part request status changed",
+          details: {
+            part_name: getPartRequestName(selectedPartRequest ?? {}),
+            from: selectedPartRequest?.status,
+            to: "ordered",
+          },
+        });
       }
+      onActivityLogged?.();
 
       await onPurchaseOrderCreated();
     } catch (error) {

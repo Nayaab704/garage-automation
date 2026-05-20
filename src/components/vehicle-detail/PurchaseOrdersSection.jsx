@@ -225,6 +225,7 @@ function PurchaseOrderCard({
 }
 
 function PurchaseOrdersSection({
+  onActivityLogged,
   onPurchaseOrderCreated,
   partRequests = [],
   purchaseOrderItems = [],
@@ -282,6 +283,7 @@ function PurchaseOrdersSection({
       {isFormOpen && (
         <CreatePurchaseOrderForm
           onClose={() => setIsFormOpen(false)}
+          onActivityLogged={onActivityLogged}
           onPurchaseOrderCreated={onPurchaseOrderCreated}
           partRequests={partRequests}
           vehicleId={vehicleId}

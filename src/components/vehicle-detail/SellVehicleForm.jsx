@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 
 const emptyForm = {
@@ -38,7 +39,12 @@ function hasWarrantyDetails(formData) {
   );
 }
 
-function SellVehicleForm({ onClose, onVehicleSold, vehicle }) {
+function SellVehicleForm({
+  onActivityLogged,
+  onClose,
+  onVehicleSold,
+  vehicle,
+}) {
   const [formData, setFormData] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -128,6 +134,18 @@ function SellVehicleForm({ onClose, onVehicleSold, vehicle }) {
       }
 
       setSuccessMessage("Vehicle sold successfully.");
+      await logVehicleActivity({
+        vehicleId: vehicle.id,
+        action: "Vehicle sold",
+        details: {
+          customer_name: sale.customer_name,
+          sale_price: sale.sale_price,
+          sale_date: sale.sale_date,
+          payment_method: sale.payment_method,
+          warranty_created: hasWarrantyDetails(formData),
+        },
+      });
+      onActivityLogged?.();
       await onVehicleSold();
       onClose();
     } catch (error) {

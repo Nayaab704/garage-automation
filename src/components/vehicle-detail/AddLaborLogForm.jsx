@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 
 const emptyForm = {
@@ -52,6 +53,7 @@ function parsePositiveNumber(value, label) {
 
 function AddLaborLogForm({
   onClose,
+  onActivityLogged,
   onLaborLogAdded,
   profiles = [],
   repairJobs = [],
@@ -131,6 +133,25 @@ function AddLaborLogForm({
       } else {
         setFormData(emptyForm);
         setSuccessMessage("Labor log added successfully.");
+        await logVehicleActivity({
+          vehicleId,
+          action: "Labor log added",
+          details: {
+            repair_job: getRepairJobTitle(
+              repairJobs.find(
+                (repairJob) => repairJob.id === laborLog.repair_job_id
+              ) ?? {}
+            ),
+            technician: getTechnicianName(
+              profiles.find(
+                (profile) => profile.id === laborLog.technician_id
+              ) ?? {}
+            ),
+            hours: laborLog.hours,
+            hourly_rate: laborLog.hourly_rate,
+          },
+        });
+        onActivityLogged?.();
         await onLaborLogAdded();
       }
     } catch (error) {

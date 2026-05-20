@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 
 const costTypeOptions = [
@@ -31,7 +32,12 @@ function parseAmount(value) {
   return { error: "", value: numberValue };
 }
 
-function AddExtraCostForm({ onClose, onExtraCostAdded, vehicleId }) {
+function AddExtraCostForm({
+  onActivityLogged,
+  onClose,
+  onExtraCostAdded,
+  vehicleId,
+}) {
   const [formData, setFormData] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -75,6 +81,16 @@ function AddExtraCostForm({ onClose, onExtraCostAdded, vehicleId }) {
       } else {
         setFormData(emptyForm);
         setSuccessMessage("Extra cost added successfully.");
+        await logVehicleActivity({
+          vehicleId,
+          action: "Extra cost added",
+          details: {
+            amount: costEntry.amount,
+            cost_type: costEntry.cost_type,
+            description: costEntry.description,
+          },
+        });
+        onActivityLogged?.();
         await onExtraCostAdded();
       }
     } catch (error) {

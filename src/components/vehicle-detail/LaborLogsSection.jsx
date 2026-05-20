@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AddLaborLogForm from "./AddLaborLogForm";
+import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -155,6 +156,7 @@ function LaborLogCard({
 
 function LaborLogsSection({
   laborLogs = [],
+  onActivityLogged,
   onLaborLogAdded,
   profiles = [],
   repairJobs = [],
@@ -182,6 +184,9 @@ function LaborLogsSection({
     setDeletingLaborLogId(laborLogId);
 
     try {
+      const laborLog = laborLogs.find((record) => record.id === laborLogId);
+      const repairJob = getRecordById(repairJobs, laborLog?.repair_job_id);
+      const technician = getRecordById(profiles, laborLog?.technician_id);
       const { error } = await supabase
         .from("labor_logs")
         .delete()
@@ -192,6 +197,17 @@ function LaborLogsSection({
         return;
       }
 
+      await logVehicleActivity({
+        vehicleId,
+        action: "Labor log deleted",
+        details: {
+          repair_job: repairJob ? getRepairJobTitle(repairJob) : null,
+          technician: technician ? getTechnicianName(technician) : null,
+          hours: laborLog?.hours,
+          hourly_rate: laborLog?.hourly_rate,
+        },
+      });
+      onActivityLogged?.();
       await onLaborLogAdded();
     } catch (error) {
       setDeleteError(error.message ?? "Something went wrong.");
@@ -252,6 +268,7 @@ function LaborLogsSection({
       {isFormOpen && (
         <AddLaborLogForm
           onClose={() => setIsFormOpen(false)}
+          onActivityLogged={onActivityLogged}
           onLaborLogAdded={onLaborLogAdded}
           profiles={profiles}
           repairJobs={repairJobs}

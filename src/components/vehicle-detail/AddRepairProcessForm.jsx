@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { logVehicleActivity } from "../../lib/activityLogger";
 import {
   repairProcessStatusOptions,
   repairProcessTypeOptions,
@@ -68,6 +69,7 @@ function isDuplicateRepairProcessError(error) {
 
 function AddRepairProcessForm({
   onClose,
+  onActivityLogged,
   onRepairProcessAdded,
   repairProcesses = [],
   vehicleId,
@@ -147,6 +149,21 @@ function AddRepairProcessForm({
 
       setFormData(getInitialFormData(repairProcesses));
       setSuccessMessage("Repair process added successfully.");
+      await logVehicleActivity({
+        vehicleId,
+        action: "Repair process added",
+        details: {
+          process_type: repairProcess.process_type,
+          status: repairProcess.status,
+          vendor: repairProcess.vendor_id
+            ? getVendorName(
+                vendors.find((vendor) => vendor.id === repairProcess.vendor_id) ??
+                  {}
+              )
+            : null,
+        },
+      });
+      onActivityLogged?.();
       await onRepairProcessAdded();
     } catch (error) {
       setErrorMessage(error.message ?? "Something went wrong.");

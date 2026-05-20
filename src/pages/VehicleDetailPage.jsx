@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import EditVehicleForm from "../components/EditVehicleForm";
+import ActivityTimelineSection from "../components/vehicle-detail/ActivityTimelineSection";
 import ExtraCostsSection from "../components/vehicle-detail/ExtraCostsSection";
 import InvestmentSummary from "../components/vehicle-detail/InvestmentSummary";
 import LaborLogsSection from "../components/vehicle-detail/LaborLogsSection";
@@ -11,6 +12,7 @@ import SaleWarrantySection from "../components/vehicle-detail/SaleWarrantySectio
 import SellVehicleForm from "../components/vehicle-detail/SellVehicleForm";
 import VehicleHeader from "../components/vehicle-detail/VehicleHeader";
 import VehiclePhotosSection from "../components/vehicle-detail/VehiclePhotosSection";
+import { logVehicleActivity } from "../lib/activityLogger";
 import { supabase } from "../lib/supabaseClient";
 
 async function fetchInvestmentSummary(vehicleId, stockNumber) {
@@ -203,6 +205,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
   const [isVehicleStatusUpdating, setIsVehicleStatusUpdating] = useState(false);
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
   const [isSellFormOpen, setIsSellFormOpen] = useState(false);
+  const [activityRefreshCount, setActivityRefreshCount] = useState(0);
   const [refreshCount, setRefreshCount] = useState(0);
 
   useEffect(() => {
@@ -281,6 +284,10 @@ function VehicleDetailPage({ vehicleId, onBack }) {
     setRefreshCount((currentCount) => currentCount + 1);
   }
 
+  function refreshActivityTimeline() {
+    setActivityRefreshCount((currentCount) => currentCount + 1);
+  }
+
   async function refreshInvestmentSummary() {
     if (!vehicleId) {
       return;
@@ -302,28 +309,70 @@ function VehicleDetailPage({ vehicleId, onBack }) {
   async function handleRepairProcessItemAdded(newItem) {
     if (newItem) {
       setRepairProcessItems((currentItems) => [...currentItems, newItem]);
+      await logVehicleActivity({
+        vehicleId,
+        action: "Repair process item added",
+        details: {
+          category_name: newItem.category_name,
+          cost: newItem.cost,
+          status: newItem.status,
+        },
+      });
+      refreshActivityTimeline();
     }
 
     await refreshInvestmentSummary();
   }
 
   async function handleRepairProcessItemUpdated(updatedItem) {
+    const previousItem = repairProcessItems.find(
+      (item) => item.id === updatedItem?.id
+    );
+
     if (updatedItem) {
       setRepairProcessItems((currentItems) =>
         currentItems.map((item) =>
           item.id === updatedItem.id ? updatedItem : item
         )
       );
+
+      await logVehicleActivity({
+        vehicleId,
+        action: "Repair process item edited",
+        details: {
+          category_name: updatedItem.category_name,
+          from_cost: previousItem?.cost,
+          to_cost: updatedItem.cost,
+          from_status: previousItem?.status,
+          to_status: updatedItem.status,
+        },
+      });
+      refreshActivityTimeline();
     }
 
     await refreshInvestmentSummary();
   }
 
   async function handleRepairProcessItemDeleted(deletedItemId) {
+    const deletedItem = repairProcessItems.find(
+      (item) => item.id === deletedItemId
+    );
+
     if (deletedItemId) {
       setRepairProcessItems((currentItems) =>
         currentItems.filter((item) => item.id !== deletedItemId)
       );
+
+      await logVehicleActivity({
+        vehicleId,
+        action: "Repair process item deleted",
+        details: {
+          category_name: deletedItem?.category_name,
+          cost: deletedItem?.cost,
+          status: deletedItem?.status,
+        },
+      });
+      refreshActivityTimeline();
     }
 
     await refreshInvestmentSummary();
@@ -383,6 +432,15 @@ function VehicleDetailPage({ vehicleId, onBack }) {
         return;
       }
 
+      await logVehicleActivity({
+        vehicleId,
+        action: "Vehicle status changed",
+        details: {
+          from: previousStatus,
+          to: newStatus,
+        },
+      });
+      refreshActivityTimeline();
       refreshVehicleDetails();
     } catch (error) {
       setVehicle((currentVehicle) =>
@@ -457,7 +515,13 @@ function VehicleDetailPage({ vehicleId, onBack }) {
             vehicle={vehicle}
           />
 
+          <ActivityTimelineSection
+            refreshKey={activityRefreshCount}
+            vehicleId={vehicleId}
+          />
+
           <VehiclePhotosSection
+            onActivityLogged={refreshActivityTimeline}
             onVehiclePhotoChanged={refreshVehicleDetails}
             vehicleId={vehicleId}
             vehiclePhotos={vehiclePhotos}
@@ -468,6 +532,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
             onRepairProcessItemAdded={handleRepairProcessItemAdded}
             onRepairProcessItemDeleted={handleRepairProcessItemDeleted}
             onRepairProcessItemUpdated={handleRepairProcessItemUpdated}
+            onActivityLogged={refreshActivityTimeline}
             repairProcessItems={repairProcessItems}
             repairProcesses={repairProcesses}
             vehicleId={vehicleId}
@@ -475,6 +540,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           />
 
           <RepairJobsSection
+            onActivityLogged={refreshActivityTimeline}
             onRepairJobAdded={refreshVehicleDetails}
             onRepairJobStatusUpdated={handleRepairJobStatusUpdated}
             repairProcesses={repairProcesses}
@@ -484,6 +550,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
 
           <LaborLogsSection
             laborLogs={laborLogs}
+            onActivityLogged={refreshActivityTimeline}
             onLaborLogAdded={refreshVehicleDetails}
             profiles={profiles}
             repairJobs={repairJobs}
@@ -492,11 +559,13 @@ function VehicleDetailPage({ vehicleId, onBack }) {
 
           <ExtraCostsSection
             costEntries={costEntries}
+            onActivityLogged={refreshActivityTimeline}
             onExtraCostChanged={refreshVehicleDetails}
             vehicleId={vehicleId}
           />
 
           <PartRequestsSection
+            onActivityLogged={refreshActivityTimeline}
             onPartRequestAdded={refreshVehicleDetails}
             onPartRequestStatusUpdated={handlePartRequestStatusUpdated}
             partRequests={partRequests}
@@ -506,6 +575,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           />
 
           <PurchaseOrdersSection
+            onActivityLogged={refreshActivityTimeline}
             onPurchaseOrderCreated={refreshVehicleDetails}
             partRequests={partRequests}
             purchaseOrderItems={purchaseOrderItems}
@@ -532,6 +602,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           {isSellFormOpen && (
             <SellVehicleForm
               onClose={() => setIsSellFormOpen(false)}
+              onActivityLogged={refreshActivityTimeline}
               onVehicleSold={refreshVehicleDetails}
               vehicle={vehicle}
             />

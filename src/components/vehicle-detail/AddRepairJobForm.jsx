@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { logVehicleActivity } from "../../lib/activityLogger";
 import { formatRepairProcessType } from "../../lib/repairProcess";
 import { supabase } from "../../lib/supabaseClient";
 
@@ -17,6 +18,7 @@ function emptyToNull(value) {
 
 function AddRepairJobForm({
   onClose,
+  onActivityLogged,
   onRepairJobAdded,
   repairProcesses = [],
   vehicleId,
@@ -59,6 +61,16 @@ function AddRepairJobForm({
       } else {
         setFormData(emptyForm);
         setSuccessMessage("Repair job added successfully.");
+        await logVehicleActivity({
+          vehicleId,
+          action: "Repair job created",
+          details: {
+            title: repairJob.title,
+            category: repairJob.category,
+            priority: repairJob.priority,
+          },
+        });
+        onActivityLogged?.();
         await onRepairJobAdded();
       }
     } catch (error) {

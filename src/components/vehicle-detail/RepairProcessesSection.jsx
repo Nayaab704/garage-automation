@@ -200,6 +200,7 @@ function RepairProcessCard({
 }
 
 function RepairProcessesSection({
+  onActivityLogged,
   onRepairProcessAdded,
   onRepairProcessItemAdded,
   onRepairProcessItemDeleted,
@@ -265,6 +266,7 @@ function RepairProcessesSection({
       {isFormOpen && (
         <AddRepairProcessForm
           onClose={() => setIsFormOpen(false)}
+          onActivityLogged={onActivityLogged}
           onRepairProcessAdded={onRepairProcessAdded}
           repairProcesses={repairProcesses}
           vehicleId={vehicleId}

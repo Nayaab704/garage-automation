@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AddVehiclePhotoForm from "./AddVehiclePhotoForm";
+import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 
 const photoTypeLabels = {
@@ -87,6 +88,7 @@ function PhotoCard({ isDeleting, onDelete, photo }) {
 }
 
 function VehiclePhotosSection({
+  onActivityLogged,
   onVehiclePhotoChanged,
   vehicleId,
   vehiclePhotos = [],
@@ -137,6 +139,15 @@ function VehiclePhotosSection({
         return;
       }
 
+      await logVehicleActivity({
+        vehicleId,
+        action: "Photo deleted",
+        details: {
+          photo_type: photo.photo_type,
+          caption: photo.caption,
+        },
+      });
+      onActivityLogged?.();
       await onVehiclePhotoChanged();
     } catch (error) {
       setDeleteError(error.message ?? "Something went wrong.");
@@ -196,6 +207,7 @@ function VehiclePhotosSection({
       {isFormOpen && (
         <AddVehiclePhotoForm
           onClose={() => setIsFormOpen(false)}
+          onActivityLogged={onActivityLogged}
           onPhotoAdded={onVehiclePhotoChanged}
           vehicleId={vehicleId}
         />
