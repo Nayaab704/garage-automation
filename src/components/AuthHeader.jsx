@@ -1,11 +1,44 @@
-function AuthHeader({ isLoggingOut = false, onLogout, userEmail }) {
+import {
+  formatProfileRole,
+  getProfileRoleClassName,
+} from "../lib/currentUserProfile";
+
+function AuthHeader({
+  currentProfile,
+  isLoggingOut = false,
+  isProfileLoading = false,
+  onLogout,
+  profileError = "",
+  userEmail,
+}) {
+  const role = currentProfile?.role;
+
   return (
     <div className="flex items-center gap-3">
-      <div className="hidden text-right md:block">
+      <div className="hidden text-right sm:block">
         <p className="text-xs font-medium text-zinc-500">Signed in as</p>
         <p className="max-w-56 truncate text-sm font-semibold text-zinc-800">
           {userEmail ?? "Unknown user"}
         </p>
+        <div className="mt-1 flex justify-end">
+          {isProfileLoading ? (
+            <span className="text-xs font-medium text-zinc-500">
+              Loading profile...
+            </span>
+          ) : profileError ? (
+            <span className="max-w-56 truncate text-xs font-medium text-amber-700">
+              {profileError}
+            </span>
+          ) : (
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${getProfileRoleClassName(
+                role
+              )}`}
+            >
+              {formatProfileRole(role)}
+            </span>
+          )}
+        </div>
       </div>
 
       <button

@@ -13,9 +13,12 @@ const mobileItems = [
 
 function Topbar({
   activePage = "Vehicles",
+  currentProfile,
   isLoggingOut = false,
+  isProfileLoading = false,
   onPageChange,
   onLogout,
+  profileError = "",
   title = "Vehicles",
   description = "Manage garage inventory and operations.",
   userEmail,
@@ -40,8 +43,11 @@ function Topbar({
             Production View
           </div>
           <AuthHeader
+            currentProfile={currentProfile}
             isLoggingOut={isLoggingOut}
+            isProfileLoading={isProfileLoading}
             onLogout={onLogout}
+            profileError={profileError}
             userEmail={userEmail}
           />
           <div className="flex size-9 items-center justify-center rounded-md bg-emerald-600 text-sm font-bold text-white lg:hidden">

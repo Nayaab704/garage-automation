@@ -5,6 +5,7 @@ import IntakePage from "./pages/IntakePage";
 import LoginPage from "./pages/LoginPage";
 import VehicleDetailPage from "./pages/VehicleDetailPage";
 import VehiclesPage from "./pages/VehiclesPage";
+import { fetchCurrentUserProfile } from "./lib/currentUserProfile";
 import { supabase } from "./lib/supabaseClient";
 
 const pageDetails = {
@@ -66,8 +67,11 @@ function App() {
   const [activePage, setActivePage] = useState("Vehicles");
   const [selectedVehicleId, setSelectedVehicleId] = useState(null);
   const [session, setSession] = useState(null);
+  const [currentProfile, setCurrentProfile] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [profileError, setProfileError] = useState("");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const currentPage = pageDetails[activePage];
   const navigationPage = activePage === "vehicleDetail" ? "Vehicles" : activePage;
@@ -120,6 +124,59 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadCurrentProfile() {
+      if (!session?.user?.id) {
+        setCurrentProfile(null);
+        setProfileError("");
+        setIsProfileLoading(false);
+        return;
+      }
+
+      setIsProfileLoading(true);
+      setProfileError("");
+
+      try {
+        const { data, error } = await fetchCurrentUserProfile(session.user.id);
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (error) {
+          setCurrentProfile(null);
+          setProfileError(error.message);
+          return;
+        }
+
+        if (!data) {
+          setCurrentProfile(null);
+          setProfileError("Profile not found. Please contact admin.");
+          return;
+        }
+
+        setCurrentProfile(data);
+      } catch (error) {
+        if (isMounted) {
+          setCurrentProfile(null);
+          setProfileError(error.message ?? "Unable to load your profile.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsProfileLoading(false);
+        }
+      }
+    }
+
+    loadCurrentProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session?.user?.id]);
+
   function handlePageChange(pageName) {
     setSelectedVehicleId(null);
     setActivePage(pageName);
@@ -138,6 +195,7 @@ function App() {
   async function handleLogout() {
     setIsLoggingOut(true);
     setAuthError("");
+    setProfileError("");
 
     try {
       const { error } = await supabase.auth.signOut();
@@ -148,6 +206,7 @@ function App() {
       }
 
       setSelectedVehicleId(null);
+      setCurrentProfile(null);
       setActivePage("Vehicles");
     } catch (error) {
       setAuthError(error.message ?? "Unable to log out.");
@@ -158,20 +217,31 @@ function App() {
 
   function renderActivePage() {
     if (activePage === "Dashboard") {
-      return <Dashboard />;
+      return <Dashboard currentProfile={currentProfile} />;
     }
 
     if (activePage === "Vehicles") {
-      return <VehiclesPage onSelectVehicle={handleSelectVehicle} />;
+      return (
+        <VehiclesPage
+          currentProfile={currentProfile}
+          onSelectVehicle={handleSelectVehicle}
+        />
+      );
     }
 
     if (activePage === "Intake") {
-      return <IntakePage onViewVehicles={() => handlePageChange("Vehicles")} />;
+      return (
+        <IntakePage
+          currentProfile={currentProfile}
+          onViewVehicles={() => handlePageChange("Vehicles")}
+        />
+      );
     }
 
     if (activePage === "vehicleDetail") {
       return (
         <VehicleDetailPage
+          currentProfile={currentProfile}
           onBack={handleBackToVehicles}
           vehicleId={selectedVehicleId}
         />
@@ -198,16 +268,24 @@ function App() {
   return (
     <AppLayout
       activePage={navigationPage}
+      currentProfile={currentProfile}
       description={currentPage.description}
       isLoggingOut={isLoggingOut}
+      isProfileLoading={isProfileLoading}
       onPageChange={handlePageChange}
       onLogout={handleLogout}
+      profileError={profileError}
       title={currentPage.title}
       userEmail={userEmail}
     >
       {authError && (
         <div className="mb-6 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
           {authError}
+        </div>
+      )}
+      {profileError && (
+        <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          {profileError}
         </div>
       )}
       {renderActivePage()}

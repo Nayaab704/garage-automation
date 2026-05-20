@@ -4,9 +4,12 @@ import Topbar from "../components/Topbar";
 function AppLayout({
   activePage = "Vehicles",
   children,
+  currentProfile,
   isLoggingOut = false,
+  isProfileLoading = false,
   onPageChange,
   onLogout,
+  profileError = "",
   title = "Vehicles",
   description = "Manage garage inventory and operations.",
   userEmail,
@@ -21,10 +24,13 @@ function AppLayout({
       <div className="min-h-screen lg:pl-64">
         <Topbar
           activePage={activePage}
+          currentProfile={currentProfile}
           description={description}
           isLoggingOut={isLoggingOut}
+          isProfileLoading={isProfileLoading}
           onPageChange={onPageChange}
           onLogout={onLogout}
+          profileError={profileError}
           title={title}
           userEmail={userEmail}
         />
