@@ -1,7 +1,10 @@
+import { useState } from "react";
+import EditRepairProcessItemForm from "./EditRepairProcessItemForm";
 import {
   formatRepairProcessItemStatus,
   getRepairProcessItemStatusClassName,
 } from "../../lib/repairProcess";
+import { supabase } from "../../lib/supabaseClient";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -24,21 +27,6 @@ function formatCurrency(value) {
   return currencyFormatter.format(numberValue);
 }
 
-function numberOrZero(value) {
-  const numberValue = Number(value);
-  return Number.isFinite(numberValue) ? numberValue : 0;
-}
-
-function getItemTotals(items) {
-  return items.reduce(
-    (totals, item) => ({
-      actualCost: totals.actualCost + numberOrZero(item.actual_cost),
-      estimatedCost: totals.estimatedCost + numberOrZero(item.estimated_cost),
-    }),
-    { actualCost: 0, estimatedCost: 0 }
-  );
-}
-
 function DetailItem({ label, value }) {
   return (
     <div>
@@ -48,7 +36,7 @@ function DetailItem({ label, value }) {
   );
 }
 
-function RepairProcessItemCard({ item }) {
+function RepairProcessItemCard({ isDeleting, item, onDelete, onEdit }) {
   return (
     <article className="rounded-md border border-zinc-200 bg-white p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -58,24 +46,35 @@ function RepairProcessItemCard({ item }) {
           </h4>
         </div>
 
-        <span
-          className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${getRepairProcessItemStatusClassName(
-            item.status
-          )}`}
-        >
-          {formatRepairProcessItemStatus(item.status)}
-        </span>
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <span
+            className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${getRepairProcessItemStatusClassName(
+              item.status
+            )}`}
+          >
+            {formatRepairProcessItemStatus(item.status)}
+          </span>
+          <button
+            className="rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isDeleting}
+            onClick={() => onEdit(item)}
+            type="button"
+          >
+            Edit
+          </button>
+          <button
+            className="rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isDeleting}
+            onClick={() => onDelete(item.id)}
+            type="button"
+          >
+            {isDeleting ? "Deleting..." : "Delete"}
+          </button>
+        </div>
       </div>
 
       <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-        <DetailItem
-          label="Estimated Cost"
-          value={formatCurrency(item.estimated_cost)}
-        />
-        <DetailItem
-          label="Actual Cost"
-          value={formatCurrency(item.actual_cost)}
-        />
+        <DetailItem label="Cost" value={formatCurrency(item.cost)} />
       </dl>
 
       {item.notes && (
@@ -90,8 +89,56 @@ function RepairProcessItemCard({ item }) {
   );
 }
 
-function RepairProcessItemsList({ items = [] }) {
-  const totals = getItemTotals(items);
+function RepairProcessItemsList({
+  items = [],
+  onItemDeleted = async () => {},
+  onItemUpdated = async () => {},
+  repairProcess,
+}) {
+  const [deleteError, setDeleteError] = useState("");
+  const [deletingItemId, setDeletingItemId] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
+
+  async function handleDelete(itemId) {
+    if (!itemId) {
+      setDeleteError("Unable to delete this item without an ID.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Delete this repair process item? This cannot be undone."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleteError("");
+    setDeletingItemId(itemId);
+
+    try {
+      const { error } = await supabase
+        .from("repair_process_items")
+        .delete()
+        .eq("id", itemId);
+
+      if (error) {
+        setDeleteError(error.message);
+        return;
+      }
+
+      await onItemDeleted(itemId);
+    } catch (error) {
+      setDeleteError(error.message ?? "Something went wrong.");
+    } finally {
+      setDeletingItemId(null);
+    }
+  }
+
+  async function handleItemUpdated(updatedItem) {
+    await onItemUpdated(updatedItem);
+    setEditingItem(null);
+  }
 
   return (
     <div className="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
@@ -101,23 +148,6 @@ function RepairProcessItemsList({ items = [] }) {
           <p className="mt-1 text-sm text-zinc-500">
             {items.length} {items.length === 1 ? "item" : "items"}
           </p>
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-2">
-          <div className="rounded-md bg-white px-3 py-2 ring-1 ring-inset ring-zinc-200">
-            <p className="text-xs font-medium text-zinc-500">
-              Estimated Total
-            </p>
-            <p className="text-sm font-bold text-zinc-950">
-              {formatCurrency(totals.estimatedCost)}
-            </p>
-          </div>
-          <div className="rounded-md bg-white px-3 py-2 ring-1 ring-inset ring-zinc-200">
-            <p className="text-xs font-medium text-zinc-500">Actual Total</p>
-            <p className="text-sm font-bold text-zinc-950">
-              {formatCurrency(totals.actualCost)}
-            </p>
-          </div>
         </div>
       </div>
 
@@ -129,11 +159,29 @@ function RepairProcessItemsList({ items = [] }) {
         <div className="mt-4 space-y-3">
           {items.map((item, index) => (
             <RepairProcessItemCard
+              isDeleting={deletingItemId === item.id}
               item={item}
               key={item.id ?? index}
+              onDelete={handleDelete}
+              onEdit={setEditingItem}
             />
           ))}
         </div>
+      )}
+
+      {deleteError && (
+        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          {deleteError}
+        </div>
+      )}
+
+      {editingItem && (
+        <EditRepairProcessItemForm
+          item={editingItem}
+          onClose={() => setEditingItem(null)}
+          onItemUpdated={handleItemUpdated}
+          repairProcess={repairProcess}
+        />
       )}
     </div>
   );

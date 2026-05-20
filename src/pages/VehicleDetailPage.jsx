@@ -64,7 +64,9 @@ async function fetchVehicleDetails(vehicleId) {
       .order("created_at", { ascending: false }),
     supabase
       .from("repair_process_items")
-      .select("*")
+      .select(
+        "id, repair_process_id, vehicle_id, category_name, status, cost, notes, created_at"
+      )
       .eq("vehicle_id", vehicleId)
       .order("created_at", { ascending: true }),
     supabase.from("purchase_orders").select("*").eq("vehicle_id", vehicleId),
@@ -279,6 +281,54 @@ function VehicleDetailPage({ vehicleId, onBack }) {
     setRefreshCount((currentCount) => currentCount + 1);
   }
 
+  async function refreshInvestmentSummary() {
+    if (!vehicleId) {
+      return;
+    }
+
+    const response = await fetchInvestmentSummary(
+      vehicleId,
+      vehicle?.stock_number
+    );
+
+    if (response.error) {
+      setErrorMessage(response.error.message);
+      return;
+    }
+
+    setInvestmentSummary(response.data);
+  }
+
+  async function handleRepairProcessItemAdded(newItem) {
+    if (newItem) {
+      setRepairProcessItems((currentItems) => [...currentItems, newItem]);
+    }
+
+    await refreshInvestmentSummary();
+  }
+
+  async function handleRepairProcessItemUpdated(updatedItem) {
+    if (updatedItem) {
+      setRepairProcessItems((currentItems) =>
+        currentItems.map((item) =>
+          item.id === updatedItem.id ? updatedItem : item
+        )
+      );
+    }
+
+    await refreshInvestmentSummary();
+  }
+
+  async function handleRepairProcessItemDeleted(deletedItemId) {
+    if (deletedItemId) {
+      setRepairProcessItems((currentItems) =>
+        currentItems.filter((item) => item.id !== deletedItemId)
+      );
+    }
+
+    await refreshInvestmentSummary();
+  }
+
   function handleRepairJobStatusUpdated(repairJobId, newStatus) {
     setRepairJobs((currentRepairJobs) =>
       currentRepairJobs.map((repairJob) =>
@@ -415,7 +465,9 @@ function VehicleDetailPage({ vehicleId, onBack }) {
 
           <RepairProcessesSection
             onRepairProcessAdded={refreshVehicleDetails}
-            onRepairProcessItemAdded={refreshVehicleDetails}
+            onRepairProcessItemAdded={handleRepairProcessItemAdded}
+            onRepairProcessItemDeleted={handleRepairProcessItemDeleted}
+            onRepairProcessItemUpdated={handleRepairProcessItemUpdated}
             repairProcessItems={repairProcessItems}
             repairProcesses={repairProcesses}
             vehicleId={vehicleId}
@@ -425,6 +477,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           <RepairJobsSection
             onRepairJobAdded={refreshVehicleDetails}
             onRepairJobStatusUpdated={handleRepairJobStatusUpdated}
+            repairProcesses={repairProcesses}
             repairJobs={repairJobs}
             vehicleId={vehicleId}
           />
@@ -447,6 +500,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
             onPartRequestAdded={refreshVehicleDetails}
             onPartRequestStatusUpdated={handlePartRequestStatusUpdated}
             partRequests={partRequests}
+            repairProcesses={repairProcesses}
             repairJobs={repairJobs}
             vehicleId={vehicleId}
           />

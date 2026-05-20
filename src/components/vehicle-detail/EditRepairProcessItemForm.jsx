@@ -4,7 +4,7 @@ import {
   repairProcessItemStatusOptions,
 } from "../../lib/repairProcess";
 import {
-  getDefaultRepairProcessItemCategory,
+  getRepairProcessItemCategoryFormData,
   getRepairProcessItemCategoryOptions,
 } from "../../lib/repairProcessItemCategories";
 import { supabase } from "../../lib/supabaseClient";
@@ -12,14 +12,6 @@ import { supabase } from "../../lib/supabaseClient";
 const allowedStatuses = repairProcessItemStatusOptions.map(
   (option) => option.value
 );
-
-const emptyForm = {
-  category_name: "Collision / Structural Damage",
-  custom_category_name: "",
-  status: "pending",
-  cost: "",
-  notes: "",
-};
 
 function emptyToNull(value) {
   const trimmedValue = value.trim();
@@ -36,19 +28,29 @@ function parseCost(value, label) {
   return { error: "", value: numberValue };
 }
 
-function getInitialFormData(processType) {
-  return {
-    ...emptyForm,
-    category_name: getDefaultRepairProcessItemCategory(processType),
-  };
-}
-
 function getSelectedCategoryName(formData) {
   if (formData.category_name === "Other") {
     return emptyToNull(formData.custom_category_name);
   }
 
   return emptyToNull(formData.category_name);
+}
+
+function getInitialFormData(item, processType) {
+  const categoryFormData = getRepairProcessItemCategoryFormData(
+    item?.category_name,
+    processType
+  );
+  const status = allowedStatuses.includes(item?.status)
+    ? item.status
+    : "pending";
+
+  return {
+    ...categoryFormData,
+    status,
+    cost: item?.cost ?? "",
+    notes: item?.notes ?? "",
+  };
 }
 
 function validateForm(formData) {
@@ -76,18 +78,17 @@ function validateForm(formData) {
   };
 }
 
-function AddRepairProcessItemForm({
+function EditRepairProcessItemForm({
+  item,
   onClose,
-  onItemAdded,
+  onItemUpdated,
   repairProcess,
-  vehicleId,
 }) {
   const [formData, setFormData] = useState(() =>
-    getInitialFormData(repairProcess?.process_type)
+    getInitialFormData(item, repairProcess?.process_type)
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
   const categoryOptions = getRepairProcessItemCategoryOptions(
     repairProcess?.process_type
   );
@@ -105,14 +106,13 @@ function AddRepairProcessItemForm({
   async function handleSubmit(event) {
     event.preventDefault();
 
-    if (!vehicleId || !repairProcess?.id) {
-      setErrorMessage("Unable to add an item without a repair process.");
+    if (!item?.id) {
+      setErrorMessage("Unable to update this item without an ID.");
       return;
     }
 
     setIsSubmitting(true);
     setErrorMessage("");
-    setSuccessMessage("");
 
     try {
       const validation = validateForm(formData);
@@ -122,9 +122,7 @@ function AddRepairProcessItemForm({
         return;
       }
 
-      const repairProcessItem = {
-        repair_process_id: repairProcess.id,
-        vehicle_id: vehicleId,
+      const itemUpdates = {
         category_name: validation.values.categoryName,
         status: formData.status,
         cost: validation.values.cost,
@@ -133,7 +131,8 @@ function AddRepairProcessItemForm({
 
       const { data, error } = await supabase
         .from("repair_process_items")
-        .insert([repairProcessItem])
+        .update(itemUpdates)
+        .eq("id", item.id)
         .select(
           "id, repair_process_id, vehicle_id, category_name, status, cost, notes, created_at"
         )
@@ -144,9 +143,8 @@ function AddRepairProcessItemForm({
         return;
       }
 
-      setFormData(getInitialFormData(repairProcess?.process_type));
-      setSuccessMessage("Repair process item added successfully.");
-      await onItemAdded(data);
+      await onItemUpdated(data);
+      onClose();
     } catch (error) {
       setErrorMessage(error.message ?? "Something went wrong.");
     } finally {
@@ -160,7 +158,7 @@ function AddRepairProcessItemForm({
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h3 className="text-lg font-bold text-zinc-950">
-              Add Repair Process Item
+              Edit Repair Process Item
             </h3>
             <p className="mt-1 text-sm text-zinc-500">
               {formatRepairProcessType(repairProcess?.process_type)}
@@ -178,13 +176,13 @@ function AddRepairProcessItemForm({
         </div>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
-          <label className="block" htmlFor="repair-process-item-category">
+          <label className="block" htmlFor="edit-repair-process-item-category">
             <span className="text-sm font-medium text-zinc-700">
               Category
             </span>
             <select
               className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
-              id="repair-process-item-category"
+              id="edit-repair-process-item-category"
               name="category_name"
               onChange={handleChange}
               value={formData.category_name}
@@ -200,14 +198,14 @@ function AddRepairProcessItemForm({
           {isCustomCategory && (
             <label
               className="block"
-              htmlFor="repair-process-item-custom-category"
+              htmlFor="edit-repair-process-item-custom-category"
             >
               <span className="text-sm font-medium text-zinc-700">
                 Custom Category
               </span>
               <input
                 className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
-                id="repair-process-item-custom-category"
+                id="edit-repair-process-item-custom-category"
                 name="custom_category_name"
                 onChange={handleChange}
                 required
@@ -217,11 +215,11 @@ function AddRepairProcessItemForm({
             </label>
           )}
 
-          <label className="block" htmlFor="repair-process-item-status">
+          <label className="block" htmlFor="edit-repair-process-item-status">
             <span className="text-sm font-medium text-zinc-700">Status</span>
             <select
               className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
-              id="repair-process-item-status"
+              id="edit-repair-process-item-status"
               name="status"
               onChange={handleChange}
               value={formData.status}
@@ -234,11 +232,11 @@ function AddRepairProcessItemForm({
             </select>
           </label>
 
-          <label className="block" htmlFor="repair-process-item-cost">
+          <label className="block" htmlFor="edit-repair-process-item-cost">
             <span className="text-sm font-medium text-zinc-700">Cost</span>
             <input
               className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
-              id="repair-process-item-cost"
+              id="edit-repair-process-item-cost"
               min="0"
               name="cost"
               onChange={handleChange}
@@ -248,11 +246,11 @@ function AddRepairProcessItemForm({
             />
           </label>
 
-          <label className="block" htmlFor="repair-process-item-notes">
+          <label className="block" htmlFor="edit-repair-process-item-notes">
             <span className="text-sm font-medium text-zinc-700">Notes</span>
             <textarea
               className="mt-1 min-h-24 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
-              id="repair-process-item-notes"
+              id="edit-repair-process-item-notes"
               name="notes"
               onChange={handleChange}
               value={formData.notes}
@@ -262,12 +260,6 @@ function AddRepairProcessItemForm({
           {errorMessage && (
             <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
               {errorMessage}
-            </div>
-          )}
-
-          {successMessage && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              {successMessage}
             </div>
           )}
 
@@ -286,7 +278,7 @@ function AddRepairProcessItemForm({
               disabled={isSubmitting}
               type="submit"
             >
-              {isSubmitting ? "Adding..." : "Add Item"}
+              {isSubmitting ? "Saving..." : "Save Changes"}
             </button>
           </div>
         </form>
@@ -295,4 +287,4 @@ function AddRepairProcessItemForm({
   );
 }
 
-export default AddRepairProcessItemForm;
+export default EditRepairProcessItemForm;

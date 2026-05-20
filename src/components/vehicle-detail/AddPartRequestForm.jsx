@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { formatRepairProcessType } from "../../lib/repairProcess";
 import { supabase } from "../../lib/supabaseClient";
 
 const emptyForm = {
   part_name: "",
   quantity: "1",
   repair_job_id: "",
+  repair_process_id: "",
   notes: "",
 };
 
@@ -26,6 +28,7 @@ function getRepairJobTitle(repairJob) {
 function AddPartRequestForm({
   onClose,
   onPartRequestAdded,
+  repairProcesses = [],
   repairJobs = [],
   vehicleId,
 }) {
@@ -69,6 +72,7 @@ function AddPartRequestForm({
         part_name: partName,
         quantity,
         repair_job_id: formData.repair_job_id || null,
+        repair_process_id: formData.repair_process_id || null,
         notes: emptyToNull(formData.notes),
       };
 
@@ -167,6 +171,26 @@ function AddPartRequestForm({
               </select>
             </label>
           </div>
+
+          <label className="block" htmlFor="part-repair-process">
+            <span className="text-sm font-medium text-zinc-700">
+              Repair Process
+            </span>
+            <select
+              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              id="part-repair-process"
+              name="repair_process_id"
+              onChange={handleChange}
+              value={formData.repair_process_id}
+            >
+              <option value="">No repair process selected</option>
+              {repairProcesses.map((repairProcess) => (
+                <option key={repairProcess.id} value={repairProcess.id}>
+                  {formatRepairProcessType(repairProcess.process_type)}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <label className="block" htmlFor="part-notes">
             <span className="text-sm font-medium text-zinc-700">Notes</span>

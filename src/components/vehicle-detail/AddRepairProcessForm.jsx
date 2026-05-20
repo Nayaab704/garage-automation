@@ -6,11 +6,9 @@ import {
 import { supabase } from "../../lib/supabaseClient";
 
 const emptyForm = {
-  process_type: "in_house",
+  process_type: "",
   status: "not_started",
   vendor_id: "",
-  estimated_cost: "",
-  actual_cost: "",
   notes: "",
 };
 
@@ -38,50 +36,52 @@ function getVendorName(vendor) {
   );
 }
 
-function parseOptionalCost(value, label) {
-  const numberValue = Number(value || 0);
+function getAvailableProcessTypeOptions(repairProcesses) {
+  const existingProcessTypes = new Set(
+    repairProcesses.map((repairProcess) => repairProcess.process_type)
+  );
 
-  if (!Number.isFinite(numberValue) || numberValue < 0) {
-    return { error: `${label} must be 0 or greater.`, value: null };
-  }
-
-  return { error: "", value: numberValue };
+  return repairProcessTypeOptions.filter(
+    (option) => !existingProcessTypes.has(option.value)
+  );
 }
 
-function validateForm(formData) {
-  const estimatedCost = parseOptionalCost(
-    formData.estimated_cost,
-    "Estimated cost"
-  );
-  const actualCost = parseOptionalCost(formData.actual_cost, "Actual cost");
-
-  if (estimatedCost.error) {
-    return { error: estimatedCost.error };
-  }
-
-  if (actualCost.error) {
-    return { error: actualCost.error };
-  }
+function getInitialFormData(repairProcesses) {
+  const availableProcessTypeOptions =
+    getAvailableProcessTypeOptions(repairProcesses);
 
   return {
-    error: "",
-    values: {
-      actualCost: actualCost.value,
-      estimatedCost: estimatedCost.value,
-    },
+    ...emptyForm,
+    process_type: availableProcessTypeOptions[0]?.value ?? "",
   };
+}
+
+function isDuplicateRepairProcessError(error) {
+  const message = String(error?.message ?? "").toLowerCase();
+
+  return (
+    error?.code === "23505" ||
+    message.includes("duplicate") ||
+    message.includes("unique")
+  );
 }
 
 function AddRepairProcessForm({
   onClose,
   onRepairProcessAdded,
+  repairProcesses = [],
   vehicleId,
   vendors = [],
 }) {
-  const [formData, setFormData] = useState(emptyForm);
+  const [formData, setFormData] = useState(() =>
+    getInitialFormData(repairProcesses)
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const availableProcessTypeOptions =
+    getAvailableProcessTypeOptions(repairProcesses);
+  const allProcessTypesAdded = availableProcessTypeOptions.length === 0;
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -100,25 +100,32 @@ function AddRepairProcessForm({
       return;
     }
 
+    if (allProcessTypesAdded) {
+      setErrorMessage(
+        "All repair process types have already been added for this vehicle."
+      );
+      return;
+    }
+
+    if (
+      !availableProcessTypeOptions.some(
+        (option) => option.value === formData.process_type
+      )
+    ) {
+      setErrorMessage("Choose an available repair process type.");
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage("");
     setSuccessMessage("");
 
     try {
-      const validation = validateForm(formData);
-
-      if (validation.error) {
-        setErrorMessage(validation.error);
-        return;
-      }
-
       const repairProcess = {
         vehicle_id: vehicleId,
         process_type: formData.process_type,
         status: formData.status,
         vendor_id: formData.vendor_id || null,
-        estimated_cost: validation.values.estimatedCost,
-        actual_cost: validation.values.actualCost,
         notes: emptyToNull(formData.notes),
       };
 
@@ -127,11 +134,18 @@ function AddRepairProcessForm({
         .insert([repairProcess]);
 
       if (error) {
+        if (isDuplicateRepairProcessError(error)) {
+          setErrorMessage(
+            "That repair process type has already been added for this vehicle."
+          );
+          return;
+        }
+
         setErrorMessage(error.message);
         return;
       }
 
-      setFormData(emptyForm);
+      setFormData(getInitialFormData(repairProcesses));
       setSuccessMessage("Repair process added successfully.");
       await onRepairProcessAdded();
     } catch (error) {
@@ -165,6 +179,12 @@ function AddRepairProcessForm({
         </div>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
+          {allProcessTypesAdded && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              All repair process types have already been added for this vehicle.
+            </div>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block" htmlFor="repair-process-type">
               <span className="text-sm font-medium text-zinc-700">
@@ -175,9 +195,10 @@ function AddRepairProcessForm({
                 id="repair-process-type"
                 name="process_type"
                 onChange={handleChange}
+                disabled={allProcessTypesAdded}
                 value={formData.process_type}
               >
-                {repairProcessTypeOptions.map((option) => (
+                {availableProcessTypeOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -194,6 +215,7 @@ function AddRepairProcessForm({
                 id="repair-process-status"
                 name="status"
                 onChange={handleChange}
+                disabled={allProcessTypesAdded}
                 value={formData.status}
               >
                 {repairProcessStatusOptions.map((option) => (
@@ -214,6 +236,7 @@ function AddRepairProcessForm({
               id="repair-process-vendor"
               name="vendor_id"
               onChange={handleChange}
+              disabled={allProcessTypesAdded}
               value={formData.vendor_id}
             >
               <option value="">No vendor</option>
@@ -225,40 +248,6 @@ function AddRepairProcessForm({
             </select>
           </label>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block" htmlFor="repair-process-estimated-cost">
-              <span className="text-sm font-medium text-zinc-700">
-                Estimated Cost
-              </span>
-              <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
-                id="repair-process-estimated-cost"
-                min="0"
-                name="estimated_cost"
-                onChange={handleChange}
-                step="0.01"
-                type="number"
-                value={formData.estimated_cost}
-              />
-            </label>
-
-            <label className="block" htmlFor="repair-process-actual-cost">
-              <span className="text-sm font-medium text-zinc-700">
-                Actual Cost
-              </span>
-              <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
-                id="repair-process-actual-cost"
-                min="0"
-                name="actual_cost"
-                onChange={handleChange}
-                step="0.01"
-                type="number"
-                value={formData.actual_cost}
-              />
-            </label>
-          </div>
-
           <label className="block" htmlFor="repair-process-notes">
             <span className="text-sm font-medium text-zinc-700">Notes</span>
             <textarea
@@ -266,6 +255,7 @@ function AddRepairProcessForm({
               id="repair-process-notes"
               name="notes"
               onChange={handleChange}
+              disabled={allProcessTypesAdded}
               value={formData.notes}
             />
           </label>
@@ -294,7 +284,7 @@ function AddRepairProcessForm({
 
             <button
               className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
-              disabled={isSubmitting}
+              disabled={isSubmitting || allProcessTypesAdded}
               type="submit"
             >
               {isSubmitting ? "Adding..." : "Add Repair Process"}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import AddRepairJobForm from "./AddRepairJobForm";
 import StatusDropdown from "./StatusDropdown";
+import { formatRepairProcessType } from "../../lib/repairProcess";
 import { supabase } from "../../lib/supabaseClient";
 
 const repairJobStatuses = [
@@ -57,6 +58,22 @@ function getTechnicianName(repairJob) {
   );
 }
 
+function getRepairProcessById(repairProcesses, repairProcessId) {
+  return repairProcesses.find(
+    (repairProcess) => repairProcess.id === repairProcessId
+  );
+}
+
+function getRepairProcessLabel(repairProcesses, repairProcessId) {
+  const repairProcess = getRepairProcessById(repairProcesses, repairProcessId);
+
+  if (!repairProcess) {
+    return "Not available";
+  }
+
+  return formatRepairProcessType(repairProcess.process_type);
+}
+
 function priorityClassName(priority) {
   const normalizedPriority = String(priority ?? "").toLowerCase();
 
@@ -90,7 +107,12 @@ function DetailItem({ label, value }) {
   );
 }
 
-function RepairJobCard({ onStatusChange, repairJob, updatingStatusId }) {
+function RepairJobCard({
+  onStatusChange,
+  repairJob,
+  repairProcesses,
+  updatingStatusId,
+}) {
   const title =
     getFirstValue(repairJob, ["title", "name", "job_title", "repair_title"]) ??
     "Repair Job";
@@ -132,6 +154,13 @@ function RepairJobCard({ onStatusChange, repairJob, updatingStatusId }) {
           label="Category"
           value={displayValue(category)}
         />
+        <DetailItem
+          label="Repair Process"
+          value={getRepairProcessLabel(
+            repairProcesses,
+            repairJob.repair_process_id
+          )}
+        />
       </dl>
 
       {notes && (
@@ -149,6 +178,7 @@ function RepairJobCard({ onStatusChange, repairJob, updatingStatusId }) {
 function RepairJobsSection({
   onRepairJobAdded,
   onRepairJobStatusUpdated,
+  repairProcesses = [],
   repairJobs = [],
   vehicleId,
 }) {
@@ -228,6 +258,7 @@ function RepairJobsSection({
               key={repairJob.id ?? index}
               onStatusChange={handleStatusChange}
               repairJob={repairJob}
+              repairProcesses={repairProcesses}
               updatingStatusId={updatingStatusId}
             />
           ))}
@@ -244,6 +275,7 @@ function RepairJobsSection({
         <AddRepairJobForm
           onClose={() => setIsFormOpen(false)}
           onRepairJobAdded={onRepairJobAdded}
+          repairProcesses={repairProcesses}
           vehicleId={vehicleId}
         />
       )}

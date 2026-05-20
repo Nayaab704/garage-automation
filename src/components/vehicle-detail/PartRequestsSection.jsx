@@ -1,6 +1,7 @@
 import { useState } from "react";
 import AddPartRequestForm from "./AddPartRequestForm";
 import StatusDropdown from "./StatusDropdown";
+import { formatRepairProcessType } from "../../lib/repairProcess";
 import { supabase } from "../../lib/supabaseClient";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
@@ -33,7 +34,37 @@ function getFirstValue(record, fieldNames) {
   return null;
 }
 
-function PartRequestCard({ onStatusChange, partRequest, updatingStatusId }) {
+function getRepairProcessById(repairProcesses, repairProcessId) {
+  return repairProcesses.find(
+    (repairProcess) => repairProcess.id === repairProcessId
+  );
+}
+
+function getRepairProcessLabel(repairProcesses, repairProcessId) {
+  const repairProcess = getRepairProcessById(repairProcesses, repairProcessId);
+
+  if (!repairProcess) {
+    return "Not available";
+  }
+
+  return formatRepairProcessType(repairProcess.process_type);
+}
+
+function DetailItem({ label, value }) {
+  return (
+    <div>
+      <dt className="text-sm text-zinc-500">{label}</dt>
+      <dd className="mt-1 font-semibold text-zinc-950">{value}</dd>
+    </div>
+  );
+}
+
+function PartRequestCard({
+  onStatusChange,
+  partRequest,
+  repairProcesses,
+  updatingStatusId,
+}) {
   const partName =
     getFirstValue(partRequest, ["part_name", "name", "part"]) ??
     "Part Request";
@@ -59,6 +90,16 @@ function PartRequestCard({ onStatusChange, partRequest, updatingStatusId }) {
         />
       </div>
 
+      <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+        <DetailItem
+          label="Repair Process"
+          value={getRepairProcessLabel(
+            repairProcesses,
+            partRequest.repair_process_id
+          )}
+        />
+      </dl>
+
       {notes && (
         <div className="mt-5 rounded-md bg-zinc-50 p-4">
           <p className="text-sm font-medium text-zinc-500">Notes</p>
@@ -75,6 +116,7 @@ function PartRequestsSection({
   onPartRequestAdded,
   onPartRequestStatusUpdated,
   partRequests = [],
+  repairProcesses = [],
   repairJobs = [],
   vehicleId,
 }) {
@@ -154,6 +196,7 @@ function PartRequestsSection({
               key={partRequest.id ?? index}
               onStatusChange={handleStatusChange}
               partRequest={partRequest}
+              repairProcesses={repairProcesses}
               updatingStatusId={updatingStatusId}
             />
           ))}
@@ -170,6 +213,7 @@ function PartRequestsSection({
         <AddPartRequestForm
           onClose={() => setIsFormOpen(false)}
           onPartRequestAdded={onPartRequestAdded}
+          repairProcesses={repairProcesses}
           repairJobs={repairJobs}
           vehicleId={vehicleId}
         />

@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { formatRepairProcessType } from "../../lib/repairProcess";
 import { supabase } from "../../lib/supabaseClient";
 
 const emptyForm = {
   title: "",
   category: "",
   priority: "medium",
+  repair_process_id: "",
   notes: "",
 };
 
@@ -13,7 +15,12 @@ function emptyToNull(value) {
   return trimmedValue === "" ? null : trimmedValue;
 }
 
-function AddRepairJobForm({ onClose, onRepairJobAdded, vehicleId }) {
+function AddRepairJobForm({
+  onClose,
+  onRepairJobAdded,
+  repairProcesses = [],
+  vehicleId,
+}) {
   const [formData, setFormData] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -41,6 +48,7 @@ function AddRepairJobForm({ onClose, onRepairJobAdded, vehicleId }) {
         title: emptyToNull(formData.title),
         category: emptyToNull(formData.category),
         priority: emptyToNull(formData.priority),
+        repair_process_id: formData.repair_process_id || null,
         notes: emptyToNull(formData.notes),
       };
 
@@ -130,6 +138,26 @@ function AddRepairJobForm({ onClose, onRepairJobAdded, vehicleId }) {
               </select>
             </label>
           </div>
+
+          <label className="block" htmlFor="repair-process">
+            <span className="text-sm font-medium text-zinc-700">
+              Repair Process
+            </span>
+            <select
+              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              id="repair-process"
+              name="repair_process_id"
+              onChange={handleChange}
+              value={formData.repair_process_id}
+            >
+              <option value="">No repair process selected</option>
+              {repairProcesses.map((repairProcess) => (
+                <option key={repairProcess.id} value={repairProcess.id}>
+                  {formatRepairProcessType(repairProcess.process_type)}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <label className="block" htmlFor="repair-notes">
             <span className="text-sm font-medium text-zinc-700">Notes</span>

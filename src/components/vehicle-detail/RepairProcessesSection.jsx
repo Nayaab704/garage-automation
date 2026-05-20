@@ -87,13 +87,7 @@ function getRepairProcessItems(repairProcessItems, repairProcessId) {
 }
 
 function getRepairProcessItemTotals(items) {
-  return items.reduce(
-    (totals, item) => ({
-      actualCost: totals.actualCost + numberOrZero(item.actual_cost),
-      estimatedCost: totals.estimatedCost + numberOrZero(item.estimated_cost),
-    }),
-    { actualCost: 0, estimatedCost: 0 }
-  );
+  return items.reduce((total, item) => total + numberOrZero(item.cost), 0);
 }
 
 function DetailItem({ label, value }) {
@@ -115,12 +109,19 @@ function Badge({ className, children }) {
   );
 }
 
-function RepairProcessCard({ items, onAddItem, repairProcess, vendors }) {
+function RepairProcessCard({
+  items,
+  onAddItem,
+  onItemDeleted,
+  onItemUpdated,
+  repairProcess,
+  vendors,
+}) {
   const vendor = getVendorById(vendors, repairProcess.vendor_id);
   const notes = getFirstValue(repairProcess, ["notes"]);
   const startedAt = getFirstValue(repairProcess, ["started_at"]);
   const completedAt = getFirstValue(repairProcess, ["completed_at"]);
-  const itemTotals = getRepairProcessItemTotals(items);
+  const processTotal = getRepairProcessItemTotals(items);
 
   return (
     <article className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
@@ -166,20 +167,8 @@ function RepairProcessCard({ items, onAddItem, repairProcess, vendors }) {
           value={vendor ? getVendorName(vendor) : "Not available"}
         />
         <DetailItem
-          label="Estimated Cost"
-          value={formatCurrency(repairProcess.estimated_cost)}
-        />
-        <DetailItem
-          label="Actual Cost"
-          value={formatCurrency(repairProcess.actual_cost)}
-        />
-        <DetailItem
-          label="Item Estimated Total"
-          value={formatCurrency(itemTotals.estimatedCost)}
-        />
-        <DetailItem
-          label="Item Actual Total"
-          value={formatCurrency(itemTotals.actualCost)}
+          label="Process Total"
+          value={formatCurrency(processTotal)}
         />
         <DetailItem
           label="Started"
@@ -200,7 +189,12 @@ function RepairProcessCard({ items, onAddItem, repairProcess, vendors }) {
         </div>
       )}
 
-      <RepairProcessItemsList items={items} />
+      <RepairProcessItemsList
+        items={items}
+        onItemDeleted={onItemDeleted}
+        onItemUpdated={onItemUpdated}
+        repairProcess={repairProcess}
+      />
     </article>
   );
 }
@@ -208,6 +202,8 @@ function RepairProcessCard({ items, onAddItem, repairProcess, vendors }) {
 function RepairProcessesSection({
   onRepairProcessAdded,
   onRepairProcessItemAdded,
+  onRepairProcessItemDeleted,
+  onRepairProcessItemUpdated,
   repairProcessItems = [],
   repairProcesses = [],
   vehicleId,
@@ -257,6 +253,8 @@ function RepairProcessesSection({
               )}
               key={repairProcess.id ?? index}
               onAddItem={setSelectedRepairProcess}
+              onItemDeleted={onRepairProcessItemDeleted}
+              onItemUpdated={onRepairProcessItemUpdated}
               repairProcess={repairProcess}
               vendors={vendors}
             />
@@ -268,6 +266,7 @@ function RepairProcessesSection({
         <AddRepairProcessForm
           onClose={() => setIsFormOpen(false)}
           onRepairProcessAdded={onRepairProcessAdded}
+          repairProcesses={repairProcesses}
           vehicleId={vehicleId}
           vendors={vendors}
         />
