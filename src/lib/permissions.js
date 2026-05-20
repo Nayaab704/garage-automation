@@ -12,6 +12,7 @@ const ALL_PERMISSIONS = [
   "sale:manage",
   "warranty:manage",
   "dashboard:view",
+  "user:manage",
 ];
 
 export const ROLE_PERMISSIONS = {

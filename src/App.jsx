@@ -3,6 +3,7 @@ import AppLayout from "./layouts/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import IntakePage from "./pages/IntakePage";
 import LoginPage from "./pages/LoginPage";
+import SettingsPage from "./pages/SettingsPage";
 import VehicleDetailPage from "./pages/VehicleDetailPage";
 import VehiclesPage from "./pages/VehiclesPage";
 import { fetchCurrentUserProfile } from "./lib/currentUserProfile";
@@ -40,7 +41,7 @@ const pageDetails = {
   },
   Settings: {
     title: "Settings",
-    description: "Workspace preferences and system settings will live here.",
+    description: "Manage team access, roles, and workspace settings.",
   },
   vehicleDetail: {
     title: "Vehicle Detail",
@@ -61,6 +62,32 @@ function PlaceholderPage({ title }) {
         dashboard.
       </p>
     </section>
+  );
+}
+
+function AccountPendingApproval({ isLoggingOut, onLogout }) {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-4">
+      <section className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-8 text-center shadow-sm">
+        <p className="text-sm font-semibold uppercase tracking-wide text-amber-700">
+          Account Pending Approval
+        </p>
+        <h1 className="mt-3 text-2xl font-bold text-zinc-950">
+          Your account is waiting for admin approval.
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-zinc-600">
+          Please contact an admin or owner to activate your account.
+        </p>
+        <button
+          className="mt-6 w-full rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isLoggingOut}
+          onClick={onLogout}
+          type="button"
+        >
+          {isLoggingOut ? "Logging Out..." : "Logout"}
+        </button>
+      </section>
+    </main>
   );
 }
 
@@ -259,6 +286,10 @@ function App() {
       );
     }
 
+    if (effectiveActivePage === "Settings") {
+      return <SettingsPage currentProfile={currentProfile} />;
+    }
+
     return <PlaceholderPage title={effectiveActivePage} />;
   }
 
@@ -274,6 +305,25 @@ function App() {
 
   if (!session) {
     return <LoginPage />;
+  }
+
+  if (isProfileLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-4">
+        <section className="rounded-lg border border-zinc-200 bg-white p-8 text-center shadow-sm">
+          <p className="font-medium text-zinc-700">Loading profile...</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (currentProfile && currentProfile.is_active === false) {
+    return (
+      <AccountPendingApproval
+        isLoggingOut={isLoggingOut}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   return (
