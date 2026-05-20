@@ -95,6 +95,7 @@ function DetailItem({ label, value }) {
 }
 
 function LaborLogCard({
+  canManage,
   isDeleting,
   laborLog,
   onDelete,
@@ -122,14 +123,16 @@ function LaborLogCard({
           <div className="rounded-md bg-emerald-50 px-3 py-2 text-right text-sm font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
             {formatCurrency(laborCost)}
           </div>
-          <button
-            className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isDeleting}
-            onClick={() => onDelete(laborLog.id)}
-            type="button"
-          >
-            {isDeleting ? "Deleting..." : "Delete"}
-          </button>
+          {canManage && (
+            <button
+              className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isDeleting}
+              onClick={() => onDelete(laborLog.id)}
+              type="button"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -155,6 +158,7 @@ function LaborLogCard({
 }
 
 function LaborLogsSection({
+  canManage = false,
   laborLogs = [],
   onActivityLogged,
   onLaborLogAdded,
@@ -167,6 +171,11 @@ function LaborLogsSection({
   const [deletingLaborLogId, setDeletingLaborLogId] = useState(null);
 
   async function handleDelete(laborLogId) {
+    if (!canManage) {
+      setDeleteError("Your role cannot delete labor logs.");
+      return;
+    }
+
     if (!laborLogId) {
       setDeleteError("Unable to delete a labor log without an ID.");
       return;
@@ -230,13 +239,15 @@ function LaborLogsSection({
           <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-600">
             {laborLogs.length}
           </span>
-          <button
-            className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
-            onClick={() => setIsFormOpen(true)}
-            type="button"
-          >
-            Add Labor Log
-          </button>
+          {canManage && (
+            <button
+              className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
+              onClick={() => setIsFormOpen(true)}
+              type="button"
+            >
+              Add Labor Log
+            </button>
+          )}
         </div>
       </div>
 
@@ -248,6 +259,7 @@ function LaborLogsSection({
         <div className="space-y-3">
           {laborLogs.map((laborLog, index) => (
             <LaborLogCard
+              canManage={canManage}
               isDeleting={deletingLaborLogId === laborLog.id}
               key={laborLog.id ?? index}
               laborLog={laborLog}
@@ -265,7 +277,7 @@ function LaborLogsSection({
         </div>
       )}
 
-      {isFormOpen && (
+      {isFormOpen && canManage && (
         <AddLaborLogForm
           onClose={() => setIsFormOpen(false)}
           onActivityLogged={onActivityLogged}

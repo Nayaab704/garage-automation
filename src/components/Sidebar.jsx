@@ -1,3 +1,5 @@
+import { hasPermission } from "../lib/permissions";
+
 const sidebarItems = [
   "Dashboard",
   "Intake",
@@ -9,7 +11,15 @@ const sidebarItems = [
   "Settings",
 ];
 
-function Sidebar({ activePage = "Vehicles", onPageChange }) {
+function getVisibleSidebarItems(role) {
+  return sidebarItems.filter(
+    (item) => item !== "Dashboard" || hasPermission(role, "dashboard:view")
+  );
+}
+
+function Sidebar({ activePage = "Vehicles", currentProfile, onPageChange }) {
+  const visibleSidebarItems = getVisibleSidebarItems(currentProfile?.role);
+
   return (
     <aside className="hidden border-r border-zinc-200 bg-white lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col">
       <div className="flex h-16 items-center border-b border-zinc-200 px-6">
@@ -25,7 +35,7 @@ function Sidebar({ activePage = "Vehicles", onPageChange }) {
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-5">
-        {sidebarItems.map((item) => {
+        {visibleSidebarItems.map((item) => {
           const isActive = item === activePage;
 
           return (

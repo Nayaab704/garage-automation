@@ -21,6 +21,17 @@ function displayValue(value) {
     : value;
 }
 
+function formatStatusLabel(status) {
+  if (!status) {
+    return "Not Available";
+  }
+
+  return String(status)
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 function getFirstValue(record, fieldNames) {
   for (const fieldName of fieldNames) {
     const value = record[fieldName];
@@ -109,6 +120,7 @@ function DetailItem({ label, value }) {
 }
 
 function RepairJobCard({
+  canManage,
   onStatusChange,
   repairJob,
   repairProcesses,
@@ -137,12 +149,18 @@ function RepairJobCard({
           <Badge className={priorityClassName(priority)}>
             {displayValue(priority)}
           </Badge>
-          <StatusDropdown
-            currentStatus={status}
-            isUpdating={updatingStatusId === repairJob.id}
-            onChange={(newStatus) => onStatusChange(repairJob.id, newStatus)}
-            statuses={repairJobStatuses}
-          />
+          {canManage ? (
+            <StatusDropdown
+              currentStatus={status}
+              isUpdating={updatingStatusId === repairJob.id}
+              onChange={(newStatus) => onStatusChange(repairJob.id, newStatus)}
+              statuses={repairJobStatuses}
+            />
+          ) : (
+            <Badge className="bg-zinc-100 text-zinc-700 ring-zinc-200">
+              {formatStatusLabel(status)}
+            </Badge>
+          )}
         </div>
       </div>
 
@@ -177,6 +195,7 @@ function RepairJobCard({
 }
 
 function RepairJobsSection({
+  canManage = false,
   onActivityLogged,
   onRepairJobAdded,
   onRepairJobStatusUpdated,
@@ -189,6 +208,11 @@ function RepairJobsSection({
   const [updatingStatusId, setUpdatingStatusId] = useState(null);
 
   async function handleStatusChange(repairJobId, newStatus) {
+    if (!canManage) {
+      setStatusError("Your role cannot update repair jobs.");
+      return;
+    }
+
     if (!repairJobId) {
       setStatusError("Unable to update a repair job without an ID.");
       return;
@@ -256,13 +280,15 @@ function RepairJobsSection({
           <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-600">
             {repairJobs.length}
           </span>
-          <button
-            className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
-            onClick={() => setIsFormOpen(true)}
-            type="button"
-          >
-            Add Repair Job
-          </button>
+          {canManage && (
+            <button
+              className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
+              onClick={() => setIsFormOpen(true)}
+              type="button"
+            >
+              Add Repair Job
+            </button>
+          )}
         </div>
       </div>
 
@@ -274,6 +300,7 @@ function RepairJobsSection({
         <div className="space-y-3">
           {repairJobs.map((repairJob, index) => (
             <RepairJobCard
+              canManage={canManage}
               key={repairJob.id ?? index}
               onStatusChange={handleStatusChange}
               repairJob={repairJob}
@@ -290,7 +317,7 @@ function RepairJobsSection({
         </div>
       )}
 
-      {isFormOpen && (
+      {isFormOpen && canManage && (
         <AddRepairJobForm
           onClose={() => setIsFormOpen(false)}
           onActivityLogged={onActivityLogged}

@@ -110,6 +110,7 @@ function Badge({ className, children }) {
 }
 
 function RepairProcessCard({
+  canManage,
   items,
   onAddItem,
   onItemDeleted,
@@ -151,13 +152,15 @@ function RepairProcessCard({
             </Badge>
           </div>
 
-          <button
-            className="w-fit rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
-            onClick={() => onAddItem(repairProcess)}
-            type="button"
-          >
-            Add Item
-          </button>
+          {canManage && (
+            <button
+              className="w-fit rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+              onClick={() => onAddItem(repairProcess)}
+              type="button"
+            >
+              Add Item
+            </button>
+          )}
         </div>
       </div>
 
@@ -190,6 +193,7 @@ function RepairProcessCard({
       )}
 
       <RepairProcessItemsList
+        canManage={canManage}
         items={items}
         onItemDeleted={onItemDeleted}
         onItemUpdated={onItemUpdated}
@@ -200,6 +204,7 @@ function RepairProcessCard({
 }
 
 function RepairProcessesSection({
+  canManage = false,
   onActivityLogged,
   onRepairProcessAdded,
   onRepairProcessItemAdded,
@@ -230,13 +235,15 @@ function RepairProcessesSection({
           <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-600">
             {repairProcesses.length}
           </span>
-          <button
-            className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
-            onClick={() => setIsFormOpen(true)}
-            type="button"
-          >
-            Add Repair Process
-          </button>
+          {canManage && (
+            <button
+              className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
+              onClick={() => setIsFormOpen(true)}
+              type="button"
+            >
+              Add Repair Process
+            </button>
+          )}
         </div>
       </div>
 
@@ -248,6 +255,7 @@ function RepairProcessesSection({
         <div className="space-y-3">
           {repairProcesses.map((repairProcess, index) => (
             <RepairProcessCard
+              canManage={canManage}
               items={getRepairProcessItems(
                 repairProcessItems,
                 repairProcess.id
@@ -263,7 +271,7 @@ function RepairProcessesSection({
         </div>
       )}
 
-      {isFormOpen && (
+      {isFormOpen && canManage && (
         <AddRepairProcessForm
           onClose={() => setIsFormOpen(false)}
           onActivityLogged={onActivityLogged}
@@ -274,7 +282,7 @@ function RepairProcessesSection({
         />
       )}
 
-      {selectedRepairProcess && (
+      {selectedRepairProcess && canManage && (
         <AddRepairProcessItemForm
           onClose={() => setSelectedRepairProcess(null)}
           onItemAdded={onRepairProcessItemAdded}

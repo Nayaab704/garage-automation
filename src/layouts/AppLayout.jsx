@@ -18,6 +18,7 @@ function AppLayout({
     <div className="min-h-screen bg-zinc-50">
       <Sidebar
         activePage={activePage}
+        currentProfile={currentProfile}
         onPageChange={onPageChange}
       />
 

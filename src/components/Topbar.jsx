@@ -1,4 +1,5 @@
 import AuthHeader from "./AuthHeader";
+import { hasPermission } from "../lib/permissions";
 
 const mobileItems = [
   "Dashboard",
@@ -10,6 +11,12 @@ const mobileItems = [
   "Analytics",
   "Settings",
 ];
+
+function getVisibleMobileItems(role) {
+  return mobileItems.filter(
+    (item) => item !== "Dashboard" || hasPermission(role, "dashboard:view")
+  );
+}
 
 function Topbar({
   activePage = "Vehicles",
@@ -23,6 +30,8 @@ function Topbar({
   description = "Manage garage inventory and operations.",
   userEmail,
 }) {
+  const visibleMobileItems = getVisibleMobileItems(currentProfile?.role);
+
   return (
     <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/95 backdrop-blur">
       <div className="flex min-h-16 items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
@@ -57,7 +66,7 @@ function Topbar({
       </div>
 
       <nav className="flex gap-2 overflow-x-auto border-t border-zinc-100 px-4 py-2 sm:px-6 lg:hidden">
-        {mobileItems.map((item) => {
+        {visibleMobileItems.map((item) => {
           const isActive = item === activePage;
 
           return (

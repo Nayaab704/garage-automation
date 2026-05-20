@@ -36,7 +36,13 @@ function DetailItem({ label, value }) {
   );
 }
 
-function RepairProcessItemCard({ isDeleting, item, onDelete, onEdit }) {
+function RepairProcessItemCard({
+  canManage,
+  isDeleting,
+  item,
+  onDelete,
+  onEdit,
+}) {
   return (
     <article className="rounded-md border border-zinc-200 bg-white p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -54,22 +60,26 @@ function RepairProcessItemCard({ isDeleting, item, onDelete, onEdit }) {
           >
             {formatRepairProcessItemStatus(item.status)}
           </span>
-          <button
-            className="rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isDeleting}
-            onClick={() => onEdit(item)}
-            type="button"
-          >
-            Edit
-          </button>
-          <button
-            className="rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isDeleting}
-            onClick={() => onDelete(item.id)}
-            type="button"
-          >
-            {isDeleting ? "Deleting..." : "Delete"}
-          </button>
+          {canManage && (
+            <>
+              <button
+                className="rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isDeleting}
+                onClick={() => onEdit(item)}
+                type="button"
+              >
+                Edit
+              </button>
+              <button
+                className="rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isDeleting}
+                onClick={() => onDelete(item.id)}
+                type="button"
+              >
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -90,6 +100,7 @@ function RepairProcessItemCard({ isDeleting, item, onDelete, onEdit }) {
 }
 
 function RepairProcessItemsList({
+  canManage = false,
   items = [],
   onItemDeleted = async () => {},
   onItemUpdated = async () => {},
@@ -100,6 +111,11 @@ function RepairProcessItemsList({
   const [editingItem, setEditingItem] = useState(null);
 
   async function handleDelete(itemId) {
+    if (!canManage) {
+      setDeleteError("Your role cannot delete repair process items.");
+      return;
+    }
+
     if (!itemId) {
       setDeleteError("Unable to delete this item without an ID.");
       return;
@@ -136,6 +152,10 @@ function RepairProcessItemsList({
   }
 
   async function handleItemUpdated(updatedItem) {
+    if (!canManage) {
+      return;
+    }
+
     await onItemUpdated(updatedItem);
     setEditingItem(null);
   }
@@ -159,6 +179,7 @@ function RepairProcessItemsList({
         <div className="mt-4 space-y-3">
           {items.map((item, index) => (
             <RepairProcessItemCard
+              canManage={canManage}
               isDeleting={deletingItemId === item.id}
               item={item}
               key={item.id ?? index}
@@ -175,7 +196,7 @@ function RepairProcessItemsList({
         </div>
       )}
 
-      {editingItem && (
+      {editingItem && canManage && (
         <EditRepairProcessItemForm
           item={editingItem}
           onClose={() => setEditingItem(null)}

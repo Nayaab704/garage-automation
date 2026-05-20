@@ -63,7 +63,7 @@ function getFirstValue(record, fieldNames) {
   return null;
 }
 
-function ExtraCostCard({ costEntry, isDeleting, onDelete }) {
+function ExtraCostCard({ canManage, costEntry, isDeleting, onDelete }) {
   const costType = getFirstValue(costEntry, ["cost_type", "type"]);
   const amount = getFirstValue(costEntry, ["amount", "cost"]);
   const description = getFirstValue(costEntry, ["description", "notes"]);
@@ -86,14 +86,16 @@ function ExtraCostCard({ costEntry, isDeleting, onDelete }) {
           <div className="rounded-md bg-zinc-100 px-3 py-2 text-right text-sm font-bold text-zinc-800 ring-1 ring-inset ring-zinc-200">
             {formatCurrency(amount)}
           </div>
-          <button
-            className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isDeleting}
-            onClick={() => onDelete(costEntry.id)}
-            type="button"
-          >
-            {isDeleting ? "Deleting..." : "Delete"}
-          </button>
+          {canManage && (
+            <button
+              className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isDeleting}
+              onClick={() => onDelete(costEntry.id)}
+              type="button"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </button>
+          )}
         </div>
       </div>
     </article>
@@ -101,6 +103,7 @@ function ExtraCostCard({ costEntry, isDeleting, onDelete }) {
 }
 
 function ExtraCostsSection({
+  canManage = false,
   costEntries = [],
   onActivityLogged,
   onExtraCostChanged,
@@ -111,6 +114,11 @@ function ExtraCostsSection({
   const [deletingCostEntryId, setDeletingCostEntryId] = useState(null);
 
   async function handleDelete(costEntryId) {
+    if (!canManage) {
+      setDeleteError("Your role cannot delete extra costs.");
+      return;
+    }
+
     if (!costEntryId) {
       setDeleteError("Unable to delete an extra cost without an ID.");
       return;
@@ -175,13 +183,15 @@ function ExtraCostsSection({
           <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-600">
             {costEntries.length}
           </span>
-          <button
-            className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
-            onClick={() => setIsFormOpen(true)}
-            type="button"
-          >
-            Add Extra Cost
-          </button>
+          {canManage && (
+            <button
+              className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
+              onClick={() => setIsFormOpen(true)}
+              type="button"
+            >
+              Add Extra Cost
+            </button>
+          )}
         </div>
       </div>
 
@@ -193,6 +203,7 @@ function ExtraCostsSection({
         <div className="space-y-3">
           {costEntries.map((costEntry, index) => (
             <ExtraCostCard
+              canManage={canManage}
               costEntry={costEntry}
               isDeleting={deletingCostEntryId === costEntry.id}
               key={costEntry.id ?? index}
@@ -208,7 +219,7 @@ function ExtraCostsSection({
         </div>
       )}
 
-      {isFormOpen && (
+      {isFormOpen && canManage && (
         <AddExtraCostForm
           onClose={() => setIsFormOpen(false)}
           onActivityLogged={onActivityLogged}

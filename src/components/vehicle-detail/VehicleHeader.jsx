@@ -1,4 +1,5 @@
 import VehicleOriginBadge from "../VehicleOriginBadge";
+import VehicleStatusBadge from "../VehicleStatusBadge";
 import VehicleStatusDropdown from "./VehicleStatusDropdown";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -82,6 +83,9 @@ function DetailItem({ label, value }) {
 }
 
 function VehicleHeader({
+  canChangeStatus = false,
+  canEdit = false,
+  canSell = false,
   isSold,
   isStatusUpdating,
   onEdit,
@@ -108,11 +112,15 @@ function VehicleHeader({
 
         <div className="flex flex-col gap-3 sm:items-end">
           <div className="flex flex-wrap gap-2 sm:justify-end">
-            <VehicleStatusDropdown
-              currentStatus={vehicle.status}
-              isUpdating={isStatusUpdating}
-              onChange={onStatusChange}
-            />
+            {canChangeStatus ? (
+              <VehicleStatusDropdown
+                currentStatus={vehicle.status}
+                isUpdating={isStatusUpdating}
+                onChange={onStatusChange}
+              />
+            ) : (
+              <VehicleStatusBadge status={vehicle.status} />
+            )}
             <VehicleOriginBadge origin={vehicle.vehicle_origin} />
             {vehicle.color && (
               <span className="w-fit rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-200">
@@ -128,16 +136,19 @@ function VehicleHeader({
             </span>
           </div>
 
-          <div className="flex flex-wrap gap-2 sm:justify-end">
-            <button
-              className="w-fit rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
-              onClick={onEdit}
-              type="button"
-            >
-              Edit Vehicle
-            </button>
+          {(canEdit || (canSell && !isSold)) && (
+            <div className="flex flex-wrap gap-2 sm:justify-end">
+              {canEdit && (
+                <button
+                  className="w-fit rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
+                  onClick={onEdit}
+                  type="button"
+                >
+                  Edit Vehicle
+                </button>
+              )}
 
-            {!isSold && (
+              {canSell && !isSold && (
               <button
                 className="w-fit rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
                 onClick={onSell}
@@ -145,8 +156,9 @@ function VehicleHeader({
               >
                 Sell Vehicle
               </button>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

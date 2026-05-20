@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import AddVehicleForm from "../components/AddVehicleForm";
 import VehicleOriginBadge from "../components/VehicleOriginBadge";
 import VehicleStatusBadge from "../components/VehicleStatusBadge";
+import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 import { formatVehicleStatus, vehicleStatusOptions } from "../lib/vehicleStatus";
 
@@ -120,7 +121,7 @@ function getFilteredVehicles(vehicles, searchText, statusFilter, titleFilter) {
   });
 }
 
-function VehiclesPage({ onSelectVehicle }) {
+function VehiclesPage({ currentProfile, onSelectVehicle }) {
   const [vehicles, setVehicles] = useState([]);
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -191,10 +192,24 @@ function VehiclesPage({ onSelectVehicle }) {
     searchText.trim() !== "" ||
     statusFilter !== "all" ||
     titleStatusFilter !== "all";
+  const canCreateVehicle = hasPermission(
+    currentProfile?.role,
+    "vehicle:create"
+  );
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(320px,420px)_1fr] lg:items-start">
-      <AddVehicleForm onVehicleAdded={refreshVehicles} />
+      {canCreateVehicle ? (
+        <AddVehicleForm onVehicleAdded={refreshVehicles} />
+      ) : (
+        <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-bold text-slate-900">Add Vehicle</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Your role can view inventory, but does not have permission to add
+            vehicles.
+          </p>
+        </section>
+      )}
 
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-4">

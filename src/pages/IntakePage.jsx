@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AddVehicleForm from "../components/AddVehicleForm";
+import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 
 function normalizeVin(value) {
@@ -10,12 +11,16 @@ function normalizeVin(value) {
     .slice(0, 17);
 }
 
-function IntakePage({ onViewVehicles }) {
+function IntakePage({ currentProfile, onViewVehicles }) {
   const [vin, setVin] = useState("");
   const [isCheckingVin, setIsCheckingVin] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [showVehicleForm, setShowVehicleForm] = useState(false);
   const [createdVehicle, setCreatedVehicle] = useState(null);
+  const canCreateVehicle = hasPermission(
+    currentProfile?.role,
+    "vehicle:create"
+  );
 
   function handleVinChange(event) {
     setVin(normalizeVin(event.target.value));
@@ -28,6 +33,12 @@ function IntakePage({ onViewVehicles }) {
     event.preventDefault();
 
     const normalizedVin = normalizeVin(vin);
+
+    if (!canCreateVehicle) {
+      setErrorMessage("Your role does not have permission to create vehicles.");
+      setShowVehicleForm(false);
+      return;
+    }
 
     if (!normalizedVin) {
       setErrorMessage("Enter a VIN to start intake.");
@@ -111,9 +122,15 @@ function IntakePage({ onViewVehicles }) {
               </div>
             )}
 
+            {!canCreateVehicle && (
+              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                Your role can view intake, but cannot create vehicles.
+              </div>
+            )}
+
             <button
               className="mt-4 w-full rounded-md bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-              disabled={isCheckingVin}
+              disabled={isCheckingVin || !canCreateVehicle}
               type="submit"
             >
               {isCheckingVin ? "Checking VIN..." : "Continue to Vehicle Form"}
@@ -122,7 +139,7 @@ function IntakePage({ onViewVehicles }) {
         </div>
       </section>
 
-      {showVehicleForm && (
+      {showVehicleForm && canCreateVehicle && (
         <AddVehicleForm
           initialValues={{ vin }}
           key={vin}

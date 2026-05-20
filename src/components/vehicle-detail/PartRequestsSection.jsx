@@ -23,6 +23,35 @@ function formatNumber(value) {
   return numberFormatter.format(numberValue);
 }
 
+function formatStatusLabel(status) {
+  if (!status) {
+    return "Not Available";
+  }
+
+  return String(status)
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function statusBadgeClassName(status) {
+  const normalizedStatus = String(status ?? "").toLowerCase();
+
+  if (normalizedStatus === "installed") {
+    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  }
+
+  if (normalizedStatus === "ordered") {
+    return "bg-blue-50 text-blue-700 ring-blue-200";
+  }
+
+  if (normalizedStatus === "received") {
+    return "bg-amber-50 text-amber-700 ring-amber-200";
+  }
+
+  return "bg-zinc-100 text-zinc-700 ring-zinc-200";
+}
+
 function getFirstValue(record, fieldNames) {
   for (const fieldName of fieldNames) {
     const value = record[fieldName];
@@ -61,6 +90,7 @@ function DetailItem({ label, value }) {
 }
 
 function PartRequestCard({
+  canManage,
   onStatusChange,
   partRequest,
   repairProcesses,
@@ -83,12 +113,22 @@ function PartRequestCard({
           </p>
         </div>
 
-        <StatusDropdown
-          currentStatus={status}
-          isUpdating={updatingStatusId === partRequest.id}
-          onChange={(newStatus) => onStatusChange(partRequest.id, newStatus)}
-          statuses={partRequestStatuses}
-        />
+        {canManage ? (
+          <StatusDropdown
+            currentStatus={status}
+            isUpdating={updatingStatusId === partRequest.id}
+            onChange={(newStatus) => onStatusChange(partRequest.id, newStatus)}
+            statuses={partRequestStatuses}
+          />
+        ) : (
+          <span
+            className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusBadgeClassName(
+              status
+            )}`}
+          >
+            {formatStatusLabel(status)}
+          </span>
+        )}
       </div>
 
       <dl className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -114,6 +154,7 @@ function PartRequestCard({
 }
 
 function PartRequestsSection({
+  canManage = false,
   onActivityLogged,
   onPartRequestAdded,
   onPartRequestStatusUpdated,
@@ -127,6 +168,11 @@ function PartRequestsSection({
   const [updatingStatusId, setUpdatingStatusId] = useState(null);
 
   async function handleStatusChange(partRequestId, newStatus) {
+    if (!canManage) {
+      setStatusError("Your role cannot update part requests.");
+      return;
+    }
+
     if (!partRequestId) {
       setStatusError("Unable to update a part request without an ID.");
       return;
@@ -193,13 +239,15 @@ function PartRequestsSection({
           <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-600">
             {partRequests.length}
           </span>
-          <button
-            className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
-            onClick={() => setIsFormOpen(true)}
-            type="button"
-          >
-            Add Part Request
-          </button>
+          {canManage && (
+            <button
+              className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
+              onClick={() => setIsFormOpen(true)}
+              type="button"
+            >
+              Add Part Request
+            </button>
+          )}
         </div>
       </div>
 
@@ -211,6 +259,7 @@ function PartRequestsSection({
         <div className="space-y-3">
           {partRequests.map((partRequest, index) => (
             <PartRequestCard
+              canManage={canManage}
               key={partRequest.id ?? index}
               onStatusChange={handleStatusChange}
               partRequest={partRequest}
@@ -227,7 +276,7 @@ function PartRequestsSection({
         </div>
       )}
 
-      {isFormOpen && (
+      {isFormOpen && canManage && (
         <AddPartRequestForm
           onClose={() => setIsFormOpen(false)}
           onActivityLogged={onActivityLogged}

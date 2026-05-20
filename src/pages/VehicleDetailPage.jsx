@@ -13,6 +13,7 @@ import SellVehicleForm from "../components/vehicle-detail/SellVehicleForm";
 import VehicleHeader from "../components/vehicle-detail/VehicleHeader";
 import VehiclePhotosSection from "../components/vehicle-detail/VehiclePhotosSection";
 import { logVehicleActivity } from "../lib/activityLogger";
+import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 
 async function fetchInvestmentSummary(vehicleId, stockNumber) {
@@ -183,7 +184,7 @@ function applyVehicleDetails(responses, setters) {
   setters.setInvestmentSummary(responses.investmentSummaryResponse.data);
 }
 
-function VehicleDetailPage({ vehicleId, onBack }) {
+function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   const [vehicle, setVehicle] = useState(null);
   const [repairJobs, setRepairJobs] = useState([]);
   const [partRequests, setPartRequests] = useState([]);
@@ -399,6 +400,11 @@ function VehicleDetailPage({ vehicleId, onBack }) {
   }
 
   async function handleVehicleStatusChange(newStatus) {
+    if (!canChangeVehicleStatus) {
+      setVehicleStatusError("Your role cannot change vehicle status.");
+      return;
+    }
+
     if (!vehicle?.id) {
       setVehicleStatusError("Unable to update a vehicle without an ID.");
       return;
@@ -456,6 +462,20 @@ function VehicleDetailPage({ vehicleId, onBack }) {
 
   const isVehicleSold =
     String(vehicle?.status ?? "").toLowerCase() === "sold" || sales.length > 0;
+  const role = currentProfile?.role;
+  const canChangeVehicleStatus = hasPermission(role, "vehicle:change_status");
+  const canEditVehicle = hasPermission(role, "vehicle:edit");
+  const canManageExtraCosts = hasPermission(role, "extra_cost:manage");
+  const canManageLabor = hasPermission(role, "labor:manage");
+  const canManagePartRequests = hasPermission(role, "part_request:manage");
+  const canManagePhotos = hasPermission(role, "photo:manage");
+  const canManagePurchaseOrders = hasPermission(role, "purchase_order:manage");
+  const canManageRepairJobs = hasPermission(role, "repair:manage");
+  const canManageRepairProcesses = hasPermission(
+    role,
+    "repair_process:manage"
+  );
+  const canSellVehicle = hasPermission(role, "sale:manage");
 
   return (
     <div className="space-y-6">
@@ -496,6 +516,9 @@ function VehicleDetailPage({ vehicleId, onBack }) {
       {!isLoading && !errorMessage && vehicle && (
         <>
           <VehicleHeader
+            canChangeStatus={canChangeVehicleStatus}
+            canEdit={canEditVehicle}
+            canSell={canSellVehicle}
             isSold={isVehicleSold}
             isStatusUpdating={isVehicleStatusUpdating}
             onEdit={() => setIsEditFormOpen(true)}
@@ -521,6 +544,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           />
 
           <VehiclePhotosSection
+            canManage={canManagePhotos}
             onActivityLogged={refreshActivityTimeline}
             onVehiclePhotoChanged={refreshVehicleDetails}
             vehicleId={vehicleId}
@@ -528,6 +552,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           />
 
           <RepairProcessesSection
+            canManage={canManageRepairProcesses}
             onRepairProcessAdded={refreshVehicleDetails}
             onRepairProcessItemAdded={handleRepairProcessItemAdded}
             onRepairProcessItemDeleted={handleRepairProcessItemDeleted}
@@ -540,6 +565,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           />
 
           <RepairJobsSection
+            canManage={canManageRepairJobs}
             onActivityLogged={refreshActivityTimeline}
             onRepairJobAdded={refreshVehicleDetails}
             onRepairJobStatusUpdated={handleRepairJobStatusUpdated}
@@ -549,6 +575,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           />
 
           <LaborLogsSection
+            canManage={canManageLabor}
             laborLogs={laborLogs}
             onActivityLogged={refreshActivityTimeline}
             onLaborLogAdded={refreshVehicleDetails}
@@ -558,6 +585,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           />
 
           <ExtraCostsSection
+            canManage={canManageExtraCosts}
             costEntries={costEntries}
             onActivityLogged={refreshActivityTimeline}
             onExtraCostChanged={refreshVehicleDetails}
@@ -565,6 +593,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           />
 
           <PartRequestsSection
+            canManage={canManagePartRequests}
             onActivityLogged={refreshActivityTimeline}
             onPartRequestAdded={refreshVehicleDetails}
             onPartRequestStatusUpdated={handlePartRequestStatusUpdated}
@@ -575,6 +604,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
           />
 
           <PurchaseOrdersSection
+            canManage={canManagePurchaseOrders}
             onActivityLogged={refreshActivityTimeline}
             onPurchaseOrderCreated={refreshVehicleDetails}
             partRequests={partRequests}
@@ -591,7 +621,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
             />
           )}
 
-          {isEditFormOpen && (
+          {isEditFormOpen && canEditVehicle && (
             <EditVehicleForm
               onClose={() => setIsEditFormOpen(false)}
               onVehicleUpdated={refreshVehicleDetails}
@@ -599,7 +629,7 @@ function VehicleDetailPage({ vehicleId, onBack }) {
             />
           )}
 
-          {isSellFormOpen && (
+          {isSellFormOpen && canSellVehicle && (
             <SellVehicleForm
               onClose={() => setIsSellFormOpen(false)}
               onActivityLogged={refreshActivityTimeline}

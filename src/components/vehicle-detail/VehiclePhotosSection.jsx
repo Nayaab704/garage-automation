@@ -41,7 +41,7 @@ function photoTypeClassName(photoType) {
   return "bg-zinc-100 text-zinc-700 ring-zinc-200";
 }
 
-function PhotoCard({ isDeleting, onDelete, photo }) {
+function PhotoCard({ canManage, isDeleting, onDelete, photo }) {
   const caption = displayValue(photo.caption);
   const altText =
     photo.caption || `${formatPhotoType(photo.photo_type)} vehicle photo`;
@@ -67,14 +67,16 @@ function PhotoCard({ isDeleting, onDelete, photo }) {
             {formatPhotoType(photo.photo_type)}
           </span>
 
-          <button
-            className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isDeleting}
-            onClick={() => onDelete(photo)}
-            type="button"
-          >
-            {isDeleting ? "Deleting..." : "Delete"}
-          </button>
+          {canManage && (
+            <button
+              className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isDeleting}
+              onClick={() => onDelete(photo)}
+              type="button"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </button>
+          )}
         </div>
 
         {photo.caption && (
@@ -88,6 +90,7 @@ function PhotoCard({ isDeleting, onDelete, photo }) {
 }
 
 function VehiclePhotosSection({
+  canManage = false,
   onActivityLogged,
   onVehiclePhotoChanged,
   vehicleId,
@@ -98,6 +101,11 @@ function VehiclePhotosSection({
   const [deletingPhotoId, setDeletingPhotoId] = useState(null);
 
   async function handleDelete(photo) {
+    if (!canManage) {
+      setDeleteError("Your role cannot delete photos.");
+      return;
+    }
+
     if (!photo?.id) {
       setDeleteError("Unable to delete a photo without an ID.");
       return;
@@ -171,13 +179,15 @@ function VehiclePhotosSection({
           <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-600">
             {vehiclePhotos.length}
           </span>
-          <button
-            className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
-            onClick={() => setIsFormOpen(true)}
-            type="button"
-          >
-            Upload Photo
-          </button>
+          {canManage && (
+            <button
+              className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
+              onClick={() => setIsFormOpen(true)}
+              type="button"
+            >
+              Upload Photo
+            </button>
+          )}
         </div>
       </div>
 
@@ -189,6 +199,7 @@ function VehiclePhotosSection({
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {vehiclePhotos.map((photo, index) => (
             <PhotoCard
+              canManage={canManage}
               isDeleting={deletingPhotoId === photo.id}
               key={photo.id ?? index}
               onDelete={handleDelete}
@@ -204,7 +215,7 @@ function VehiclePhotosSection({
         </div>
       )}
 
-      {isFormOpen && (
+      {isFormOpen && canManage && (
         <AddVehiclePhotoForm
           onClose={() => setIsFormOpen(false)}
           onActivityLogged={onActivityLogged}

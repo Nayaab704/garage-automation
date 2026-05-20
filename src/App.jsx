@@ -6,6 +6,7 @@ import LoginPage from "./pages/LoginPage";
 import VehicleDetailPage from "./pages/VehicleDetailPage";
 import VehiclesPage from "./pages/VehiclesPage";
 import { fetchCurrentUserProfile } from "./lib/currentUserProfile";
+import { hasPermission } from "./lib/permissions";
 import { supabase } from "./lib/supabaseClient";
 
 const pageDetails = {
@@ -73,8 +74,12 @@ function App() {
   const [authError, setAuthError] = useState("");
   const [profileError, setProfileError] = useState("");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const currentPage = pageDetails[activePage];
-  const navigationPage = activePage === "vehicleDetail" ? "Vehicles" : activePage;
+  const canViewDashboard = hasPermission(currentProfile?.role, "dashboard:view");
+  const effectiveActivePage =
+    activePage === "Dashboard" && !canViewDashboard ? "Vehicles" : activePage;
+  const currentPage = pageDetails[effectiveActivePage];
+  const navigationPage =
+    effectiveActivePage === "vehicleDetail" ? "Vehicles" : effectiveActivePage;
   const userEmail = session?.user?.email ?? "";
 
   useEffect(() => {
@@ -178,6 +183,12 @@ function App() {
   }, [session?.user?.id]);
 
   function handlePageChange(pageName) {
+    if (pageName === "Dashboard" && !canViewDashboard) {
+      setSelectedVehicleId(null);
+      setActivePage("Vehicles");
+      return;
+    }
+
     setSelectedVehicleId(null);
     setActivePage(pageName);
   }
@@ -216,11 +227,11 @@ function App() {
   }
 
   function renderActivePage() {
-    if (activePage === "Dashboard") {
+    if (effectiveActivePage === "Dashboard") {
       return <Dashboard currentProfile={currentProfile} />;
     }
 
-    if (activePage === "Vehicles") {
+    if (effectiveActivePage === "Vehicles") {
       return (
         <VehiclesPage
           currentProfile={currentProfile}
@@ -229,7 +240,7 @@ function App() {
       );
     }
 
-    if (activePage === "Intake") {
+    if (effectiveActivePage === "Intake") {
       return (
         <IntakePage
           currentProfile={currentProfile}
@@ -238,7 +249,7 @@ function App() {
       );
     }
 
-    if (activePage === "vehicleDetail") {
+    if (effectiveActivePage === "vehicleDetail") {
       return (
         <VehicleDetailPage
           currentProfile={currentProfile}
@@ -248,7 +259,7 @@ function App() {
       );
     }
 
-    return <PlaceholderPage title={activePage} />;
+    return <PlaceholderPage title={effectiveActivePage} />;
   }
 
   if (isAuthLoading) {
