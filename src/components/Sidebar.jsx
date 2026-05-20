@@ -1,5 +1,6 @@
 const sidebarItems = [
   "Dashboard",
+  "Intake",
   "Vehicles",
   "Repairs",
   "Parts",

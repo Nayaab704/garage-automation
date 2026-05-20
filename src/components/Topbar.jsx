@@ -2,6 +2,7 @@ import AuthHeader from "./AuthHeader";
 
 const mobileItems = [
   "Dashboard",
+  "Intake",
   "Vehicles",
   "Repairs",
   "Parts",

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import AppLayout from "./layouts/AppLayout";
 import Dashboard from "./pages/Dashboard";
+import IntakePage from "./pages/IntakePage";
 import LoginPage from "./pages/LoginPage";
 import VehicleDetailPage from "./pages/VehicleDetailPage";
 import VehiclesPage from "./pages/VehiclesPage";
@@ -10,6 +11,10 @@ const pageDetails = {
   Dashboard: {
     title: "Dashboard",
     description: "Track inventory investment, total spend, and estimated profit.",
+  },
+  Intake: {
+    title: "Intake",
+    description: "Start a new vehicle record with a VIN-first intake workflow.",
   },
   Vehicles: {
     title: "Vehicles",
@@ -158,6 +163,10 @@ function App() {
 
     if (activePage === "Vehicles") {
       return <VehiclesPage onSelectVehicle={handleSelectVehicle} />;
+    }
+
+    if (activePage === "Intake") {
+      return <IntakePage onViewVehicles={() => handlePageChange("Vehicles")} />;
     }
 
     if (activePage === "vehicleDetail") {

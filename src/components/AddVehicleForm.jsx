@@ -52,59 +52,93 @@ const titleStatusOptions = [
   { value: "unknown", label: "Unknown" },
 ];
 
+const allowedTitleStatuses = titleStatusOptions.map((option) => option.value);
+const allowedVehicleOrigins = vehicleOriginOptions.map((option) => option.value);
+
 function emptyToNull(value) {
-  const trimmedValue = value.trim();
+  const trimmedValue = String(value ?? "").trim();
   return trimmedValue === "" ? null : trimmedValue;
 }
 
 function numberOrNull(value) {
-  if (value === "") {
+  const trimmedValue = String(value ?? "").trim();
+
+  if (trimmedValue === "") {
     return null;
   }
 
-  const numberValue = Number(value);
+  const numberValue = Number(trimmedValue);
   return Number.isFinite(numberValue) ? numberValue : null;
 }
 
-function decimalOrNull(value) {
-  if (value === "") {
-    return null;
-  }
+function decimalOrZero(value) {
+  const numberValue = Number(value || 0);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+}
 
-  const numberValue = parseFloat(value);
-  return Number.isFinite(numberValue) ? numberValue : null;
+function normalizeVin(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/\s/g, "")
+    .toUpperCase()
+    .slice(0, 17);
+}
+
+function getValidTitleStatus(value) {
+  return allowedTitleStatuses.includes(value) ? value : "unknown";
+}
+
+function getValidVehicleOrigin(value) {
+  return allowedVehicleOrigins.includes(value) ? value : "unknown";
+}
+
+function buildInitialFormData(initialValues = {}) {
+  return {
+    ...emptyForm,
+    ...initialValues,
+    vin: normalizeVin(initialValues.vin),
+    title_status: getValidTitleStatus(
+      initialValues.title_status ?? emptyForm.title_status
+    ),
+    vehicle_origin: getValidVehicleOrigin(
+      initialValues.vehicle_origin ?? emptyForm.vehicle_origin
+    ),
+  };
 }
 
 function buildVehiclePayload(formData) {
   return {
     stock_number: emptyToNull(formData.stock_number),
-    vin: emptyToNull(formData.vin),
+    vin: emptyToNull(normalizeVin(formData.vin)),
     year: numberOrNull(formData.year),
     make: emptyToNull(formData.make),
     model: emptyToNull(formData.model),
     trim: emptyToNull(formData.trim),
     mileage: numberOrNull(formData.mileage),
     color: emptyToNull(formData.color),
-    title_status: formData.title_status,
-    vehicle_origin: formData.vehicle_origin,
-    purchase_price: decimalOrNull(formData.purchase_price),
-    target_sale_price: decimalOrNull(formData.target_sale_price),
+    title_status: getValidTitleStatus(formData.title_status),
+    vehicle_origin: getValidVehicleOrigin(formData.vehicle_origin),
+    purchase_price: decimalOrZero(formData.purchase_price),
+    target_sale_price: decimalOrZero(formData.target_sale_price),
     notes: emptyToNull(formData.notes),
   };
 }
 
-function AddVehicleForm({ onVehicleAdded }) {
-  const [formData, setFormData] = useState(emptyForm);
+function AddVehicleForm({ initialValues = {}, onVehicleAdded }) {
+  const [formData, setFormData] = useState(() =>
+    buildInitialFormData(initialValues)
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
   function handleChange(event) {
     const { name, value } = event.target;
+    const nextValue = name === "vin" ? normalizeVin(value) : value;
 
     setFormData((currentFormData) => ({
       ...currentFormData,
-      [name]: value,
+      [name]: nextValue,
     }));
   }
 
@@ -117,14 +151,18 @@ function AddVehicleForm({ onVehicleAdded }) {
 
     try {
       const vehiclePayload = buildVehiclePayload(formData);
-      const { error } = await supabase.from("vehicles").insert([vehiclePayload]);
+      const { data, error } = await supabase
+        .from("vehicles")
+        .insert([vehiclePayload])
+        .select("id, stock_number, vin")
+        .single();
 
       if (error) {
         setErrorMessage(error.message);
       } else {
-        setFormData(emptyForm);
+        setFormData(buildInitialFormData(initialValues));
         setSuccessMessage("Vehicle added successfully.");
-        await onVehicleAdded();
+        await onVehicleAdded?.(data);
       }
     } catch (error) {
       setErrorMessage(error.message ?? "Something went wrong.");
@@ -156,6 +194,7 @@ function AddVehicleForm({ onVehicleAdded }) {
               <input
                 className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
                 id={field.name}
+                maxLength={field.name === "vin" ? 17 : undefined}
                 name={field.name}
                 onChange={handleChange}
                 required={field.required}
