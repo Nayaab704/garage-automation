@@ -38,14 +38,28 @@ function formatDate(value) {
   });
 }
 
+function numberToInputValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+
+  return String(value);
+}
+
 function TeamMemberCard({
   currentProfile,
   isUpdating,
+  onHourlyRateSave,
   onRoleChange,
   onToggleActive,
   profile,
 }) {
+  const [hourlyRateValue, setHourlyRateValue] = useState(() =>
+    numberToInputValue(profile.hourly_rate)
+  );
   const isCurrentUser = profile.id === currentProfile?.id;
+  const hasHourlyRateChanged =
+    hourlyRateValue !== numberToInputValue(profile.hourly_rate);
 
   return (
     <article className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
@@ -82,7 +96,7 @@ function TeamMemberCard({
         </div>
       </div>
 
-      <dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <dt className="text-sm text-zinc-500">Created</dt>
           <dd className="mt-1 font-semibold text-zinc-950">
@@ -106,6 +120,30 @@ function TeamMemberCard({
             ))}
           </select>
         </label>
+
+        <div>
+          <label className="block" htmlFor={`hourly-rate-${profile.id}`}>
+            <span className="text-sm text-zinc-500">Hourly Rate</span>
+            <input
+              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isUpdating}
+              id={`hourly-rate-${profile.id}`}
+              min="0"
+              onChange={(event) => setHourlyRateValue(event.target.value)}
+              step="0.01"
+              type="number"
+              value={hourlyRateValue}
+            />
+          </label>
+          <button
+            className="mt-2 w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isUpdating || !hasHourlyRateChanged}
+            onClick={() => onHourlyRateSave(profile, hourlyRateValue)}
+            type="button"
+          >
+            {isUpdating ? "Saving..." : "Save Rate"}
+          </button>
+        </div>
 
         <div>
           <p className="text-sm text-zinc-500">Status</p>
@@ -160,7 +198,9 @@ function SettingsPage({ currentProfile }) {
       try {
         const { data, error } = await supabase
           .from("profiles")
-          .select("id, full_name, email, role, phone, is_active, created_at")
+          .select(
+            "id, full_name, email, role, phone, hourly_rate, is_active, created_at"
+          )
           .order("created_at", { ascending: false });
 
         if (!isMounted) {
@@ -216,7 +256,9 @@ function SettingsPage({ currentProfile }) {
         .from("profiles")
         .update({ role: nextRole })
         .eq("id", profile.id)
-        .select("id, full_name, email, role, phone, is_active, created_at")
+        .select(
+          "id, full_name, email, role, phone, hourly_rate, is_active, created_at"
+        )
         .single();
 
       if (error) {
@@ -248,7 +290,9 @@ function SettingsPage({ currentProfile }) {
         .from("profiles")
         .update({ is_active: !profile.is_active })
         .eq("id", profile.id)
-        .select("id, full_name, email, role, phone, is_active, created_at")
+        .select(
+          "id, full_name, email, role, phone, hourly_rate, is_active, created_at"
+        )
         .single();
 
       if (error) {
@@ -262,6 +306,42 @@ function SettingsPage({ currentProfile }) {
       );
     } catch (error) {
       setErrorMessage(error.message ?? "Unable to update user status.");
+    } finally {
+      setUpdatingProfileId(null);
+    }
+  }
+
+  async function handleHourlyRateSave(profile, hourlyRateValue) {
+    const hourlyRate = Number(hourlyRateValue || 0);
+
+    if (!Number.isFinite(hourlyRate) || hourlyRate < 0) {
+      setErrorMessage("Hourly rate must be 0 or greater.");
+      return;
+    }
+
+    setUpdatingProfileId(profile.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({ hourly_rate: hourlyRate })
+        .eq("id", profile.id)
+        .select(
+          "id, full_name, email, role, phone, hourly_rate, is_active, created_at"
+        )
+        .single();
+
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
+
+      updateProfileInState(data);
+      setSuccessMessage("Hourly rate updated.");
+    } catch (error) {
+      setErrorMessage(error.message ?? "Unable to update hourly rate.");
     } finally {
       setUpdatingProfileId(null);
     }
@@ -318,6 +398,7 @@ function SettingsPage({ currentProfile }) {
               currentProfile={currentProfile}
               isUpdating={updatingProfileId === profile.id}
               key={profile.id}
+              onHourlyRateSave={handleHourlyRateSave}
               onRoleChange={handleRoleChange}
               onToggleActive={handleToggleActive}
               profile={profile}

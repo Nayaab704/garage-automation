@@ -53,8 +53,14 @@ async function fetchVehicleDetails(vehicleId) {
     supabase.from("vehicles").select("*").eq("id", vehicleId).single(),
     supabase.from("repair_jobs").select("*").eq("vehicle_id", vehicleId),
     supabase.from("part_requests").select("*").eq("vehicle_id", vehicleId),
-    supabase.from("labor_logs").select("*").eq("vehicle_id", vehicleId),
-    supabase.from("profiles").select("id, full_name, email, role, phone"),
+    supabase
+      .from("labor_logs")
+      .select("*")
+      .eq("vehicle_id", vehicleId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("profiles")
+      .select("id, full_name, email, role, phone, hourly_rate"),
     supabase.from("cost_entries").select("*").eq("vehicle_id", vehicleId),
     supabase
       .from("vehicle_photos")
@@ -330,6 +336,31 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
     );
   }
 
+  async function handleWorkOrderLaborAdded(laborLog) {
+    if (laborLog?.id) {
+      setLaborLogs((currentLaborLogs) => [
+        laborLog,
+        ...currentLaborLogs.filter(
+          (currentLaborLog) => currentLaborLog.id !== laborLog.id
+        ),
+      ]);
+    }
+
+    await refreshInvestmentSummary();
+  }
+
+  async function handleWorkOrderLaborDeleted(deletedLaborLog) {
+    if (deletedLaborLog?.id) {
+      setLaborLogs((currentLaborLogs) =>
+        currentLaborLogs.filter(
+          (laborLog) => laborLog.id !== deletedLaborLog.id
+        )
+      );
+    }
+
+    await refreshInvestmentSummary();
+  }
+
   async function handleWorkOrderPartAdded(partRequest) {
     if (partRequest?.id) {
       setPartRequests((currentPartRequests) => [
@@ -541,10 +572,14 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
 
           <ServiceWorkSection
             canManage={canManageRepairJobs}
+            canManageLabor={canManageLabor}
             canManageParts={canManageWorkOrderParts}
             canManageThirdPartyRepairs={canManageRepairJobs}
             currentProfile={currentProfile}
+            laborLogs={laborLogs}
             onActivityLogged={refreshActivityTimeline}
+            onLaborAdded={handleWorkOrderLaborAdded}
+            onLaborDeleted={handleWorkOrderLaborDeleted}
             onPartAdded={handleWorkOrderPartAdded}
             onPartApprovalUpdated={handleWorkOrderPartApprovalUpdated}
             onThirdPartyRepairAdded={handleThirdPartyRepairAdded}

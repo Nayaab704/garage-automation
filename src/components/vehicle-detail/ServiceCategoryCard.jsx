@@ -1,7 +1,9 @@
 import { useState } from "react";
 import AddThirdPartyRepairForm from "./AddThirdPartyRepairForm";
+import AddWorkOrderLaborForm from "./AddWorkOrderLaborForm";
 import AddWorkOrderPartForm from "./AddWorkOrderPartForm";
 import ThirdPartyRepairsList from "./ThirdPartyRepairsList";
+import WorkOrderLaborList from "./WorkOrderLaborList";
 import WorkOrderPartsList from "./WorkOrderPartsList";
 
 const priorityLabels = {
@@ -106,10 +108,14 @@ function Badge({ children, className }) {
 }
 
 function WorkOrderCard({
+  canManageLabor,
   canManageParts,
   canManageThirdPartyRepairs,
   currentProfile,
+  laborLogs,
   onActivityLogged,
+  onLaborAdded,
+  onLaborDeleted,
   onPartAdded,
   onPartApprovalUpdated,
   onThirdPartyRepairAdded,
@@ -121,6 +127,7 @@ function WorkOrderCard({
   vendors,
   workOrder,
 }) {
+  const [isLaborFormOpen, setIsLaborFormOpen] = useState(false);
   const [isPartFormOpen, setIsPartFormOpen] = useState(false);
   const [isThirdPartyFormOpen, setIsThirdPartyFormOpen] = useState(false);
   const creatorName = getProfileName(profiles, workOrder.created_by);
@@ -148,6 +155,16 @@ function WorkOrderCard({
               {formatLabel(workOrder.status, statusLabels)}
             </Badge>
           </div>
+
+          {canManageLabor && (
+            <button
+              className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+              onClick={() => setIsLaborFormOpen(true)}
+              type="button"
+            >
+              Add Labor
+            </button>
+          )}
 
           {canManageParts && (
             <button
@@ -177,6 +194,16 @@ function WorkOrderCard({
         </p>
       )}
 
+      <WorkOrderLaborList
+        canManage={canManageLabor}
+        currentProfile={currentProfile}
+        laborLogs={laborLogs}
+        onActivityLogged={onActivityLogged}
+        onLaborDeleted={onLaborDeleted}
+        profiles={profiles}
+        vehicleId={vehicleId}
+      />
+
       <WorkOrderPartsList
         currentProfile={currentProfile}
         onActivityLogged={onActivityLogged}
@@ -193,6 +220,18 @@ function WorkOrderCard({
         vehicleId={vehicleId}
         vendors={vendors}
       />
+
+      {isLaborFormOpen && canManageLabor && (
+        <AddWorkOrderLaborForm
+          currentProfile={currentProfile}
+          onActivityLogged={onActivityLogged}
+          onClose={() => setIsLaborFormOpen(false)}
+          onLaborAdded={onLaborAdded}
+          profiles={profiles}
+          vehicleId={vehicleId}
+          workOrder={workOrder}
+        />
+      )}
 
       {isPartFormOpen && canManageParts && (
         <AddWorkOrderPartForm
@@ -231,12 +270,16 @@ function getStatusSummary(workOrders) {
 
 function ServiceCategoryCard({
   canManage = false,
+  canManageLabor = false,
   canManageParts = false,
   canManageThirdPartyRepairs = false,
   category,
   currentProfile,
+  laborLogs = [],
   onAddWorkOrder,
   onActivityLogged,
+  onLaborAdded,
+  onLaborDeleted,
   onPartAdded,
   onPartApprovalUpdated,
   onThirdPartyRepairAdded,
@@ -304,11 +347,17 @@ function ServiceCategoryCard({
         <div className="mt-5 space-y-3">
           {workOrders.map((workOrder, index) => (
             <WorkOrderCard
+              canManageLabor={canManageLabor}
               canManageParts={canManageParts}
               canManageThirdPartyRepairs={canManageThirdPartyRepairs}
               currentProfile={currentProfile}
               key={workOrder.id ?? index}
+              laborLogs={laborLogs.filter(
+                (laborLog) => laborLog.repair_job_id === workOrder.id
+              )}
               onActivityLogged={onActivityLogged}
+              onLaborAdded={onLaborAdded}
+              onLaborDeleted={onLaborDeleted}
               onPartAdded={onPartAdded}
               onPartApprovalUpdated={onPartApprovalUpdated}
               onThirdPartyRepairAdded={onThirdPartyRepairAdded}
