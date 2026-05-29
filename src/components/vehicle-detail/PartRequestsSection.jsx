@@ -155,6 +155,7 @@ function PartRequestCard({
 
 function PartRequestsSection({
   canManage = false,
+  currentProfile,
   onActivityLogged,
   onPartRequestAdded,
   onPartRequestStatusUpdated,
@@ -278,6 +279,7 @@ function PartRequestsSection({
 
       {isFormOpen && canManage && (
         <AddPartRequestForm
+          currentProfile={currentProfile}
           onClose={() => setIsFormOpen(false)}
           onActivityLogged={onActivityLogged}
           onPartRequestAdded={onPartRequestAdded}

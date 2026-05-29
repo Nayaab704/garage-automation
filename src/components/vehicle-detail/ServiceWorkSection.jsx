@@ -12,9 +12,13 @@ function sortWorkOrders(workOrders) {
 
 function ServiceWorkSection({
   canManage = false,
+  canManageParts = false,
   currentProfile,
   onActivityLogged,
+  onPartAdded,
+  onPartApprovalUpdated,
   onWorkOrderAdded,
+  partRequests = [],
   profiles = [],
   repairJobs = [],
   serviceCategories = [],
@@ -72,10 +76,17 @@ function ServiceWorkSection({
           {serviceCategories.map((category) => (
             <ServiceCategoryCard
               canManage={canManage}
+              canManageParts={canManageParts}
               category={category}
+              currentProfile={currentProfile}
               key={category.id}
               onAddWorkOrder={setSelectedCategory}
+              onActivityLogged={onActivityLogged}
+              onPartAdded={onPartAdded}
+              onPartApprovalUpdated={onPartApprovalUpdated}
+              partRequests={partRequests}
               profiles={profiles}
+              vehicleId={vehicleId}
               workOrders={workOrdersByCategoryId[category.id] ?? []}
             />
           ))}

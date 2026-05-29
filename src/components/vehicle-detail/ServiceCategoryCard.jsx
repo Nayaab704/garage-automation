@@ -1,3 +1,7 @@
+import { useState } from "react";
+import AddWorkOrderPartForm from "./AddWorkOrderPartForm";
+import WorkOrderPartsList from "./WorkOrderPartsList";
+
 const priorityLabels = {
   low: "Low",
   medium: "Medium",
@@ -99,7 +103,18 @@ function Badge({ children, className }) {
   );
 }
 
-function WorkOrderCard({ profiles, workOrder }) {
+function WorkOrderCard({
+  canManageParts,
+  currentProfile,
+  onActivityLogged,
+  onPartAdded,
+  onPartApprovalUpdated,
+  parts,
+  profiles,
+  vehicleId,
+  workOrder,
+}) {
+  const [isPartFormOpen, setIsPartFormOpen] = useState(false);
   const creatorName = getProfileName(profiles, workOrder.created_by);
 
   return (
@@ -116,13 +131,25 @@ function WorkOrderCard({ profiles, workOrder }) {
           )}
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Badge className={priorityClassName(workOrder.priority)}>
-            {formatLabel(workOrder.priority, priorityLabels)}
-          </Badge>
-          <Badge className={statusClassName(workOrder.status)}>
-            {formatLabel(workOrder.status, statusLabels)}
-          </Badge>
+        <div className="flex flex-wrap items-start gap-2 sm:justify-end">
+          <div className="flex flex-wrap gap-2">
+            <Badge className={priorityClassName(workOrder.priority)}>
+              {formatLabel(workOrder.priority, priorityLabels)}
+            </Badge>
+            <Badge className={statusClassName(workOrder.status)}>
+              {formatLabel(workOrder.status, statusLabels)}
+            </Badge>
+          </div>
+
+          {canManageParts && (
+            <button
+              className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+              onClick={() => setIsPartFormOpen(true)}
+              type="button"
+            >
+              Add Part
+            </button>
+          )}
         </div>
       </div>
 
@@ -130,6 +157,25 @@ function WorkOrderCard({ profiles, workOrder }) {
         <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-zinc-600">
           {workOrder.notes}
         </p>
+      )}
+
+      <WorkOrderPartsList
+        currentProfile={currentProfile}
+        onActivityLogged={onActivityLogged}
+        onPartApprovalUpdated={onPartApprovalUpdated}
+        parts={parts}
+        vehicleId={vehicleId}
+      />
+
+      {isPartFormOpen && canManageParts && (
+        <AddWorkOrderPartForm
+          currentProfile={currentProfile}
+          onActivityLogged={onActivityLogged}
+          onClose={() => setIsPartFormOpen(false)}
+          onPartAdded={onPartAdded}
+          vehicleId={vehicleId}
+          workOrder={workOrder}
+        />
       )}
     </article>
   );
@@ -146,9 +192,16 @@ function getStatusSummary(workOrders) {
 
 function ServiceCategoryCard({
   canManage = false,
+  canManageParts = false,
   category,
+  currentProfile,
   onAddWorkOrder,
+  onActivityLogged,
+  onPartAdded,
+  onPartApprovalUpdated,
+  partRequests = [],
   profiles = [],
+  vehicleId,
   workOrders = [],
 }) {
   const statusSummary = getStatusSummary(workOrders);
@@ -207,8 +260,17 @@ function ServiceCategoryCard({
         <div className="mt-5 space-y-3">
           {workOrders.map((workOrder, index) => (
             <WorkOrderCard
+              canManageParts={canManageParts}
+              currentProfile={currentProfile}
               key={workOrder.id ?? index}
+              onActivityLogged={onActivityLogged}
+              onPartAdded={onPartAdded}
+              onPartApprovalUpdated={onPartApprovalUpdated}
+              parts={partRequests.filter(
+                (partRequest) => partRequest.repair_job_id === workOrder.id
+              )}
               profiles={profiles}
+              vehicleId={vehicleId}
               workOrder={workOrder}
             />
           ))}

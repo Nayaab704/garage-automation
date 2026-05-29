@@ -287,12 +287,59 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
     setActivityRefreshCount((currentCount) => currentCount + 1);
   }
 
+  async function refreshInvestmentSummary() {
+    if (!vehicleId) {
+      return;
+    }
+
+    const response = await fetchInvestmentSummary(
+      vehicleId,
+      vehicle?.stock_number
+    );
+
+    if (response.error) {
+      setErrorMessage(response.error.message);
+      return;
+    }
+
+    setInvestmentSummary(response.data);
+  }
+
   function handleRepairJobStatusUpdated(repairJobId, newStatus) {
     setRepairJobs((currentRepairJobs) =>
       currentRepairJobs.map((repairJob) =>
         repairJob.id === repairJobId
           ? { ...repairJob, status: newStatus }
           : repairJob
+      )
+    );
+  }
+
+  async function handleWorkOrderPartAdded(partRequest) {
+    if (partRequest?.id) {
+      setPartRequests((currentPartRequests) => [
+        partRequest,
+        ...currentPartRequests.filter(
+          (currentPartRequest) => currentPartRequest.id !== partRequest.id
+        ),
+      ]);
+    }
+
+    if (partRequest?.part_source === "in_house") {
+      await refreshInvestmentSummary();
+    }
+  }
+
+  function handleWorkOrderPartApprovalUpdated(updatedPartRequest) {
+    if (!updatedPartRequest?.id) {
+      return;
+    }
+
+    setPartRequests((currentPartRequests) =>
+      currentPartRequests.map((partRequest) =>
+        partRequest.id === updatedPartRequest.id
+          ? updatedPartRequest
+          : partRequest
       )
     );
   }
@@ -379,6 +426,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   const canManagePhotos = hasPermission(role, "photo:manage");
   const canManagePurchaseOrders = hasPermission(role, "purchase_order:manage");
   const canManageRepairJobs = hasPermission(role, "repair:manage");
+  const canManageWorkOrderParts = canManageRepairJobs || canManagePartRequests;
   const canSellVehicle = hasPermission(role, "sale:manage");
 
   return (
@@ -457,9 +505,13 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
 
           <ServiceWorkSection
             canManage={canManageRepairJobs}
+            canManageParts={canManageWorkOrderParts}
             currentProfile={currentProfile}
             onActivityLogged={refreshActivityTimeline}
+            onPartAdded={handleWorkOrderPartAdded}
+            onPartApprovalUpdated={handleWorkOrderPartApprovalUpdated}
             onWorkOrderAdded={refreshVehicleDetails}
+            partRequests={partRequests}
             profiles={profiles}
             repairJobs={repairJobs}
             serviceCategories={serviceCategories}
@@ -497,6 +549,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
 
           <PartRequestsSection
             canManage={canManagePartRequests}
+            currentProfile={currentProfile}
             onActivityLogged={refreshActivityTimeline}
             onPartRequestAdded={refreshVehicleDetails}
             onPartRequestStatusUpdated={handlePartRequestStatusUpdated}
