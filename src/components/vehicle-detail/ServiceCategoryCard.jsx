@@ -1,5 +1,7 @@
 import { useState } from "react";
+import AddThirdPartyRepairForm from "./AddThirdPartyRepairForm";
 import AddWorkOrderPartForm from "./AddWorkOrderPartForm";
+import ThirdPartyRepairsList from "./ThirdPartyRepairsList";
 import WorkOrderPartsList from "./WorkOrderPartsList";
 
 const priorityLabels = {
@@ -105,16 +107,22 @@ function Badge({ children, className }) {
 
 function WorkOrderCard({
   canManageParts,
+  canManageThirdPartyRepairs,
   currentProfile,
   onActivityLogged,
   onPartAdded,
   onPartApprovalUpdated,
+  onThirdPartyRepairAdded,
+  onThirdPartyRepairDeleted,
   parts,
   profiles,
+  thirdPartyRepairs,
   vehicleId,
+  vendors,
   workOrder,
 }) {
   const [isPartFormOpen, setIsPartFormOpen] = useState(false);
+  const [isThirdPartyFormOpen, setIsThirdPartyFormOpen] = useState(false);
   const creatorName = getProfileName(profiles, workOrder.created_by);
 
   return (
@@ -150,6 +158,16 @@ function WorkOrderCard({
               Add Part
             </button>
           )}
+
+          {canManageThirdPartyRepairs && (
+            <button
+              className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+              onClick={() => setIsThirdPartyFormOpen(true)}
+              type="button"
+            >
+              Add Third-Party Repair
+            </button>
+          )}
         </div>
       </div>
 
@@ -167,6 +185,15 @@ function WorkOrderCard({
         vehicleId={vehicleId}
       />
 
+      <ThirdPartyRepairsList
+        canManage={canManageThirdPartyRepairs}
+        onActivityLogged={onActivityLogged}
+        onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
+        thirdPartyRepairs={thirdPartyRepairs}
+        vehicleId={vehicleId}
+        vendors={vendors}
+      />
+
       {isPartFormOpen && canManageParts && (
         <AddWorkOrderPartForm
           currentProfile={currentProfile}
@@ -174,6 +201,18 @@ function WorkOrderCard({
           onClose={() => setIsPartFormOpen(false)}
           onPartAdded={onPartAdded}
           vehicleId={vehicleId}
+          workOrder={workOrder}
+        />
+      )}
+
+      {isThirdPartyFormOpen && canManageThirdPartyRepairs && (
+        <AddThirdPartyRepairForm
+          currentProfile={currentProfile}
+          onActivityLogged={onActivityLogged}
+          onClose={() => setIsThirdPartyFormOpen(false)}
+          onThirdPartyRepairAdded={onThirdPartyRepairAdded}
+          vehicleId={vehicleId}
+          vendors={vendors}
           workOrder={workOrder}
         />
       )}
@@ -193,15 +232,20 @@ function getStatusSummary(workOrders) {
 function ServiceCategoryCard({
   canManage = false,
   canManageParts = false,
+  canManageThirdPartyRepairs = false,
   category,
   currentProfile,
   onAddWorkOrder,
   onActivityLogged,
   onPartAdded,
   onPartApprovalUpdated,
+  onThirdPartyRepairAdded,
+  onThirdPartyRepairDeleted,
   partRequests = [],
   profiles = [],
+  thirdPartyRepairs = [],
   vehicleId,
+  vendors = [],
   workOrders = [],
 }) {
   const statusSummary = getStatusSummary(workOrders);
@@ -261,16 +305,24 @@ function ServiceCategoryCard({
           {workOrders.map((workOrder, index) => (
             <WorkOrderCard
               canManageParts={canManageParts}
+              canManageThirdPartyRepairs={canManageThirdPartyRepairs}
               currentProfile={currentProfile}
               key={workOrder.id ?? index}
               onActivityLogged={onActivityLogged}
               onPartAdded={onPartAdded}
               onPartApprovalUpdated={onPartApprovalUpdated}
+              onThirdPartyRepairAdded={onThirdPartyRepairAdded}
+              onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
               parts={partRequests.filter(
                 (partRequest) => partRequest.repair_job_id === workOrder.id
               )}
               profiles={profiles}
+              thirdPartyRepairs={thirdPartyRepairs.filter(
+                (thirdPartyRepair) =>
+                  thirdPartyRepair.repair_job_id === workOrder.id
+              )}
               vehicleId={vehicleId}
+              vendors={vendors}
               workOrder={workOrder}
             />
           ))}

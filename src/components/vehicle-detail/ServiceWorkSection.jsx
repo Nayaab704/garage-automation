@@ -13,16 +13,21 @@ function sortWorkOrders(workOrders) {
 function ServiceWorkSection({
   canManage = false,
   canManageParts = false,
+  canManageThirdPartyRepairs = false,
   currentProfile,
   onActivityLogged,
   onPartAdded,
   onPartApprovalUpdated,
+  onThirdPartyRepairAdded,
+  onThirdPartyRepairDeleted,
   onWorkOrderAdded,
   partRequests = [],
   profiles = [],
   repairJobs = [],
   serviceCategories = [],
+  thirdPartyRepairs = [],
   vehicleId,
+  vendors = [],
 }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
 
@@ -77,6 +82,7 @@ function ServiceWorkSection({
             <ServiceCategoryCard
               canManage={canManage}
               canManageParts={canManageParts}
+              canManageThirdPartyRepairs={canManageThirdPartyRepairs}
               category={category}
               currentProfile={currentProfile}
               key={category.id}
@@ -84,9 +90,13 @@ function ServiceWorkSection({
               onActivityLogged={onActivityLogged}
               onPartAdded={onPartAdded}
               onPartApprovalUpdated={onPartApprovalUpdated}
+              onThirdPartyRepairAdded={onThirdPartyRepairAdded}
+              onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
               partRequests={partRequests}
               profiles={profiles}
+              thirdPartyRepairs={thirdPartyRepairs}
               vehicleId={vehicleId}
+              vendors={vendors}
               workOrders={workOrdersByCategoryId[category.id] ?? []}
             />
           ))}

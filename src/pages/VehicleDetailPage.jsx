@@ -44,6 +44,7 @@ async function fetchVehicleDetails(vehicleId) {
     costEntriesResponse,
     vehiclePhotosResponse,
     serviceCategoriesResponse,
+    thirdPartyRepairsResponse,
     repairProcessesResponse,
     purchaseOrdersResponse,
     vendorsResponse,
@@ -65,6 +66,13 @@ async function fetchVehicleDetails(vehicleId) {
       .select("id, slug, name, description, sort_order, is_active, created_at")
       .eq("is_active", true)
       .order("sort_order", { ascending: true }),
+    supabase
+      .from("third_party_repairs")
+      .select(
+        "id, vehicle_id, repair_job_id, vendor_id, service_rendered, status, outbound_date, inbound_date, repair_cost, transit_cost, invoice_url, invoice_path, notes, created_by, created_at"
+      )
+      .eq("vehicle_id", vehicleId)
+      .order("created_at", { ascending: false }),
     supabase
       .from("repair_processes")
       .select("*")
@@ -110,6 +118,7 @@ async function fetchVehicleDetails(vehicleId) {
     partRequestsResponse,
     profilesResponse,
     serviceCategoriesResponse,
+    thirdPartyRepairsResponse,
     vehiclePhotosResponse,
     repairProcessesResponse,
     purchaseOrderItemsResponse,
@@ -132,6 +141,7 @@ function findFirstError(responses) {
     responses.costEntriesResponse.error ??
     responses.vehiclePhotosResponse.error ??
     responses.serviceCategoriesResponse.error ??
+    responses.thirdPartyRepairsResponse.error ??
     responses.repairProcessesResponse.error ??
     responses.purchaseOrdersResponse.error ??
     responses.purchaseOrderItemsResponse.error ??
@@ -155,6 +165,7 @@ function applyVehicleDetails(responses, setters) {
     setters.setCostEntries([]);
     setters.setVehiclePhotos([]);
     setters.setServiceCategories([]);
+    setters.setThirdPartyRepairs([]);
     setters.setRepairProcesses([]);
     setters.setPurchaseOrders([]);
     setters.setPurchaseOrderItems([]);
@@ -173,6 +184,7 @@ function applyVehicleDetails(responses, setters) {
   setters.setCostEntries(responses.costEntriesResponse.data ?? []);
   setters.setVehiclePhotos(responses.vehiclePhotosResponse.data ?? []);
   setters.setServiceCategories(responses.serviceCategoriesResponse.data ?? []);
+  setters.setThirdPartyRepairs(responses.thirdPartyRepairsResponse.data ?? []);
   setters.setRepairProcesses(responses.repairProcessesResponse.data ?? []);
   setters.setPurchaseOrders(responses.purchaseOrdersResponse.data ?? []);
   setters.setPurchaseOrderItems(responses.purchaseOrderItemsResponse.data ?? []);
@@ -191,6 +203,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   const [costEntries, setCostEntries] = useState([]);
   const [vehiclePhotos, setVehiclePhotos] = useState([]);
   const [serviceCategories, setServiceCategories] = useState([]);
+  const [thirdPartyRepairs, setThirdPartyRepairs] = useState([]);
   const [repairProcesses, setRepairProcesses] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [purchaseOrderItems, setPurchaseOrderItems] = useState([]);
@@ -236,6 +249,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
           setPartRequests,
           setProfiles,
           setServiceCategories,
+          setThirdPartyRepairs,
           setVehiclePhotos,
           setRepairProcesses,
           setPurchaseOrderItems,
@@ -257,6 +271,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
           setCostEntries([]);
           setVehiclePhotos([]);
           setServiceCategories([]);
+          setThirdPartyRepairs([]);
           setRepairProcesses([]);
           setPurchaseOrders([]);
           setPurchaseOrderItems([]);
@@ -342,6 +357,27 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
           : partRequest
       )
     );
+  }
+
+  async function handleThirdPartyRepairAdded(thirdPartyRepair) {
+    if (thirdPartyRepair?.id) {
+      setThirdPartyRepairs((currentRepairs) => [
+        thirdPartyRepair,
+        ...currentRepairs.filter((repair) => repair.id !== thirdPartyRepair.id),
+      ]);
+    }
+
+    await refreshInvestmentSummary();
+  }
+
+  async function handleThirdPartyRepairDeleted(deletedRepair) {
+    if (deletedRepair?.id) {
+      setThirdPartyRepairs((currentRepairs) =>
+        currentRepairs.filter((repair) => repair.id !== deletedRepair.id)
+      );
+    }
+
+    await refreshInvestmentSummary();
   }
 
   function handlePartRequestStatusUpdated(partRequestId, newStatus) {
@@ -506,16 +542,21 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
           <ServiceWorkSection
             canManage={canManageRepairJobs}
             canManageParts={canManageWorkOrderParts}
+            canManageThirdPartyRepairs={canManageRepairJobs}
             currentProfile={currentProfile}
             onActivityLogged={refreshActivityTimeline}
             onPartAdded={handleWorkOrderPartAdded}
             onPartApprovalUpdated={handleWorkOrderPartApprovalUpdated}
+            onThirdPartyRepairAdded={handleThirdPartyRepairAdded}
+            onThirdPartyRepairDeleted={handleThirdPartyRepairDeleted}
             onWorkOrderAdded={refreshVehicleDetails}
             partRequests={partRequests}
             profiles={profiles}
             repairJobs={repairJobs}
             serviceCategories={serviceCategories}
+            thirdPartyRepairs={thirdPartyRepairs}
             vehicleId={vehicleId}
+            vendors={vendors}
           />
 
           <RepairJobsSection
