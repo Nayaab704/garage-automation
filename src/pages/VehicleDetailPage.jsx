@@ -2,6 +2,11 @@ import { useEffect, useState } from "react";
 import EditVehicleForm from "../components/EditVehicleForm";
 import ActivityTimelineSection from "../components/vehicle-detail/ActivityTimelineSection";
 import ExtraCostsSection from "../components/vehicle-detail/ExtraCostsSection";
+import FinalCheckSection from "../components/vehicle-detail/FinalCheckSection";
+import {
+  areFinalChecksComplete,
+  finalCheckTemplates,
+} from "../lib/finalChecks";
 import InvestmentSummary from "../components/vehicle-detail/InvestmentSummary";
 import LaborLogsSection from "../components/vehicle-detail/LaborLogsSection";
 import PartRequestsSection from "../components/vehicle-detail/PartRequestsSection";
@@ -32,6 +37,55 @@ async function fetchInvestmentSummary(vehicleId, stockNumber) {
     .select("*")
     .eq("stock_number", stockNumber)
     .maybeSingle();
+}
+
+const finalCheckColumns =
+  "id, vehicle_id, check_key, label, required_role, is_checked, checked_by, checked_at, notes, created_at";
+
+async function fetchFinalChecks(vehicleId) {
+  const existingChecksResponse = await supabase
+    .from("vehicle_final_checks")
+    .select(finalCheckColumns)
+    .eq("vehicle_id", vehicleId);
+
+  if (existingChecksResponse.error) {
+    return existingChecksResponse;
+  }
+
+  const existingKeys = new Set(
+    (existingChecksResponse.data ?? []).map((finalCheck) => finalCheck.check_key)
+  );
+  const missingChecks = finalCheckTemplates.filter(
+    (template) => !existingKeys.has(template.check_key)
+  );
+
+  if (missingChecks.length === 0) {
+    return existingChecksResponse;
+  }
+
+  const insertRows = missingChecks.map((template) => ({
+    vehicle_id: vehicleId,
+    check_key: template.check_key,
+    label: template.label,
+    required_role: template.required_role,
+    is_checked: false,
+  }));
+
+  const insertResponse = await supabase
+    .from("vehicle_final_checks")
+    .upsert(insertRows, {
+      ignoreDuplicates: true,
+      onConflict: "vehicle_id,check_key",
+    });
+
+  if (insertResponse.error && insertResponse.error.code !== "23505") {
+    return { data: existingChecksResponse.data ?? [], error: insertResponse.error };
+  }
+
+  return supabase
+    .from("vehicle_final_checks")
+    .select(finalCheckColumns)
+    .eq("vehicle_id", vehicleId);
 }
 
 async function fetchVehicleDetails(vehicleId) {
@@ -116,10 +170,14 @@ async function fetchVehicleDetails(vehicleId) {
   const investmentSummaryResponse = vehicleResponse.error
     ? { data: null, error: null }
     : await fetchInvestmentSummary(vehicleId, vehicleResponse.data?.stock_number);
+  const finalChecksResponse = vehicleResponse.error
+    ? { data: [], error: null }
+    : await fetchFinalChecks(vehicleId);
 
   return {
     investmentSummaryResponse,
     costEntriesResponse,
+    finalChecksResponse,
     laborLogsResponse,
     partRequestsResponse,
     profilesResponse,
@@ -143,6 +201,7 @@ function findFirstError(responses) {
     responses.repairJobsResponse.error ??
     responses.partRequestsResponse.error ??
     responses.laborLogsResponse.error ??
+    responses.finalChecksResponse.error ??
     responses.profilesResponse.error ??
     responses.costEntriesResponse.error ??
     responses.vehiclePhotosResponse.error ??
@@ -167,6 +226,7 @@ function applyVehicleDetails(responses, setters) {
     setters.setRepairJobs([]);
     setters.setPartRequests([]);
     setters.setLaborLogs([]);
+    setters.setFinalChecks([]);
     setters.setProfiles([]);
     setters.setCostEntries([]);
     setters.setVehiclePhotos([]);
@@ -186,6 +246,7 @@ function applyVehicleDetails(responses, setters) {
   setters.setRepairJobs(responses.repairJobsResponse.data ?? []);
   setters.setPartRequests(responses.partRequestsResponse.data ?? []);
   setters.setLaborLogs(responses.laborLogsResponse.data ?? []);
+  setters.setFinalChecks(responses.finalChecksResponse.data ?? []);
   setters.setProfiles(responses.profilesResponse.data ?? []);
   setters.setCostEntries(responses.costEntriesResponse.data ?? []);
   setters.setVehiclePhotos(responses.vehiclePhotosResponse.data ?? []);
@@ -205,6 +266,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   const [repairJobs, setRepairJobs] = useState([]);
   const [partRequests, setPartRequests] = useState([]);
   const [laborLogs, setLaborLogs] = useState([]);
+  const [finalChecks, setFinalChecks] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [costEntries, setCostEntries] = useState([]);
   const [vehiclePhotos, setVehiclePhotos] = useState([]);
@@ -250,6 +312,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
         applyVehicleDetails(responses, {
           setCostEntries,
           setErrorMessage,
+          setFinalChecks,
           setInvestmentSummary,
           setLaborLogs,
           setPartRequests,
@@ -273,6 +336,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
           setRepairJobs([]);
           setPartRequests([]);
           setLaborLogs([]);
+          setFinalChecks([]);
           setProfiles([]);
           setCostEntries([]);
           setVehiclePhotos([]);
@@ -332,6 +396,18 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
         repairJob.id === repairJobId
           ? { ...repairJob, status: newStatus }
           : repairJob
+      )
+    );
+  }
+
+  function handleFinalCheckUpdated(updatedFinalCheck) {
+    if (!updatedFinalCheck?.id) {
+      return;
+    }
+
+    setFinalChecks((currentFinalChecks) =>
+      currentFinalChecks.map((finalCheck) =>
+        finalCheck.id === updatedFinalCheck.id ? updatedFinalCheck : finalCheck
       )
     );
   }
@@ -433,6 +509,13 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
     }
 
     if (newStatus === vehicle.status) {
+      return;
+    }
+
+    if (newStatus === "ready_for_sale" && !areFinalChecksComplete(finalChecks)) {
+      setVehicleStatusError(
+        "Complete all final checks before marking this vehicle Ready For Sale."
+      );
       return;
     }
 
@@ -555,6 +638,15 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
           <InvestmentSummary
             investmentSummary={investmentSummary}
             vehicle={vehicle}
+          />
+
+          <FinalCheckSection
+            currentProfile={currentProfile}
+            finalChecks={finalChecks}
+            onActivityLogged={refreshActivityTimeline}
+            onFinalCheckUpdated={handleFinalCheckUpdated}
+            profiles={profiles}
+            vehicleId={vehicleId}
           />
 
           <ActivityTimelineSection
