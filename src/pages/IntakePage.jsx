@@ -155,6 +155,11 @@ function IntakePage({ currentProfile, onViewVehicles }) {
           <p className="mt-2 text-sm text-emerald-800">
             VIN {createdVehicle.vin ?? vin} was added to inventory.
           </p>
+          {createdVehicle.stock_number && (
+            <p className="mt-1 text-sm font-semibold text-emerald-900">
+              Stock number: {createdVehicle.stock_number}
+            </p>
+          )}
           <button
             className="mt-4 rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800"
             onClick={onViewVehicles}

@@ -3,7 +3,6 @@ import { supabase } from "../lib/supabaseClient";
 import { vehicleOriginOptions } from "../lib/vehicleOrigin";
 
 const emptyForm = {
-  stock_number: "",
   vin: "",
   year: "",
   make: "",
@@ -19,7 +18,6 @@ const emptyForm = {
 };
 
 const textFields = [
-  { name: "stock_number", label: "Stock Number", required: true },
   { name: "vin", label: "VIN" },
   { name: "make", label: "Make", required: true },
   { name: "model", label: "Model", required: true },
@@ -108,7 +106,6 @@ function buildInitialFormData(initialValues = {}) {
 
 function buildVehiclePayload(formData) {
   return {
-    stock_number: emptyToNull(formData.stock_number),
     vin: emptyToNull(normalizeVin(formData.vin)),
     year: numberOrNull(formData.year),
     make: emptyToNull(formData.make),
@@ -161,7 +158,11 @@ function AddVehicleForm({ initialValues = {}, onVehicleAdded }) {
         setErrorMessage(error.message);
       } else {
         setFormData(buildInitialFormData(initialValues));
-        setSuccessMessage("Vehicle added successfully.");
+        setSuccessMessage(
+          data?.stock_number
+            ? `Vehicle added successfully. Stock number: ${data.stock_number}.`
+            : "Vehicle added successfully."
+        );
         await onVehicleAdded?.(data);
       }
     } catch (error) {

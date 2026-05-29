@@ -11,7 +11,6 @@ const titleStatusOptions = [
 ];
 
 const textFields = [
-  { name: "stock_number", label: "Stock Number", required: true },
   { name: "vin", label: "VIN" },
   { name: "make", label: "Make", required: true },
   { name: "model", label: "Model", required: true },
@@ -69,7 +68,6 @@ function valueToString(value) {
 
 function getInitialFormData(vehicle) {
   return {
-    stock_number: valueToString(vehicle.stock_number),
     vin: valueToString(vehicle.vin),
     year: valueToString(vehicle.year),
     make: valueToString(vehicle.make),
@@ -87,7 +85,6 @@ function getInitialFormData(vehicle) {
 
 function buildVehiclePayload(formData) {
   return {
-    stock_number: emptyToNull(formData.stock_number),
     vin: emptyToNull(formData.vin),
     year: numberOrNull(formData.year),
     make: emptyToNull(formData.make),

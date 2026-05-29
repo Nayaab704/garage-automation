@@ -32,6 +32,18 @@ function formatStatusLabel(status) {
     .join(" ");
 }
 
+function formatCategoryLabel(category) {
+  if (!category) {
+    return "Not available";
+  }
+
+  return String(category)
+    .split("_")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 function getFirstValue(record, fieldNames) {
   for (const fieldName of fieldNames) {
     const value = record[fieldName];
@@ -86,6 +98,20 @@ function getRepairProcessLabel(repairProcesses, repairProcessId) {
   return formatRepairProcessType(repairProcess.process_type);
 }
 
+function getServiceCategoryLabel(serviceCategories, repairJob) {
+  const serviceCategory = serviceCategories.find(
+    (category) => category.id === repairJob.service_category_id
+  );
+
+  if (serviceCategory?.name) {
+    return serviceCategory.name;
+  }
+
+  return formatCategoryLabel(
+    getFirstValue(repairJob, ["category", "repair_category"])
+  );
+}
+
 function priorityClassName(priority) {
   const normalizedPriority = String(priority ?? "").toLowerCase();
 
@@ -124,12 +150,13 @@ function RepairJobCard({
   onStatusChange,
   repairJob,
   repairProcesses,
+  serviceCategories,
   updatingStatusId,
 }) {
   const title =
     getFirstValue(repairJob, ["title", "name", "job_title", "repair_title"]) ??
     "Repair Job";
-  const category = getFirstValue(repairJob, ["category", "repair_category"]);
+  const category = getServiceCategoryLabel(serviceCategories, repairJob);
   const priority = getFirstValue(repairJob, ["priority"]);
   const status = getFirstValue(repairJob, ["status"]);
   const notes = getFirstValue(repairJob, ["notes", "description"]);
@@ -170,7 +197,7 @@ function RepairJobCard({
           value={displayValue(technicianName)}
         />
         <DetailItem
-          label="Category"
+          label="Service Category"
           value={displayValue(category)}
         />
         <DetailItem
@@ -201,6 +228,7 @@ function RepairJobsSection({
   onRepairJobStatusUpdated,
   repairProcesses = [],
   repairJobs = [],
+  serviceCategories = [],
   vehicleId,
 }) {
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -305,6 +333,7 @@ function RepairJobsSection({
               onStatusChange={handleStatusChange}
               repairJob={repairJob}
               repairProcesses={repairProcesses}
+              serviceCategories={serviceCategories}
               updatingStatusId={updatingStatusId}
             />
           ))}
