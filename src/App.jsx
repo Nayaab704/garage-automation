@@ -4,6 +4,7 @@ import Dashboard from "./pages/Dashboard";
 import IntakePage from "./pages/IntakePage";
 import LoginPage from "./pages/LoginPage";
 import PartsPage from "./pages/PartsPage";
+import RepairsPage from "./pages/RepairsPage";
 import SettingsPage from "./pages/SettingsPage";
 import VehicleDetailPage from "./pages/VehicleDetailPage";
 import VehiclesPage from "./pages/VehiclesPage";
@@ -27,7 +28,7 @@ const pageDetails = {
   },
   Repairs: {
     title: "Repairs",
-    description: "Repair orders and service history will live here.",
+    description: "Track active work orders, technician assignments, and repair status.",
   },
   Parts: {
     title: "Parts",
@@ -280,6 +281,15 @@ function App() {
 
     if (effectiveActivePage === "Parts") {
       return <PartsPage currentProfile={currentProfile} />;
+    }
+
+    if (effectiveActivePage === "Repairs") {
+      return (
+        <RepairsPage
+          currentProfile={currentProfile}
+          onSelectVehicle={handleSelectVehicle}
+        />
+      );
     }
 
     if (effectiveActivePage === "Vendors") {
