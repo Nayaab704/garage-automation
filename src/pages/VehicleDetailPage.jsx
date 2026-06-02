@@ -8,10 +8,7 @@ import {
   finalCheckTemplates,
 } from "../lib/finalChecks";
 import InvestmentSummary from "../components/vehicle-detail/InvestmentSummary";
-import LaborLogsSection from "../components/vehicle-detail/LaborLogsSection";
-import PartRequestsSection from "../components/vehicle-detail/PartRequestsSection";
 import PurchaseOrdersSection from "../components/vehicle-detail/PurchaseOrdersSection";
-import RepairJobsSection from "../components/vehicle-detail/RepairJobsSection";
 import SaleWarrantySection from "../components/vehicle-detail/SaleWarrantySection";
 import SellVehicleForm from "../components/vehicle-detail/SellVehicleForm";
 import ServiceWorkSection from "../components/vehicle-detail/ServiceWorkSection";
@@ -99,7 +96,6 @@ async function fetchVehicleDetails(vehicleId) {
     vehiclePhotosResponse,
     serviceCategoriesResponse,
     thirdPartyRepairsResponse,
-    repairProcessesResponse,
     purchaseOrdersResponse,
     vendorsResponse,
     salesResponse,
@@ -131,11 +127,6 @@ async function fetchVehicleDetails(vehicleId) {
       .select(
         "id, vehicle_id, repair_job_id, vendor_id, service_rendered, status, outbound_date, inbound_date, repair_cost, transit_cost, invoice_url, invoice_path, notes, created_by, created_at"
       )
-      .eq("vehicle_id", vehicleId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("repair_processes")
-      .select("*")
       .eq("vehicle_id", vehicleId)
       .order("created_at", { ascending: false }),
     supabase.from("purchase_orders").select("*").eq("vehicle_id", vehicleId),
@@ -184,7 +175,6 @@ async function fetchVehicleDetails(vehicleId) {
     serviceCategoriesResponse,
     thirdPartyRepairsResponse,
     vehiclePhotosResponse,
-    repairProcessesResponse,
     purchaseOrderItemsResponse,
     purchaseOrdersResponse,
     repairJobsResponse,
@@ -207,7 +197,6 @@ function findFirstError(responses) {
     responses.vehiclePhotosResponse.error ??
     responses.serviceCategoriesResponse.error ??
     responses.thirdPartyRepairsResponse.error ??
-    responses.repairProcessesResponse.error ??
     responses.purchaseOrdersResponse.error ??
     responses.purchaseOrderItemsResponse.error ??
     responses.vendorsResponse.error ??
@@ -232,7 +221,6 @@ function applyVehicleDetails(responses, setters) {
     setters.setVehiclePhotos([]);
     setters.setServiceCategories([]);
     setters.setThirdPartyRepairs([]);
-    setters.setRepairProcesses([]);
     setters.setPurchaseOrders([]);
     setters.setPurchaseOrderItems([]);
     setters.setVendors([]);
@@ -252,7 +240,6 @@ function applyVehicleDetails(responses, setters) {
   setters.setVehiclePhotos(responses.vehiclePhotosResponse.data ?? []);
   setters.setServiceCategories(responses.serviceCategoriesResponse.data ?? []);
   setters.setThirdPartyRepairs(responses.thirdPartyRepairsResponse.data ?? []);
-  setters.setRepairProcesses(responses.repairProcessesResponse.data ?? []);
   setters.setPurchaseOrders(responses.purchaseOrdersResponse.data ?? []);
   setters.setPurchaseOrderItems(responses.purchaseOrderItemsResponse.data ?? []);
   setters.setVendors(responses.vendorsResponse.data ?? []);
@@ -272,7 +259,6 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   const [vehiclePhotos, setVehiclePhotos] = useState([]);
   const [serviceCategories, setServiceCategories] = useState([]);
   const [thirdPartyRepairs, setThirdPartyRepairs] = useState([]);
-  const [repairProcesses, setRepairProcesses] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [purchaseOrderItems, setPurchaseOrderItems] = useState([]);
   const [vendors, setVendors] = useState([]);
@@ -320,7 +306,6 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
           setServiceCategories,
           setThirdPartyRepairs,
           setVehiclePhotos,
-          setRepairProcesses,
           setPurchaseOrderItems,
           setPurchaseOrders,
           setRepairJobs,
@@ -342,7 +327,6 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
           setVehiclePhotos([]);
           setServiceCategories([]);
           setThirdPartyRepairs([]);
-          setRepairProcesses([]);
           setPurchaseOrders([]);
           setPurchaseOrderItems([]);
           setVendors([]);
@@ -388,16 +372,6 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
     }
 
     setInvestmentSummary(response.data);
-  }
-
-  function handleRepairJobStatusUpdated(repairJobId, newStatus) {
-    setRepairJobs((currentRepairJobs) =>
-      currentRepairJobs.map((repairJob) =>
-        repairJob.id === repairJobId
-          ? { ...repairJob, status: newStatus }
-          : repairJob
-      )
-    );
   }
 
   function handleFinalCheckUpdated(updatedFinalCheck) {
@@ -485,16 +459,6 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
     }
 
     await refreshInvestmentSummary();
-  }
-
-  function handlePartRequestStatusUpdated(partRequestId, newStatus) {
-    setPartRequests((currentPartRequests) =>
-      currentPartRequests.map((partRequest) =>
-        partRequest.id === partRequestId
-          ? { ...partRequest, status: newStatus }
-          : partRequest
-      )
-    );
   }
 
   async function handleVehicleStatusChange(newStatus) {
@@ -686,44 +650,12 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             vendors={vendors}
           />
 
-          <RepairJobsSection
-            canManage={canManageRepairJobs}
-            onActivityLogged={refreshActivityTimeline}
-            onRepairJobAdded={refreshVehicleDetails}
-            onRepairJobStatusUpdated={handleRepairJobStatusUpdated}
-            repairProcesses={repairProcesses}
-            repairJobs={repairJobs}
-            serviceCategories={serviceCategories}
-            vehicleId={vehicleId}
-          />
-
-          <LaborLogsSection
-            canManage={canManageLabor}
-            laborLogs={laborLogs}
-            onActivityLogged={refreshActivityTimeline}
-            onLaborLogAdded={refreshVehicleDetails}
-            profiles={profiles}
-            repairJobs={repairJobs}
-            vehicleId={vehicleId}
-          />
-
+          {/* Legacy repair process workflow hidden after migration to service-category work orders. */}
           <ExtraCostsSection
             canManage={canManageExtraCosts}
             costEntries={costEntries}
             onActivityLogged={refreshActivityTimeline}
             onExtraCostChanged={refreshVehicleDetails}
-            vehicleId={vehicleId}
-          />
-
-          <PartRequestsSection
-            canManage={canManagePartRequests}
-            currentProfile={currentProfile}
-            onActivityLogged={refreshActivityTimeline}
-            onPartRequestAdded={refreshVehicleDetails}
-            onPartRequestStatusUpdated={handlePartRequestStatusUpdated}
-            partRequests={partRequests}
-            repairProcesses={repairProcesses}
-            repairJobs={repairJobs}
             vehicleId={vehicleId}
           />
 
