@@ -13,6 +13,13 @@ const emptyForm = {
   notes: "",
 };
 
+const purchaseOrderBlockedStatuses = [
+  "ordered",
+  "received",
+  "installed",
+  "cancelled",
+];
+
 function emptyToNull(value) {
   const trimmedValue = value.trim();
   return trimmedValue === "" ? null : trimmedValue;
@@ -44,6 +51,31 @@ function getPartRequestName(partRequest) {
   );
 }
 
+function valueToString(value) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function canCreatePurchaseOrderForPart(partRequest) {
+  return (
+    partRequest?.part_source === "needs_to_buy" &&
+    !purchaseOrderBlockedStatuses.includes(partRequest?.status)
+  );
+}
+
+function getInitialFormData(initialPartRequest) {
+  if (!initialPartRequest?.id) {
+    return emptyForm;
+  }
+
+  return {
+    ...emptyForm,
+    description: getPartRequestName(initialPartRequest),
+    part_request_id: initialPartRequest.id,
+    quantity: valueToString(initialPartRequest.quantity || 1),
+    unit_cost: valueToString(initialPartRequest.unit_cost ?? ""),
+  };
+}
+
 function parseRequiredNumber(value, label) {
   if (value.trim() === "") {
     return { error: `${label} is required.`, value: null };
@@ -67,6 +99,8 @@ function parseOptionalNumber(value, label) {
 }
 
 function CreatePurchaseOrderForm({
+  initialPartRequest = null,
+  lockPartRequest = false,
   onClose,
   onActivityLogged,
   onPurchaseOrderCreated,
@@ -74,11 +108,18 @@ function CreatePurchaseOrderForm({
   vehicleId,
   vendors = [],
 }) {
-  const [formData, setFormData] = useState(emptyForm);
+  const [formData, setFormData] = useState(() =>
+    getInitialFormData(initialPartRequest)
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [warningMessage, setWarningMessage] = useState("");
+  const availablePartRequests = partRequests.filter(canCreatePurchaseOrderForPart);
+  const selectedPartRequest =
+    partRequests.find(
+      (partRequest) => partRequest.id === formData.part_request_id
+    ) ?? initialPartRequest;
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -101,6 +142,12 @@ function CreatePurchaseOrderForm({
       description:
         currentFormData.description ||
         (selectedPartRequest ? getPartRequestName(selectedPartRequest) : ""),
+      quantity:
+        currentFormData.quantity ||
+        valueToString(selectedPartRequest?.quantity || 1),
+      unit_cost:
+        currentFormData.unit_cost ||
+        valueToString(selectedPartRequest?.unit_cost ?? ""),
     }));
   }
 
@@ -120,6 +167,17 @@ function CreatePurchaseOrderForm({
 
     if (!formData.part_request_id) {
       return { error: "Part request is required." };
+    }
+
+    const selectedPartRequest = partRequests.find(
+      (partRequest) => partRequest.id === formData.part_request_id
+    );
+
+    if (!canCreatePurchaseOrderForPart(selectedPartRequest)) {
+      return {
+        error:
+          "Purchase orders can only be created for needs-to-buy parts that have not already been ordered or completed.",
+      };
     }
 
     if (!description) {
@@ -236,8 +294,9 @@ function CreatePurchaseOrderForm({
       if (partRequestResponse.error) {
         statusWarning = `Purchase order created, but the part request status could not be updated: ${partRequestResponse.error.message}`;
       }
+      const partRequestStatusUpdated = !partRequestResponse.error;
 
-      setFormData(emptyForm);
+      setFormData(getInitialFormData(initialPartRequest));
       setSuccessMessage("Purchase order created successfully.");
       setWarningMessage(statusWarning);
       await logVehicleActivity({
@@ -270,7 +329,13 @@ function CreatePurchaseOrderForm({
       }
       onActivityLogged?.();
 
-      await onPurchaseOrderCreated();
+      await onPurchaseOrderCreated?.({
+        partRequestId: formData.part_request_id,
+        partRequestStatusUpdated,
+        purchaseOrderId,
+        status: "ordered",
+        warningMessage: statusWarning,
+      });
     } catch (error) {
       setErrorMessage(error.message ?? "Something went wrong.");
     } finally {
@@ -330,6 +395,7 @@ function CreatePurchaseOrderForm({
               </span>
               <select
                 className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                disabled={lockPartRequest}
                 id="purchase-order-part-request"
                 name="part_request_id"
                 onChange={handlePartRequestChange}
@@ -337,7 +403,7 @@ function CreatePurchaseOrderForm({
                 value={formData.part_request_id}
               >
                 <option value="">Select a part request</option>
-                {partRequests.map((partRequest) => (
+                {availablePartRequests.map((partRequest) => (
                   <option key={partRequest.id} value={partRequest.id}>
                     {getPartRequestName(partRequest)}
                   </option>
@@ -345,6 +411,12 @@ function CreatePurchaseOrderForm({
               </select>
             </label>
           </div>
+
+          {selectedPartRequest?.approval_status === "pending" && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              Pending admin review, but PO can still be created.
+            </div>
+          )}
 
           <label className="block" htmlFor="purchase-order-description">
             <span className="text-sm font-medium text-zinc-700">

@@ -32,7 +32,7 @@ const pageDetails = {
   },
   Parts: {
     title: "Parts",
-    description: "Review and approve requested parts for active work orders.",
+    description: "Review requested parts and create purchase orders for work orders.",
   },
   Vendors: {
     title: "Vendors",

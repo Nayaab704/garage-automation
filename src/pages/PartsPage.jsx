@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import CreatePurchaseOrderForm from "../components/vehicle-detail/CreatePurchaseOrderForm";
 import { logVehicleActivity } from "../lib/activityLogger";
+import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -15,7 +17,7 @@ const partRequestColumns =
   "id, vehicle_id, repair_job_id, part_name, quantity, status, notes, part_source, approval_status, unit_cost, created_by, created_at";
 
 const filterOptions = [
-  { key: "pending", label: "Pending Approval" },
+  { key: "pending", label: "Pending Review" },
   { key: "approved", label: "Approved" },
   { key: "rejected", label: "Rejected" },
   { key: "in_house", label: "In-House / Not Required" },
@@ -29,12 +31,13 @@ const partSourceLabels = {
 
 const approvalLabels = {
   not_required: "Not Required",
-  pending: "Pending",
+  pending: "Pending Review",
   approved: "Approved",
   rejected: "Rejected",
 };
 
 const statusLabels = {
+  cancelled: "Cancelled",
   requested: "Requested",
   ordered: "Ordered",
   received: "Received",
@@ -100,6 +103,10 @@ function approvalClassName(approvalStatus) {
 }
 
 function statusClassName(status) {
+  if (status === "cancelled") {
+    return "bg-red-50 text-red-700 ring-red-200";
+  }
+
   if (status === "installed" || status === "received") {
     return "bg-emerald-50 text-emerald-700 ring-emerald-200";
   }
@@ -109,6 +116,17 @@ function statusClassName(status) {
   }
 
   return "bg-zinc-100 text-zinc-700 ring-zinc-200";
+}
+
+function canCreatePurchaseOrderForPart(part) {
+  return (
+    part.part_source === "needs_to_buy" &&
+    !["ordered", "received", "installed", "cancelled"].includes(part.status)
+  );
+}
+
+function hasOrderOrCompletedStatus(part) {
+  return ["ordered", "received", "installed"].includes(part.status);
 }
 
 function sourceClassName(partSource) {
@@ -174,7 +192,7 @@ async function fetchPartsQueueData() {
   const repairJobIds = uniqueValues(parts.map((part) => part.repair_job_id));
   const profileIds = uniqueValues(parts.map((part) => part.created_by));
 
-  const [vehiclesResponse, repairJobsResponse, profilesResponse] =
+  const [vehiclesResponse, repairJobsResponse, profilesResponse, vendorsResponse] =
     await Promise.all([
       vehicleIds.length > 0
         ? supabase
@@ -191,10 +209,16 @@ async function fetchPartsQueueData() {
             .select("id, full_name, email")
             .in("id", profileIds)
         : { data: [], error: null },
+      supabase.from("vendors").select("id, name").order("name", {
+        ascending: true,
+      }),
     ]);
 
   const firstRelatedError =
-    vehiclesResponse.error ?? repairJobsResponse.error ?? profilesResponse.error;
+    vehiclesResponse.error ??
+    repairJobsResponse.error ??
+    profilesResponse.error ??
+    vendorsResponse.error;
 
   if (firstRelatedError) {
     return { error: firstRelatedError };
@@ -215,6 +239,7 @@ async function fetchPartsQueueData() {
       vehiclesById: Object.fromEntries(
         (vehiclesResponse.data ?? []).map((vehicle) => [vehicle.id, vehicle])
       ),
+      vendors: vendorsResponse.data ?? [],
     },
     error: null,
   };
@@ -237,11 +262,19 @@ function PartsPage({ currentProfile }) {
   const [partRequests, setPartRequests] = useState([]);
   const [profilesById, setProfilesById] = useState({});
   const [repairJobsById, setRepairJobsById] = useState({});
+  const [selectedPartForPurchaseOrder, setSelectedPartForPurchaseOrder] =
+    useState(null);
+  const [successMessage, setSuccessMessage] = useState("");
   const [updatingPartId, setUpdatingPartId] = useState(null);
+  const [vendors, setVendors] = useState([]);
   const [vehiclesById, setVehiclesById] = useState({});
 
   const canApproveParts =
     currentProfile?.role === "admin" || currentProfile?.role === "owner";
+  const canManagePurchaseOrders = hasPermission(
+    currentProfile?.role,
+    "purchase_order:manage"
+  );
 
   const filteredParts = useMemo(
     () => partRequests.filter((part) => partMatchesFilter(part, activeFilter)),
@@ -286,6 +319,7 @@ function PartsPage({ currentProfile }) {
         setVehiclesById(data.vehiclesById);
         setRepairJobsById(data.repairJobsById);
         setProfilesById(data.profilesById);
+        setVendors(data.vendors);
       } catch (error) {
         if (isMounted) {
           setErrorMessage(error.message ?? "Unable to load parts.");
@@ -319,6 +353,7 @@ function PartsPage({ currentProfile }) {
 
     setUpdatingPartId(part.id);
     setErrorMessage("");
+    setSuccessMessage("");
 
     try {
       const { data, error } = await supabase
@@ -359,27 +394,53 @@ function PartsPage({ currentProfile }) {
     }
   }
 
+  function handlePurchaseOrderCreated(result) {
+    const partRequestId =
+      result?.partRequestId ?? selectedPartForPurchaseOrder?.id;
+
+    if (result?.partRequestStatusUpdated === false) {
+      setSelectedPartForPurchaseOrder(null);
+      setErrorMessage(
+        result.warningMessage ??
+          "Purchase order created, but the part status could not be updated."
+      );
+      return;
+    }
+
+    if (partRequestId) {
+      setPartRequests((currentParts) =>
+        currentParts.map((part) =>
+          part.id === partRequestId ? { ...part, status: "ordered" } : part
+        )
+      );
+    }
+
+    setErrorMessage("");
+    setSelectedPartForPurchaseOrder(null);
+    setSuccessMessage("Purchase order created. Part status is now Ordered.");
+  }
+
   return (
     <div className="space-y-6">
       <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
-              Parts Approval
+              Parts Review
             </p>
             <h2 className="mt-2 text-2xl font-bold text-zinc-950">
-              Parts Queue
+              Parts Review Queue
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
-              Review requested parts, approve purchases, and keep technicians
-              updated without leaving the queue.
+              Review requested parts for oversight while technicians keep work
+              moving and create purchase orders when needed.
             </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-md border border-amber-200 bg-amber-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
-                Pending Approval
+                Pending Review
               </p>
               <p className="mt-2 text-2xl font-bold text-zinc-950">
                 {pendingNeedsToBuyParts.length}
@@ -387,7 +448,7 @@ function PartsPage({ currentProfile }) {
             </div>
             <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Pending Cost
+                Pending Review Cost
               </p>
               <p className="mt-2 text-2xl font-bold text-zinc-950">
                 {formatCurrency(pendingTotal)}
@@ -441,6 +502,12 @@ function PartsPage({ currentProfile }) {
         </section>
       )}
 
+      {!isLoading && successMessage && (
+        <section className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+          {successMessage}
+        </section>
+      )}
+
       {!isLoading && !errorMessage && filteredParts.length === 0 && (
         <section className="rounded-lg border border-dashed border-zinc-300 bg-white p-8 text-center shadow-sm">
           <h3 className="text-lg font-bold text-zinc-950">
@@ -463,6 +530,8 @@ function PartsPage({ currentProfile }) {
               canApproveParts &&
               part.part_source === "needs_to_buy" &&
               part.approval_status === "pending";
+            const canCreatePurchaseOrder =
+              canManagePurchaseOrders && canCreatePurchaseOrderForPart(part);
 
             return (
               <article
@@ -522,6 +591,21 @@ function PartsPage({ currentProfile }) {
                         {part.notes}
                       </p>
                     )}
+
+                    {canCreatePurchaseOrder &&
+                      part.approval_status === "pending" && (
+                        <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                          Pending admin review, but PO can still be created.
+                        </p>
+                      )}
+
+                    {part.approval_status === "rejected" &&
+                      hasOrderOrCompletedStatus(part) && (
+                        <p className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                          This part has a rejected review status after ordering.
+                          Check the purchase order and resolve manually.
+                        </p>
+                      )}
                   </div>
 
                   <div className="flex shrink-0 flex-col gap-3 xl:items-end">
@@ -554,12 +638,37 @@ function PartsPage({ currentProfile }) {
                         </button>
                       </div>
                     )}
+
+                    {canCreatePurchaseOrder && (
+                      <button
+                        className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800"
+                        onClick={() => {
+                          setSuccessMessage("");
+                          setSelectedPartForPurchaseOrder(part);
+                        }}
+                        type="button"
+                      >
+                        Create PO
+                      </button>
+                    )}
                   </div>
                 </div>
               </article>
             );
           })}
         </section>
+      )}
+
+      {selectedPartForPurchaseOrder && canManagePurchaseOrders && (
+        <CreatePurchaseOrderForm
+          initialPartRequest={selectedPartForPurchaseOrder}
+          lockPartRequest
+          onClose={() => setSelectedPartForPurchaseOrder(null)}
+          onPurchaseOrderCreated={handlePurchaseOrderCreated}
+          partRequests={[selectedPartForPurchaseOrder]}
+          vehicleId={selectedPartForPurchaseOrder.vehicle_id}
+          vendors={vendors}
+        />
       )}
     </div>
   );

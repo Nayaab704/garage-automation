@@ -23,6 +23,7 @@ export const ROLE_PERMISSIONS = {
     "repair_process:manage",
     "labor:manage",
     "photo:manage",
+    "purchase_order:manage",
     "vehicle:change_status",
   ],
   ordering: [

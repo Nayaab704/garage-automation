@@ -18,12 +18,13 @@ const partSourceLabels = {
 
 const approvalLabels = {
   not_required: "Not Required",
-  pending: "Pending",
+  pending: "Pending Review",
   approved: "Approved",
   rejected: "Rejected",
 };
 
 const statusLabels = {
+  cancelled: "Cancelled",
   requested: "Requested",
   ordered: "Ordered",
   received: "Received",
@@ -76,6 +77,10 @@ function approvalClassName(approvalStatus) {
 }
 
 function statusClassName(status) {
+  if (status === "cancelled") {
+    return "bg-red-50 text-red-700 ring-red-200";
+  }
+
   if (status === "installed" || status === "received") {
     return "bg-emerald-50 text-emerald-700 ring-emerald-200";
   }
