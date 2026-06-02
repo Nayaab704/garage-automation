@@ -7,6 +7,7 @@ import PartsPage from "./pages/PartsPage";
 import SettingsPage from "./pages/SettingsPage";
 import VehicleDetailPage from "./pages/VehicleDetailPage";
 import VehiclesPage from "./pages/VehiclesPage";
+import VendorsPage from "./pages/VendorsPage";
 import { fetchCurrentUserProfile } from "./lib/currentUserProfile";
 import { hasPermission } from "./lib/permissions";
 import { supabase } from "./lib/supabaseClient";
@@ -34,7 +35,7 @@ const pageDetails = {
   },
   Vendors: {
     title: "Vendors",
-    description: "Vendor contacts, invoices, and performance will live here.",
+    description: "Manage supplier, service, auction, and partner contacts.",
   },
   Analytics: {
     title: "Analytics",
@@ -279,6 +280,10 @@ function App() {
 
     if (effectiveActivePage === "Parts") {
       return <PartsPage currentProfile={currentProfile} />;
+    }
+
+    if (effectiveActivePage === "Vendors") {
+      return <VendorsPage currentProfile={currentProfile} />;
     }
 
     if (effectiveActivePage === "vehicleDetail") {
