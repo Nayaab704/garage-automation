@@ -3,6 +3,7 @@ import AppLayout from "./layouts/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import IntakePage from "./pages/IntakePage";
 import LoginPage from "./pages/LoginPage";
+import PartsPage from "./pages/PartsPage";
 import SettingsPage from "./pages/SettingsPage";
 import VehicleDetailPage from "./pages/VehicleDetailPage";
 import VehiclesPage from "./pages/VehiclesPage";
@@ -29,7 +30,7 @@ const pageDetails = {
   },
   Parts: {
     title: "Parts",
-    description: "Parts inventory, ordering, and usage tracking will live here.",
+    description: "Review and approve requested parts for active work orders.",
   },
   Vendors: {
     title: "Vendors",
@@ -274,6 +275,10 @@ function App() {
           onViewVehicles={() => handlePageChange("Vehicles")}
         />
       );
+    }
+
+    if (effectiveActivePage === "Parts") {
+      return <PartsPage currentProfile={currentProfile} />;
     }
 
     if (effectiveActivePage === "vehicleDetail") {
