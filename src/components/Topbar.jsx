@@ -7,6 +7,7 @@ const mobileItems = [
   "Vehicles",
   "Repairs",
   "Parts",
+  "Purchase Orders",
   "Vendors",
   "Analytics",
   "Settings",

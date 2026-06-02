@@ -4,6 +4,7 @@ import Dashboard from "./pages/Dashboard";
 import IntakePage from "./pages/IntakePage";
 import LoginPage from "./pages/LoginPage";
 import PartsPage from "./pages/PartsPage";
+import PurchaseOrdersPage from "./pages/PurchaseOrdersPage";
 import RepairsPage from "./pages/RepairsPage";
 import SettingsPage from "./pages/SettingsPage";
 import VehicleDetailPage from "./pages/VehicleDetailPage";
@@ -33,6 +34,10 @@ const pageDetails = {
   Parts: {
     title: "Parts",
     description: "Review requested parts and create purchase orders for work orders.",
+  },
+  "Purchase Orders": {
+    title: "Purchase Orders",
+    description: "Track purchase orders, received parts, and vendor ordering status.",
   },
   Vendors: {
     title: "Vendors",
@@ -281,6 +286,15 @@ function App() {
 
     if (effectiveActivePage === "Parts") {
       return <PartsPage currentProfile={currentProfile} />;
+    }
+
+    if (effectiveActivePage === "Purchase Orders") {
+      return (
+        <PurchaseOrdersPage
+          currentProfile={currentProfile}
+          onSelectVehicle={handleSelectVehicle}
+        />
+      );
     }
 
     if (effectiveActivePage === "Repairs") {

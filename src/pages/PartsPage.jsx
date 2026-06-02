@@ -661,6 +661,7 @@ function PartsPage({ currentProfile }) {
 
       {selectedPartForPurchaseOrder && canManagePurchaseOrders && (
         <CreatePurchaseOrderForm
+          currentProfile={currentProfile}
           initialPartRequest={selectedPartForPurchaseOrder}
           lockPartRequest
           onClose={() => setSelectedPartForPurchaseOrder(null)}

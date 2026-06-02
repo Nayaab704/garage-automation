@@ -226,6 +226,7 @@ function PurchaseOrderCard({
 
 function PurchaseOrdersSection({
   canManage = false,
+  currentProfile,
   onActivityLogged,
   onPurchaseOrderCreated,
   partRequests = [],
@@ -286,6 +287,7 @@ function PurchaseOrdersSection({
       {isFormOpen && canManage && (
         <CreatePurchaseOrderForm
           onClose={() => setIsFormOpen(false)}
+          currentProfile={currentProfile}
           onActivityLogged={onActivityLogged}
           onPurchaseOrderCreated={onPurchaseOrderCreated}
           partRequests={partRequests}

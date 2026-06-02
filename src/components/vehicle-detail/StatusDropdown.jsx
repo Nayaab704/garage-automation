@@ -14,7 +14,11 @@ function formatStatusLabel(status) {
 function getStatusClassName(status) {
   const normalizedStatus = String(status ?? "").toLowerCase();
 
-  if (normalizedStatus === "completed" || normalizedStatus === "installed") {
+  if (
+    normalizedStatus === "completed" ||
+    normalizedStatus === "installed" ||
+    normalizedStatus === "received"
+  ) {
     return "bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100";
   }
 
@@ -26,11 +30,15 @@ function getStatusClassName(status) {
     return "bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100";
   }
 
-  if (normalizedStatus === "waiting_parts" || normalizedStatus === "received") {
+  if (normalizedStatus === "waiting_parts" || normalizedStatus === "partial_received") {
     return "bg-amber-50 text-amber-700 ring-amber-200 hover:bg-amber-100";
   }
 
-  if (normalizedStatus === "blocked" || normalizedStatus === "cancelled") {
+  if (
+    normalizedStatus === "blocked" ||
+    normalizedStatus === "cancelled" ||
+    normalizedStatus === "returned"
+  ) {
     return "bg-red-50 text-red-700 ring-red-200 hover:bg-red-100";
   }
 

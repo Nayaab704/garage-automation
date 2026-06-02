@@ -76,12 +76,8 @@ function getInitialFormData(initialPartRequest) {
   };
 }
 
-function parseRequiredNumber(value, label) {
-  if (value.trim() === "") {
-    return { error: `${label} is required.`, value: null };
-  }
-
-  const numberValue = Number(value);
+function parseNumberWithDefault(value, defaultValue, label) {
+  const numberValue = Number(value || defaultValue);
 
   if (!Number.isFinite(numberValue) || numberValue < 0) {
     return { error: `${label} must be 0 or greater.`, value: null };
@@ -90,15 +86,8 @@ function parseRequiredNumber(value, label) {
   return { error: "", value: numberValue };
 }
 
-function parseOptionalNumber(value, label) {
-  if (value.trim() === "") {
-    return { error: "", value: null };
-  }
-
-  return parseRequiredNumber(value, label);
-}
-
 function CreatePurchaseOrderForm({
+  currentProfile,
   initialPartRequest = null,
   lockPartRequest = false,
   onClose,
@@ -153,13 +142,14 @@ function CreatePurchaseOrderForm({
 
   function validateForm() {
     const description = emptyToNull(formData.description);
-    const quantity = Number(formData.quantity);
-    const unitCost = parseRequiredNumber(formData.unit_cost, "Unit cost");
-    const shippingCost = parseOptionalNumber(
+    const quantity = Number(formData.quantity || 1);
+    const unitCost = parseNumberWithDefault(formData.unit_cost, 0, "Unit cost");
+    const shippingCost = parseNumberWithDefault(
       formData.shipping_cost,
+      0,
       "Shipping cost"
     );
-    const tax = parseOptionalNumber(formData.tax, "Tax");
+    const tax = parseNumberWithDefault(formData.tax, 0, "Tax");
 
     if (!formData.vendor_id) {
       return { error: "Vendor is required." };
@@ -229,6 +219,7 @@ function CreatePurchaseOrderForm({
       }
 
       const purchaseOrder = {
+        ordered_by: currentProfile?.id ?? null,
         vehicle_id: vehicleId,
         vendor_id: formData.vendor_id,
         status: "ordered",
@@ -444,7 +435,6 @@ function CreatePurchaseOrderForm({
                 min="1"
                 name="quantity"
                 onChange={handleChange}
-                required
                 step="1"
                 type="number"
                 value={formData.quantity}
@@ -461,7 +451,6 @@ function CreatePurchaseOrderForm({
                 min="0"
                 name="unit_cost"
                 onChange={handleChange}
-                required
                 step="0.01"
                 type="number"
                 value={formData.unit_cost}

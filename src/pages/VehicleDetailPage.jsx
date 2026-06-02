@@ -661,6 +661,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
 
           <PurchaseOrdersSection
             canManage={canManagePurchaseOrders}
+            currentProfile={currentProfile}
             onActivityLogged={refreshActivityTimeline}
             onPurchaseOrderCreated={refreshVehicleDetails}
             partRequests={partRequests}
