@@ -66,7 +66,13 @@ function CheckRow({
   const isUpdating = updatingCheckId === finalCheck.id;
 
   return (
-    <div className="rounded-md border border-zinc-200 bg-white p-4">
+    <div
+      className={`rounded-md border p-4 ${
+        finalCheck.is_checked
+          ? "border-emerald-200 bg-emerald-50/60"
+          : "border-zinc-200 bg-white"
+      }`}
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <label className="flex items-start gap-3">
           <input
@@ -81,7 +87,7 @@ function CheckRow({
               {finalCheck.label}
             </span>
             <span className="mt-1 block text-sm text-zinc-500">
-              {finalCheck.is_checked ? "Complete" : "Not complete"}
+              {finalCheck.is_checked ? "Completed" : "Open"}
             </span>
           </span>
         </label>
@@ -137,7 +143,7 @@ function FinalCheckGroup({
   );
 
   return (
-    <div>
+    <div className="rounded-lg border border-zinc-200 bg-white p-4">
       <h3 className="text-base font-bold text-zinc-950">{title}</h3>
       <div className="mt-3 space-y-3">
         {templates.map((template) => (
@@ -171,6 +177,9 @@ function FinalCheckSection({
   const completedCount = finalCheckTemplates.filter(
     (template) => checksByKey.get(template.check_key)?.is_checked === true
   ).length;
+  const progressPercent = Math.round(
+    (completedCount / finalCheckTemplates.length) * 100
+  );
   const allChecksComplete = areFinalChecksComplete(finalChecks);
 
   async function handleToggle(finalCheck, isChecked) {
@@ -259,6 +268,17 @@ function FinalCheckSection({
         >
           {allChecksComplete ? "Cleared" : "Needs Review"}
         </span>
+      </div>
+
+      <div className="mb-5">
+        <div className="h-2 overflow-hidden rounded-full bg-zinc-200">
+          <div
+            className={`h-full rounded-full transition-all ${
+              allChecksComplete ? "bg-emerald-600" : "bg-amber-500"
+            }`}
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
       </div>
 
       {allChecksComplete && (

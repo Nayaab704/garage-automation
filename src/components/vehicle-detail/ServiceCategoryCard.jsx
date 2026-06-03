@@ -2,6 +2,7 @@ import { useState } from "react";
 import AddThirdPartyRepairForm from "./AddThirdPartyRepairForm";
 import AddWorkOrderLaborForm from "./AddWorkOrderLaborForm";
 import AddWorkOrderPartForm from "./AddWorkOrderPartForm";
+import AddWorkOrderPhotoForm from "./AddWorkOrderPhotoForm";
 import ThirdPartyRepairsList from "./ThirdPartyRepairsList";
 import WorkOrderLaborList from "./WorkOrderLaborList";
 import WorkOrderPartsList from "./WorkOrderPartsList";
@@ -140,14 +141,15 @@ function WorkOrderCard({
 }) {
   const [isLaborFormOpen, setIsLaborFormOpen] = useState(false);
   const [isPartFormOpen, setIsPartFormOpen] = useState(false);
+  const [isPhotoFormOpen, setIsPhotoFormOpen] = useState(false);
   const [isThirdPartyFormOpen, setIsThirdPartyFormOpen] = useState(false);
   const creatorName = getProfileName(profiles, workOrder.created_by);
 
   return (
-    <article className="rounded-md border border-zinc-200 bg-white p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h4 className="font-semibold text-zinc-950">
+    <article className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0">
+          <h4 className="text-base font-bold text-zinc-950">
             {displayValue(workOrder.title)}
           </h4>
           {creatorName && (
@@ -157,8 +159,8 @@ function WorkOrderCard({
           )}
         </div>
 
-        <div className="flex flex-wrap items-start gap-2 sm:justify-end">
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-3 xl:items-end">
+          <div className="flex flex-wrap gap-2 xl:justify-end">
             <Badge className={priorityClassName(workOrder.priority)}>
               {formatLabel(workOrder.priority, priorityLabels)}
             </Badge>
@@ -167,34 +169,51 @@ function WorkOrderCard({
             </Badge>
           </div>
 
-          {canManageLabor && (
-            <button
-              className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
-              onClick={() => setIsLaborFormOpen(true)}
-              type="button"
-            >
-              Add Labor
-            </button>
-          )}
+          {(canManageLabor ||
+            canManageParts ||
+            canManagePhotos ||
+            canManageThirdPartyRepairs) && (
+            <div className="flex flex-wrap gap-2 xl:justify-end">
+              {canManageLabor && (
+                <button
+                  className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                  onClick={() => setIsLaborFormOpen(true)}
+                  type="button"
+                >
+                  Add Labor
+                </button>
+              )}
 
-          {canManageParts && (
-            <button
-              className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
-              onClick={() => setIsPartFormOpen(true)}
-              type="button"
-            >
-              Add Part
-            </button>
-          )}
+              {canManageParts && (
+                <button
+                  className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                  onClick={() => setIsPartFormOpen(true)}
+                  type="button"
+                >
+                  Add Part
+                </button>
+              )}
 
-          {canManageThirdPartyRepairs && (
-            <button
-              className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
-              onClick={() => setIsThirdPartyFormOpen(true)}
-              type="button"
-            >
-              Add Third-Party Repair
-            </button>
+              {canManagePhotos && (
+                <button
+                  className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                  onClick={() => setIsPhotoFormOpen(true)}
+                  type="button"
+                >
+                  Add Photo
+                </button>
+              )}
+
+              {canManageThirdPartyRepairs && (
+                <button
+                  className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                  onClick={() => setIsThirdPartyFormOpen(true)}
+                  type="button"
+                >
+                  Add Third-Party Repair
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -207,6 +226,7 @@ function WorkOrderCard({
 
       <WorkOrderPhotosList
         canManage={canManagePhotos}
+        showAddButton={false}
         onActivityLogged={onActivityLogged}
         onPhotoAdded={onPhotoAdded}
         onPhotoDeleted={onPhotoDeleted}
@@ -268,6 +288,19 @@ function WorkOrderCard({
           onActivityLogged={onActivityLogged}
           onClose={() => setIsPartFormOpen(false)}
           onPartAdded={onPartAdded}
+          vehicleId={vehicleId}
+          workOrder={workOrder}
+        />
+      )}
+
+      {isPhotoFormOpen && canManagePhotos && (
+        <AddWorkOrderPhotoForm
+          onActivityLogged={onActivityLogged}
+          onClose={() => setIsPhotoFormOpen(false)}
+          onPhotoAdded={async (photo) => {
+            await onPhotoAdded?.(photo);
+            setIsPhotoFormOpen(false);
+          }}
           vehicleId={vehicleId}
           workOrder={workOrder}
         />
@@ -383,7 +416,7 @@ function ServiceCategoryCard({
       </div>
 
       {workOrders.length > 0 && (
-        <div className="mt-5 space-y-3">
+        <div className="mt-5 space-y-4">
           {workOrders.map((workOrder, index) => (
             <WorkOrderCard
               canManageLabor={canManageLabor}

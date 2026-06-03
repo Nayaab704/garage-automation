@@ -242,7 +242,7 @@ function WorkOrderPartsList({
 
       {parts.length === 0 ? (
         <div className="rounded-md border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-500">
-          No parts added to this work order.
+          No parts added yet.
         </div>
       ) : (
         <div className="space-y-3">

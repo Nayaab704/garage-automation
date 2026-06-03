@@ -72,18 +72,25 @@ function ServiceWorkSection({
         <div>
           <h2 className="text-lg font-bold text-zinc-950">Service Work</h2>
           <p className="mt-1 text-sm text-zinc-500">
-            {serviceCategories.length} service{" "}
-            {serviceCategories.length === 1 ? "category" : "categories"} and{" "}
-            {totalWorkOrders}{" "}
-            {totalWorkOrders === 1 ? "work order" : "work orders"}
+            Service Categories and Work Orders for this vehicle.
           </p>
         </div>
 
-        {!canManage && (
-          <span className="w-fit rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-600">
-            Read only
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-fit rounded-full bg-white px-3 py-1 text-sm font-semibold text-zinc-700 ring-1 ring-inset ring-zinc-200">
+            {serviceCategories.length}{" "}
+            {serviceCategories.length === 1 ? "category" : "categories"}
           </span>
-        )}
+          <span className="w-fit rounded-full bg-white px-3 py-1 text-sm font-semibold text-zinc-700 ring-1 ring-inset ring-zinc-200">
+            {totalWorkOrders}{" "}
+            {totalWorkOrders === 1 ? "work order" : "work orders"}
+          </span>
+          {!canManage && (
+            <span className="w-fit rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-600">
+              Read only
+            </span>
+          )}
+        </div>
       </div>
 
       {serviceCategories.length === 0 ? (

@@ -682,28 +682,6 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             vehicle={vehicle}
           />
 
-          <FinalCheckSection
-            currentProfile={currentProfile}
-            finalChecks={finalChecks}
-            onActivityLogged={refreshActivityTimeline}
-            onFinalCheckUpdated={handleFinalCheckUpdated}
-            profiles={profiles}
-            vehicleId={vehicleId}
-          />
-
-          <ActivityTimelineSection
-            refreshKey={activityRefreshCount}
-            vehicleId={vehicleId}
-          />
-
-          <VehiclePhotosSection
-            canManage={canManagePhotos}
-            onActivityLogged={refreshActivityTimeline}
-            onVehiclePhotoChanged={refreshVehicleDetails}
-            vehicleId={vehicleId}
-            vehiclePhotos={vehiclePhotos.filter((photo) => !photo.repair_job_id)}
-          />
-
           <ServiceWorkSection
             canManage={canManageRepairJobs}
             canManageLabor={canManageLabor}
@@ -738,6 +716,23 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             vendors={vendors}
           />
 
+          <VehiclePhotosSection
+            canManage={canManagePhotos}
+            onActivityLogged={refreshActivityTimeline}
+            onVehiclePhotoChanged={refreshVehicleDetails}
+            vehicleId={vehicleId}
+            vehiclePhotos={vehiclePhotos.filter((photo) => !photo.repair_job_id)}
+          />
+
+          <FinalCheckSection
+            currentProfile={currentProfile}
+            finalChecks={finalChecks}
+            onActivityLogged={refreshActivityTimeline}
+            onFinalCheckUpdated={handleFinalCheckUpdated}
+            profiles={profiles}
+            vehicleId={vehicleId}
+          />
+
           {/* Legacy repair process workflow hidden after migration to service-category work orders. */}
           <ExtraCostsSection
             canManage={canManageExtraCosts}
@@ -765,6 +760,11 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
               warranties={warranties}
             />
           )}
+
+          <ActivityTimelineSection
+            refreshKey={activityRefreshCount}
+            vehicleId={vehicleId}
+          />
 
           {isEditFormOpen && canEditVehicle && (
             <EditVehicleForm

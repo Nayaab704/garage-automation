@@ -82,6 +82,7 @@ function WorkOrderPhotosList({
   onPhotoAdded,
   onPhotoDeleted,
   photos = [],
+  showAddButton = true,
   vehicleId,
   workOrder,
 }) {
@@ -163,7 +164,7 @@ function WorkOrderPhotosList({
           </p>
         </div>
 
-        {canManage && (
+        {canManage && showAddButton && (
           <button
             className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
             onClick={() => {
@@ -179,7 +180,7 @@ function WorkOrderPhotosList({
 
       {photos.length === 0 ? (
         <div className="rounded-md border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-500">
-          No photos added to this work order.
+          No photos uploaded yet.
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

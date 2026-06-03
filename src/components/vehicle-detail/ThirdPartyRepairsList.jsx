@@ -197,7 +197,7 @@ function ThirdPartyRepairsList({
 
       {thirdPartyRepairs.length === 0 ? (
         <div className="rounded-md border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-500">
-          No third-party repairs recorded for this work order.
+          No third-party repairs yet.
         </div>
       ) : (
         <div className="space-y-3">

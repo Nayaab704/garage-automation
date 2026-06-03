@@ -37,13 +37,15 @@ function formatDetailValue(value) {
   }
 
   if (typeof value === "object") {
-    return Object.entries(value)
+    const nestedSummary = Object.entries(value)
       .filter(([, nestedValue]) => nestedValue !== null && nestedValue !== "")
       .map(
         ([nestedKey, nestedValue]) =>
           `${formatDetailLabel(nestedKey)}: ${formatDetailValue(nestedValue)}`
       )
       .join(", ");
+
+    return nestedSummary || "Not available";
   }
 
   return String(value)
@@ -74,15 +76,17 @@ function getDetailEntries(details) {
     return [];
   }
 
-  return Object.entries(details).filter(([key, value]) => {
-    const normalizedKey = key.toLowerCase();
-    return (
-      !normalizedKey.endsWith("id") &&
-      value !== null &&
-      value !== undefined &&
-      value !== ""
-    );
-  });
+  return Object.entries(details)
+    .filter(([key, value]) => {
+      const normalizedKey = key.toLowerCase();
+      return (
+        !normalizedKey.endsWith("id") &&
+        value !== null &&
+        value !== undefined &&
+        value !== ""
+      );
+    })
+    .slice(0, 4);
 }
 
 function ActivityDetails({ details }) {
@@ -97,7 +101,7 @@ function ActivityDetails({ details }) {
   }
 
   return (
-    <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+    <dl className="mt-3 flex flex-wrap gap-2">
       {entries.map(([key, value]) => (
         <div
           className="rounded-md bg-zinc-50 px-3 py-2"
@@ -123,7 +127,7 @@ function TimelineItem({ activity, isLast }) {
       )}
       <div className="relative mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-zinc-950 ring-4 ring-white" />
 
-      <article className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+      <article className="min-w-0 flex-1 rounded-md border border-zinc-200 bg-white p-4">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
           <h3 className="font-bold text-zinc-950">
             {formatActionLabel(activity.action)}
@@ -231,7 +235,7 @@ function ActivityTimelineSection({ refreshKey = 0, vehicleId }) {
       )}
 
       {!isLoading && !errorMessage && activities.length > 0 && (
-        <ol className="space-y-4">
+        <ol className="space-y-3">
           {activities.map((activity, index) => (
             <TimelineItem
               activity={activity}
