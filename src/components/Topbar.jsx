@@ -1,4 +1,5 @@
 import AuthHeader from "./AuthHeader";
+import { APP_NAME, APP_SHORT_NAME } from "../config/appConfig";
 import { hasPermission } from "../lib/permissions";
 
 const mobileItems = [
@@ -35,25 +36,24 @@ function Topbar({
   onPageChange,
   onLogout,
   profileError = "",
+  showTitle = false,
   title = "Vehicles",
-  description = "Manage garage inventory and operations.",
   userEmail,
 }) {
   const visibleMobileItems = getVisibleMobileItems(currentProfile?.role);
 
   return (
-    <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/95 backdrop-blur">
+    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
       <div className="flex min-h-16 items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-            Garage Management
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black tracking-wide text-emerald-700">
+            {APP_NAME}
           </p>
-          <h1 className="text-xl font-bold text-zinc-950 sm:text-2xl">
-            {title}
-          </h1>
-          <p className="mt-1 hidden text-sm text-zinc-500 sm:block">
-            {description}
-          </p>
+          {showTitle && (
+            <h1 className="mt-1 truncate text-xl font-bold text-zinc-950 sm:text-2xl">
+              {title}
+            </h1>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
@@ -69,7 +69,7 @@ function Topbar({
             userEmail={userEmail}
           />
           <div className="flex size-9 items-center justify-center rounded-md bg-emerald-600 text-sm font-bold text-white lg:hidden">
-            GM
+            {APP_SHORT_NAME}
           </div>
         </div>
       </div>

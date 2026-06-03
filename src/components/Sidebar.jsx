@@ -1,3 +1,4 @@
+import { APP_NAME, APP_SHORT_NAME } from "../config/appConfig";
 import { hasPermission } from "../lib/permissions";
 
 const sidebarItems = [
@@ -34,11 +35,11 @@ function Sidebar({ activePage = "Vehicles", currentProfile, onPageChange }) {
       <div className="flex h-16 items-center border-b border-zinc-200 px-6">
         <div className="flex items-center gap-3">
           <div className="flex size-9 items-center justify-center rounded-md bg-emerald-600 text-sm font-bold text-white">
-            GM
+            {APP_SHORT_NAME}
           </div>
           <div>
-            <p className="text-sm font-bold text-zinc-950">Garage Manager</p>
-            <p className="text-xs text-zinc-500">Operations Dashboard</p>
+            <p className="text-sm font-bold text-zinc-950">{APP_NAME}</p>
+            <p className="text-xs text-zinc-500">Garage Operations</p>
           </div>
         </div>
       </div>

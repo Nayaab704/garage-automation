@@ -10,6 +10,7 @@ import SettingsPage from "./pages/SettingsPage";
 import VehicleDetailPage from "./pages/VehicleDetailPage";
 import VehiclesPage from "./pages/VehiclesPage";
 import VendorsPage from "./pages/VendorsPage";
+import { MAIN_NAV_PAGES } from "./config/appConfig";
 import { fetchCurrentUserProfile } from "./lib/currentUserProfile";
 import { hasPermission } from "./lib/permissions";
 import { supabase } from "./lib/supabaseClient";
@@ -113,6 +114,7 @@ function App() {
   const effectiveActivePage =
     activePage === "Dashboard" && !canViewDashboard ? "Vehicles" : activePage;
   const currentPage = pageDetails[effectiveActivePage];
+  const showShellTitle = !MAIN_NAV_PAGES.includes(effectiveActivePage);
   const navigationPage =
     effectiveActivePage === "vehicleDetail" ? "Vehicles" : effectiveActivePage;
   const userEmail = session?.user?.email ?? "";
@@ -369,12 +371,12 @@ function App() {
     <AppLayout
       activePage={navigationPage}
       currentProfile={currentProfile}
-      description={currentPage.description}
       isLoggingOut={isLoggingOut}
       isProfileLoading={isProfileLoading}
       onPageChange={handlePageChange}
       onLogout={handleLogout}
       profileError={profileError}
+      showTitle={showShellTitle}
       title={currentPage.title}
       userEmail={userEmail}
     >

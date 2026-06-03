@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { APP_NAME } from "../config/appConfig";
 import { supabase } from "../lib/supabaseClient";
 
 const emptyForm = {
@@ -85,7 +86,7 @@ function LoginPage() {
       <section className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
         <div className="mb-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-            Garage Management
+            {APP_NAME}
           </p>
           <h1 className="mt-2 text-2xl font-bold text-zinc-950">
             Sign in to continue
