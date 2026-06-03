@@ -1,12 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import VehicleStatusBadge from "../components/VehicleStatusBadge";
+import AppIcon from "../components/ui/AppIcon";
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
-import {
-  formatVehicleStatus,
-  getVehicleStatusClassName,
-  vehicleStatusOptions,
-} from "../lib/vehicleStatus";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -132,25 +127,6 @@ function isActiveVehicle(vehicle) {
   return status !== "sold" && status !== "archived";
 }
 
-function countVehiclesByStatus(vehicles) {
-  return vehicles.reduce((counts, vehicle) => {
-    const status = vehicle.status || "not_available";
-    counts[status] = (counts[status] ?? 0) + 1;
-    return counts;
-  }, {});
-}
-
-function getStatusOverviewRows(statusCounts) {
-  const customStatuses = Object.keys(statusCounts).filter(
-    (status) => !vehicleStatusOptions.includes(status)
-  );
-
-  return [...vehicleStatusOptions, ...customStatuses].map((status) => ({
-    count: statusCounts[status] ?? 0,
-    status,
-  }));
-}
-
 function mergeVehiclesWithSummaries(vehicles, summaries) {
   const summariesByStockNumber = new Map(
     summaries.map((summary) => [summary.stock_number, summary])
@@ -165,17 +141,6 @@ function mergeVehiclesWithSummaries(vehicles, summaries) {
       total_invested: summary.total_invested ?? 0,
     };
   });
-}
-
-function getTopActiveInvestments(vehicles, summaries) {
-  return mergeVehiclesWithSummaries(vehicles, summaries)
-    .filter(isActiveVehicle)
-    .sort(
-      (firstVehicle, secondVehicle) =>
-        numberOrZero(secondVehicle.total_invested) -
-        numberOrZero(firstVehicle.total_invested)
-    )
-    .slice(0, 5);
 }
 
 function getSalesTotal(sales) {
@@ -311,56 +276,72 @@ function getAttentionMetrics({
 
   return [
     {
-      accent: "border-amber-200 bg-amber-50 text-amber-800",
+      actionPage: "Parts",
       count: partRequests.filter(
         (partRequest) => partRequest.approval_status === "pending"
       ).length,
+      icon: "parts",
       label: "Pending Part Reviews",
+      tone: "amber",
     },
     {
-      accent: "border-red-200 bg-red-50 text-red-800",
+      actionPage: "Parts",
       count: partRequests.filter(
         (partRequest) => partRequest.approval_status === "rejected"
       ).length,
+      icon: "warning",
       label: "Rejected / Issue Parts",
+      tone: "red",
     },
     {
-      accent: "border-amber-200 bg-amber-50 text-amber-800",
+      actionPage: "Repairs",
       count: repairJobs.filter(
         (repairJob) => repairJob.status === "waiting_parts"
       ).length,
+      icon: "clock",
       label: "Waiting Parts Work Orders",
+      tone: "amber",
     },
     {
-      accent: "border-red-200 bg-red-50 text-red-800",
+      actionPage: "Repairs",
       count: repairJobs.filter((repairJob) => repairJob.status === "blocked")
         .length,
+      icon: "warning",
       label: "Blocked Work Orders",
+      tone: "red",
     },
     {
-      accent: "border-red-200 bg-red-50 text-red-800",
+      actionPage: "Repairs",
       count: activeUrgentWorkOrders.length,
+      icon: "warning",
       label: "Urgent Work Orders",
+      tone: "red",
     },
     {
-      accent: "border-blue-200 bg-blue-50 text-blue-800",
+      actionPage: "Purchase Orders",
       count: purchaseOrders.filter((purchaseOrder) =>
         openPurchaseOrderStatuses.includes(purchaseOrder.status)
       ).length,
+      icon: "file",
       label: "Open Purchase Orders",
+      tone: "blue",
     },
     {
-      accent: "border-blue-200 bg-blue-50 text-blue-800",
+      actionPage: "Repairs",
       count: thirdPartyRepairs.filter((thirdPartyRepair) =>
         thirdPartyOutStatuses.includes(thirdPartyRepair.status)
       ).length,
+      icon: "third-party",
       label: "Third-Party Repairs Out",
+      tone: "blue",
     },
     {
-      accent: "border-emerald-200 bg-emerald-50 text-emerald-800",
+      actionPage: "Vehicles",
       count: vehicles.filter((vehicle) => vehicle.status === "ready_for_sale")
         .length,
+      icon: "check",
       label: "Ready For Sale Vehicles",
+      tone: "green",
     },
   ];
 }
@@ -597,21 +578,91 @@ async function fetchDashboardData() {
   };
 }
 
-function SummaryCard({ label, value, valueClassName = "text-zinc-950" }) {
+const toneClassNames = {
+  amber: {
+    badge: "border-amber-200 bg-amber-50 text-amber-700",
+    icon: "bg-amber-50 text-amber-700",
+  },
+  blue: {
+    badge: "border-blue-200 bg-blue-50 text-blue-700",
+    icon: "bg-blue-50 text-blue-700",
+  },
+  gray: {
+    badge: "border-slate-200 bg-slate-100 text-slate-700",
+    icon: "bg-slate-100 text-slate-600",
+  },
+  green: {
+    badge: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    icon: "bg-emerald-50 text-emerald-700",
+  },
+  red: {
+    badge: "border-red-200 bg-red-50 text-red-700",
+    icon: "bg-red-50 text-red-700",
+  },
+};
+
+function getToneClasses(tone) {
+  return toneClassNames[tone] ?? toneClassNames.gray;
+}
+
+function DashboardSection({ children, className = "", title }) {
   return (
-    <article className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-      <p className="text-sm font-medium text-zinc-500">{label}</p>
-      <p className={`mt-2 text-2xl font-bold ${valueClassName}`}>{value}</p>
+    <section
+      className={`rounded-3xl border border-slate-200 bg-white shadow-sm ${className}`}
+    >
+      <div className="border-b border-slate-100 px-4 py-3 sm:px-5">
+        <h2 className="text-base font-black text-slate-950">{title}</h2>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function SummaryCard({
+  helperText,
+  icon,
+  label,
+  value,
+  valueClassName = "text-slate-950",
+}) {
+  return (
+    <article className="flex min-h-24 items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+        <AppIcon name={icon} size={21} />
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {label}
+        </p>
+        <p className={`mt-1 truncate text-xl font-black ${valueClassName}`}>
+          {value}
+        </p>
+        {helperText && (
+          <p className="mt-0.5 truncate text-xs text-slate-500">
+            {helperText}
+          </p>
+        )}
+      </div>
     </article>
   );
 }
 
-function AttentionMetricCard({ accent, count, label }) {
+function DashboardQuickActions({ canStartIntake, onNavigate }) {
+  if (!canStartIntake) {
+    return null;
+  }
+
   return (
-    <article className={`rounded-lg border p-4 shadow-sm ${accent}`}>
-      <p className="text-sm font-semibold">{label}</p>
-      <p className="mt-2 text-3xl font-bold">{formatNumber(count)}</p>
-    </article>
+    <section>
+      <button
+        className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-base font-black text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+        onClick={() => onNavigate?.("Intake")}
+        type="button"
+      >
+        <AppIcon name="plus" size={20} />
+        New Vehicle
+      </button>
+    </section>
   );
 }
 
@@ -623,6 +674,84 @@ function Badge({ children, className }) {
       {children}
     </span>
   );
+}
+
+function DashboardAttentionList({ metrics, onNavigate }) {
+  return (
+    <DashboardSection title="Needs Attention">
+      <div className="divide-y divide-slate-100">
+        {metrics.map((metric) => {
+          const toneClasses = getToneClasses(metric.tone);
+
+          return (
+            <button
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 sm:px-5"
+              key={metric.label}
+              onClick={() => onNavigate?.(metric.actionPage)}
+              type="button"
+            >
+              <span
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${toneClasses.icon}`}
+              >
+                <AppIcon name={metric.icon} size={20} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-bold text-slate-900">
+                  {metric.label}
+                </span>
+              </span>
+              <span
+                className={`inline-flex min-w-9 items-center justify-center rounded-full border px-2.5 py-1 text-sm font-black ${toneClasses.badge}`}
+              >
+                {formatNumber(metric.count)}
+              </span>
+              <AppIcon
+                className="shrink-0 text-slate-400"
+                name="chevron-right"
+                size={18}
+              />
+            </button>
+          );
+        })}
+      </div>
+    </DashboardSection>
+  );
+}
+
+function getQueueIcon(item) {
+  if (item.type.includes("Part")) {
+    return "parts";
+  }
+
+  if (item.type.includes("Purchase")) {
+    return "file";
+  }
+
+  if (item.type.includes("Third-Party")) {
+    return "third-party";
+  }
+
+  if (item.status === "blocked" || item.priority >= 90) {
+    return "warning";
+  }
+
+  return "wrench";
+}
+
+function getQueueTone(item) {
+  if (item.status === "blocked" || item.status === "rejected") {
+    return "red";
+  }
+
+  if (item.status === "pending" || item.status === "waiting_parts") {
+    return "amber";
+  }
+
+  if (item.status === "ordered" || item.status === "in_progress") {
+    return "blue";
+  }
+
+  return "gray";
 }
 
 function AttentionQueue({ items, onNavigate, onSelectVehicle }) {
@@ -638,180 +767,99 @@ function AttentionQueue({ items, onNavigate, onSelectVehicle }) {
   }
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-      <div className="mb-4">
-        <h2 className="text-lg font-bold text-zinc-950">Attention Queue</h2>
-        <p className="mt-1 text-sm text-zinc-500">
-          Top operational items that may need manager review today.
-        </p>
-      </div>
-
+    <DashboardSection title="Attention Queue">
       {items.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-6 text-sm text-zinc-500">
+        <div className="m-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500 sm:m-5">
           Nothing urgent in the queue right now.
         </div>
       ) : (
-        <div className="divide-y divide-zinc-100">
+        <div className="divide-y divide-slate-100">
           {items.map((item, index) => (
-            <div
-              className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 xl:flex-row xl:items-start xl:justify-between"
+            <button
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 sm:px-5"
+              disabled={!item.actionPage && !item.vehicleId}
               key={`${item.type}-${item.vehicleId}-${item.title}-${index}`}
+              onClick={() => handleAction(item)}
+              type="button"
             >
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge className="bg-zinc-100 text-zinc-700 ring-zinc-200">
-                    {item.type}
-                  </Badge>
+              <span
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
+                  getToneClasses(getQueueTone(item)).icon
+                }`}
+              >
+                <AppIcon name={getQueueIcon(item)} size={20} />
+              </span>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <h3 className="truncate text-sm font-black text-slate-950">
+                    {item.title}
+                  </h3>
                   <Badge className={genericBadgeClassName(item.status)}>
                     {formatLabel(item.status, item.statusLabels)}
                   </Badge>
                 </div>
-                <h3 className="mt-2 font-bold text-zinc-950">{item.title}</h3>
-                <p className="mt-1 text-sm text-zinc-500">
-                  {getVehicleLabel(item.vehicle)}
+                <p className="mt-1 truncate text-xs text-slate-500">
+                  {item.type} - {getVehicleLabel(item.vehicle)}
                 </p>
-                <p className="mt-2 text-sm text-zinc-700">{item.reason}</p>
+                <p className="mt-0.5 truncate text-xs text-slate-600">
+                  {item.reason}
+                </p>
               </div>
 
-              <button
-                className="w-fit rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!item.actionPage && !item.vehicleId}
-                onClick={() => handleAction(item)}
-                type="button"
-              >
-                {item.actionText}
-              </button>
-            </div>
+              <AppIcon
+                className="shrink-0 text-slate-400"
+                name="chevron-right"
+                size={18}
+              />
+            </button>
           ))}
         </div>
       )}
-    </section>
+    </DashboardSection>
   );
 }
 
 function RecentActivity({ activityLogs, vehiclesById }) {
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-      <div className="mb-4">
-        <h2 className="text-lg font-bold text-zinc-950">Recent Activity</h2>
-        <p className="mt-1 text-sm text-zinc-500">
-          Latest vehicle actions across the garage.
-        </p>
-      </div>
-
+    <DashboardSection title="Recent Activity">
       {activityLogs.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-6 text-sm text-zinc-500">
+        <div className="m-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500 sm:m-5">
           No recent activity found yet.
         </div>
       ) : (
-        <div className="divide-y divide-zinc-100">
+        <div className="divide-y divide-slate-100">
           {activityLogs.map((activityLog) => (
-            <div className="py-4 first:pt-0 last:pb-0" key={activityLog.id}>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h3 className="font-semibold text-zinc-950">
-                    {activityLog.action}
-                  </h3>
-                  <p className="mt-1 text-sm text-zinc-500">
-                    {getVehicleLabel(vehiclesById[activityLog.vehicle_id])}
+            <div
+              className="flex items-start gap-3 px-4 py-3 sm:px-5"
+              key={activityLog.id}
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
+                <AppIcon name="status" size={18} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-sm font-bold text-slate-950">
+                      {activityLog.action}
+                    </h3>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">
+                      {getVehicleLabel(vehiclesById[activityLog.vehicle_id])}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-xs text-slate-400">
+                    {formatDate(activityLog.created_at)}
                   </p>
                 </div>
-                <p className="text-sm text-zinc-500">
-                  {formatDate(activityLog.created_at)}
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">
+                  {summarizeActivityDetails(activityLog.details)}
                 </p>
               </div>
-              <p className="mt-2 text-sm leading-6 text-zinc-600">
-                {summarizeActivityDetails(activityLog.details)}
-              </p>
             </div>
           ))}
         </div>
       )}
-    </section>
-  );
-}
-
-function TopActiveInvestments({ vehicles }) {
-  return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-      <div className="mb-4">
-        <h2 className="text-lg font-bold text-zinc-950">
-          Top Active Investments
-        </h2>
-        <p className="mt-1 text-sm text-zinc-500">
-          Top 5 active vehicles by total invested.
-        </p>
-      </div>
-
-      {vehicles.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-6 text-sm text-zinc-500">
-          No active investment data found yet.
-        </div>
-      ) : (
-        <div className="divide-y divide-zinc-100">
-          {vehicles.map((vehicle, index) => (
-            <div
-              className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-              key={vehicle.id ?? `${vehicle.stock_number}-${index}`}
-            >
-              <div className="flex items-center gap-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-sm font-bold text-zinc-700">
-                  {index + 1}
-                </span>
-                <div>
-                  <p className="font-bold text-zinc-950">
-                    {vehicle.stock_number ?? "No Stock Number"}
-                  </p>
-                  <p className="mt-1 text-sm text-zinc-500">
-                    {getVehicleName(vehicle) || "Unknown Vehicle"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                <VehicleStatusBadge status={vehicle.status} />
-                <span className="rounded-md bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
-                  {formatCurrency(vehicle.total_invested)}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function StatusOverview({ rows }) {
-  return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-      <div className="mb-4">
-        <h2 className="text-lg font-bold text-zinc-950">Status Overview</h2>
-        <p className="mt-1 text-sm text-zinc-500">
-          Vehicle count by workflow status.
-        </p>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        {rows.map((row) => (
-          <div
-            className="flex items-center justify-between gap-3 rounded-md border border-zinc-100 bg-zinc-50 px-4 py-3"
-            key={row.status}
-          >
-            <span
-              className={`rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset ${getVehicleStatusClassName(
-                row.status
-              )}`}
-            >
-              {formatVehicleStatus(row.status)}
-            </span>
-            <span className="text-lg font-bold text-zinc-950">
-              {formatNumber(row.count)}
-            </span>
-          </div>
-        ))}
-      </div>
-    </section>
+    </DashboardSection>
   );
 }
 
@@ -831,6 +879,7 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
     currentProfile?.role,
     "dashboard:view"
   );
+  const canStartIntake = hasPermission(currentProfile?.role, "vehicle:create");
 
   useEffect(() => {
     let isMounted = true;
@@ -928,34 +977,27 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
     thirdPartyRepairs,
     vehiclesById,
   });
-  const topActiveInvestments = getTopActiveInvestments(
-    vehicles,
-    investmentSummaries
-  );
-  const statusOverviewRows = getStatusOverviewRows(
-    countVehiclesByStatus(vehicles)
-  );
 
   if (!canViewDashboard) {
     return (
-      <section className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-800">
+      <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-amber-800 shadow-sm">
         You do not have permission to view the dashboard.
       </section>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {isLoading && (
-        <section className="rounded-lg border border-zinc-200 bg-white p-8 text-center shadow-sm">
-          <p className="font-medium text-zinc-700">
+        <section className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <p className="font-medium text-slate-700">
             Loading dashboard analytics...
           </p>
         </section>
       )}
 
       {!isLoading && errorMessage && (
-        <section className="rounded-lg border border-red-200 bg-red-50 p-6 text-red-800">
+        <section className="rounded-3xl border border-red-200 bg-red-50 p-6 text-red-800 shadow-sm">
           <h2 className="font-semibold">Unable to load dashboard data</h2>
           <p className="mt-2 text-sm">{errorMessage}</p>
         </section>
@@ -963,20 +1005,33 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
 
       {!isLoading && !errorMessage && (
         <>
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+          <DashboardQuickActions
+            canStartIntake={canStartIntake}
+            onNavigate={onNavigate}
+          />
+
+          <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             <SummaryCard
+              helperText="All records"
+              icon="car"
               label="Total Vehicles"
               value={formatNumber(vehicles.length)}
             />
             <SummaryCard
+              helperText="Not sold or archived"
+              icon="chart-up"
               label="Active Inventory"
               value={formatNumber(activeVehicles.length)}
             />
             <SummaryCard
+              helperText="Active vehicles"
+              icon="dollar"
               label="Active Inventory Investment"
               value={formatCurrency(activeInventoryInvestment)}
             />
             <SummaryCard
+              helperText="Active vehicles"
+              icon="chart-up"
               label="Estimated Active Profit"
               value={formatCurrency(estimatedActiveProfit)}
               valueClassName={
@@ -984,65 +1039,45 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
               }
             />
             <SummaryCard
+              helperText="Closed sales"
+              icon="check"
               label="Sold Vehicles"
               value={formatNumber(soldVehicles.length)}
             />
             <SummaryCard
+              helperText="Sale revenue"
+              icon="dollar"
               label="Sold Revenue"
               value={formatCurrency(soldRevenue)}
               valueClassName="text-emerald-700"
             />
           </section>
 
-          <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="mb-4">
-              <h2 className="text-lg font-bold text-zinc-950">
-                Needs Attention
-              </h2>
-              <p className="mt-1 text-sm text-zinc-500">
-                Counts for parts, repairs, orders, and vehicles that may need
-                manager review.
-              </p>
-            </div>
+          <DashboardAttentionList
+            metrics={attentionMetrics}
+            onNavigate={onNavigate}
+          />
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {attentionMetrics.map((metric) => (
-                <AttentionMetricCard
-                  accent={metric.accent}
-                  count={metric.count}
-                  key={metric.label}
-                  label={metric.label}
-                />
-              ))}
-            </div>
-          </section>
+          <AttentionQueue
+            items={attentionQueue}
+            onNavigate={onNavigate}
+            onSelectVehicle={onSelectVehicle}
+          />
 
-          <section className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
-            <AttentionQueue
-              items={attentionQueue}
-              onNavigate={onNavigate}
-              onSelectVehicle={onSelectVehicle}
-            />
-            <RecentActivity
-              activityLogs={activityLogs}
-              vehiclesById={vehiclesById}
-            />
-          </section>
+          <RecentActivity
+            activityLogs={activityLogs}
+            vehiclesById={vehiclesById}
+          />
 
-          {vehicles.length === 0 && investmentSummaries.length === 0 ? (
-            <section className="rounded-lg border border-zinc-200 bg-white p-8 text-center shadow-sm">
-              <h2 className="text-lg font-semibold text-zinc-900">
+          {vehicles.length === 0 && investmentSummaries.length === 0 && (
+            <section className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+              <h2 className="text-lg font-semibold text-slate-900">
                 No vehicles found
               </h2>
-              <p className="mt-2 text-zinc-600">
-                Add vehicles to inventory and the dashboard will start filling
+              <p className="mt-2 text-slate-600">
+                Add vehicles through Intake and the dashboard will start filling
                 in.
               </p>
-            </section>
-          ) : (
-            <section className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
-              <TopActiveInvestments vehicles={topActiveInvestments} />
-              <StatusOverview rows={statusOverviewRows} />
             </section>
           )}
         </>
