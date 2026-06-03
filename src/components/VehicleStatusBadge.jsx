@@ -1,18 +1,7 @@
-import {
-  formatVehicleStatus,
-  getVehicleStatusClassName,
-} from "../lib/vehicleStatus";
+import StatusBadge from "./ui/StatusBadge";
 
 function VehicleStatusBadge({ className = "", status }) {
-  return (
-    <span
-      className={`inline-flex w-fit rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset ${getVehicleStatusClassName(
-        status
-      )} ${className}`}
-    >
-      {formatVehicleStatus(status)}
-    </span>
-  );
+  return <StatusBadge className={`px-3 text-sm ${className}`} status={status} />;
 }
 
 export default VehicleStatusBadge;

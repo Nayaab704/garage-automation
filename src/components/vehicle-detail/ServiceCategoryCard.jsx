@@ -1,4 +1,8 @@
 import { useState } from "react";
+import ActionTile from "../ui/ActionTile";
+import PriorityBadge from "../ui/PriorityBadge";
+import StatChip from "../ui/StatChip";
+import StatusBadge from "../ui/StatusBadge";
 import AddThirdPartyRepairForm from "./AddThirdPartyRepairForm";
 import AddWorkOrderLaborForm from "./AddWorkOrderLaborForm";
 import AddWorkOrderPartForm from "./AddWorkOrderPartForm";
@@ -7,13 +11,6 @@ import ThirdPartyRepairsList from "./ThirdPartyRepairsList";
 import WorkOrderLaborList from "./WorkOrderLaborList";
 import WorkOrderPartsList from "./WorkOrderPartsList";
 import WorkOrderPhotosList from "./WorkOrderPhotosList";
-
-const priorityLabels = {
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  urgent: "Urgent",
-};
 
 const statusLabels = {
   needed: "Needed",
@@ -51,22 +48,6 @@ function formatLabel(value, labels) {
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
-}
-
-function priorityClassName(priority) {
-  if (priority === "urgent") {
-    return "bg-red-50 text-red-700 ring-red-200";
-  }
-
-  if (priority === "high") {
-    return "bg-orange-50 text-orange-700 ring-orange-200";
-  }
-
-  if (priority === "medium") {
-    return "bg-amber-50 text-amber-700 ring-amber-200";
-  }
-
-  return "bg-zinc-100 text-zinc-700 ring-zinc-200";
 }
 
 function statusClassName(status) {
@@ -118,12 +99,14 @@ function WorkOrderCard({
   canUploadDocuments,
   currentProfile,
   documents,
+  isOpen,
   laborLogs,
   onActivityLogged,
   onDocumentAdded,
   onDocumentDeleted,
   onLaborAdded,
   onLaborDeleted,
+  onToggle,
   onPartAdded,
   onPartApprovalUpdated,
   onPartPurchaseOrderCreated,
@@ -157,118 +140,131 @@ function WorkOrderCard({
               Created by {creatorName}
             </p>
           )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <StatChip icon="camera" label="Photos" value={photos.length} />
+            <StatChip icon="clock" label="Labor" value={laborLogs.length} />
+            <StatChip icon="box" label="Parts" value={parts.length} />
+            <StatChip
+              icon="users"
+              label="3rd-Party"
+              value={thirdPartyRepairs.length}
+            />
+          </div>
         </div>
 
         <div className="flex flex-col gap-3 xl:items-end">
           <div className="flex flex-wrap gap-2 xl:justify-end">
-            <Badge className={priorityClassName(workOrder.priority)}>
-              {formatLabel(workOrder.priority, priorityLabels)}
-            </Badge>
-            <Badge className={statusClassName(workOrder.status)}>
-              {formatLabel(workOrder.status, statusLabels)}
-            </Badge>
+            <PriorityBadge priority={workOrder.priority} />
+            <StatusBadge status={workOrder.status} />
           </div>
+
+          <button
+            className="min-h-10 w-fit rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800"
+            onClick={onToggle}
+            type="button"
+          >
+            {isOpen ? "Close" : "Open"}
+          </button>
+        </div>
+      </div>
+
+      {isOpen && (
+        <div className="mt-4 border-t border-zinc-100 pt-4">
+          {workOrder.notes && (
+            <p className="mb-4 whitespace-pre-wrap rounded-md bg-zinc-50 p-3 text-sm leading-6 text-zinc-600">
+              {workOrder.notes}
+            </p>
+          )}
 
           {(canManageLabor ||
             canManageParts ||
             canManagePhotos ||
             canManageThirdPartyRepairs) && (
-            <div className="flex flex-wrap gap-2 xl:justify-end">
+            <div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               {canManageLabor && (
-                <button
-                  className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                <ActionTile
+                  icon="clock"
+                  label="Add Labor"
                   onClick={() => setIsLaborFormOpen(true)}
-                  type="button"
-                >
-                  Add Labor
-                </button>
+                />
               )}
 
               {canManageParts && (
-                <button
-                  className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                <ActionTile
+                  icon="box"
+                  label="Add Part"
                   onClick={() => setIsPartFormOpen(true)}
-                  type="button"
-                >
-                  Add Part
-                </button>
+                />
               )}
 
               {canManagePhotos && (
-                <button
-                  className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                <ActionTile
+                  icon="camera"
+                  label="Add Photo"
                   onClick={() => setIsPhotoFormOpen(true)}
-                  type="button"
-                >
-                  Add Photo
-                </button>
+                  variant="primary"
+                />
               )}
 
               {canManageThirdPartyRepairs && (
-                <button
-                  className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                <ActionTile
+                  icon="users"
+                  label="Add 3rd-Party"
                   onClick={() => setIsThirdPartyFormOpen(true)}
-                  type="button"
-                >
-                  Add Third-Party Repair
-                </button>
+                />
               )}
             </div>
           )}
+
+          <div className="space-y-3">
+            <WorkOrderPhotosList
+              canManage={canManagePhotos}
+              showAddButton={false}
+              onActivityLogged={onActivityLogged}
+              onPhotoAdded={onPhotoAdded}
+              onPhotoDeleted={onPhotoDeleted}
+              photos={photos}
+              vehicleId={vehicleId}
+              workOrder={workOrder}
+            />
+
+            <WorkOrderLaborList
+              canManage={canManageLabor}
+              currentProfile={currentProfile}
+              laborLogs={laborLogs}
+              onActivityLogged={onActivityLogged}
+              onLaborDeleted={onLaborDeleted}
+              profiles={profiles}
+              vehicleId={vehicleId}
+            />
+
+            <WorkOrderPartsList
+              currentProfile={currentProfile}
+              onActivityLogged={onActivityLogged}
+              onPartApprovalUpdated={onPartApprovalUpdated}
+              onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
+              parts={parts}
+              vehicleId={vehicleId}
+              vendors={vendors}
+            />
+
+            <ThirdPartyRepairsList
+              canManage={canManageThirdPartyRepairs}
+              canManageDocuments={canManageDocuments}
+              canUploadDocuments={canUploadDocuments}
+              currentProfile={currentProfile}
+              documents={documents}
+              onActivityLogged={onActivityLogged}
+              onDocumentAdded={onDocumentAdded}
+              onDocumentDeleted={onDocumentDeleted}
+              onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
+              thirdPartyRepairs={thirdPartyRepairs}
+              vehicleId={vehicleId}
+              vendors={vendors}
+            />
+          </div>
         </div>
-      </div>
-
-      {workOrder.notes && (
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-zinc-600">
-          {workOrder.notes}
-        </p>
       )}
-
-      <WorkOrderPhotosList
-        canManage={canManagePhotos}
-        showAddButton={false}
-        onActivityLogged={onActivityLogged}
-        onPhotoAdded={onPhotoAdded}
-        onPhotoDeleted={onPhotoDeleted}
-        photos={photos}
-        vehicleId={vehicleId}
-        workOrder={workOrder}
-      />
-
-      <WorkOrderLaborList
-        canManage={canManageLabor}
-        currentProfile={currentProfile}
-        laborLogs={laborLogs}
-        onActivityLogged={onActivityLogged}
-        onLaborDeleted={onLaborDeleted}
-        profiles={profiles}
-        vehicleId={vehicleId}
-      />
-
-      <WorkOrderPartsList
-        currentProfile={currentProfile}
-        onActivityLogged={onActivityLogged}
-        onPartApprovalUpdated={onPartApprovalUpdated}
-        onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
-        parts={parts}
-        vehicleId={vehicleId}
-        vendors={vendors}
-      />
-
-      <ThirdPartyRepairsList
-        canManage={canManageThirdPartyRepairs}
-        canManageDocuments={canManageDocuments}
-        canUploadDocuments={canUploadDocuments}
-        currentProfile={currentProfile}
-        documents={documents}
-        onActivityLogged={onActivityLogged}
-        onDocumentAdded={onDocumentAdded}
-        onDocumentDeleted={onDocumentDeleted}
-        onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
-        thirdPartyRepairs={thirdPartyRepairs}
-        vehicleId={vehicleId}
-        vendors={vendors}
-      />
 
       {isLaborFormOpen && canManageLabor && (
         <AddWorkOrderLaborForm
@@ -363,10 +359,11 @@ function ServiceCategoryCard({
   vendors = [],
   workOrders = [],
 }) {
+  const [openWorkOrderId, setOpenWorkOrderId] = useState(null);
   const statusSummary = getStatusSummary(workOrders);
 
   return (
-    <article className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+    <article className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">
@@ -398,7 +395,7 @@ function ServiceCategoryCard({
               ))
             ) : (
               <span className="text-sm text-zinc-500">
-                No work orders yet.
+                No work orders in this category yet.
               </span>
             )}
           </div>
@@ -406,7 +403,7 @@ function ServiceCategoryCard({
 
         {canManage && (
           <button
-            className="w-fit rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
+            className="min-h-11 w-full rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 sm:w-fit"
             onClick={() => onAddWorkOrder(category)}
             type="button"
           >
@@ -417,48 +414,61 @@ function ServiceCategoryCard({
 
       {workOrders.length > 0 && (
         <div className="mt-5 space-y-4">
-          {workOrders.map((workOrder, index) => (
-            <WorkOrderCard
-              canManageLabor={canManageLabor}
-              canManageParts={canManageParts}
-              canManagePhotos={canManagePhotos}
-              canManageDocuments={canManageDocuments}
-              canManageThirdPartyRepairs={canManageThirdPartyRepairs}
-              canUploadDocuments={canUploadDocuments}
-              currentProfile={currentProfile}
-              documents={documents}
-              key={workOrder.id ?? index}
-              laborLogs={laborLogs.filter(
-                (laborLog) => laborLog.repair_job_id === workOrder.id
-              )}
-              onActivityLogged={onActivityLogged}
-              onDocumentAdded={onDocumentAdded}
-              onDocumentDeleted={onDocumentDeleted}
-              onLaborAdded={onLaborAdded}
-              onLaborDeleted={onLaborDeleted}
-              onPartAdded={onPartAdded}
-              onPartApprovalUpdated={onPartApprovalUpdated}
-              onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
-              onPhotoAdded={onPhotoAdded}
-              onPhotoDeleted={onPhotoDeleted}
-              onThirdPartyRepairAdded={onThirdPartyRepairAdded}
-              onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
-              parts={partRequests.filter(
-                (partRequest) => partRequest.repair_job_id === workOrder.id
-              )}
-              photos={vehiclePhotos.filter(
-                (photo) => photo.repair_job_id === workOrder.id
-              )}
-              profiles={profiles}
-              thirdPartyRepairs={thirdPartyRepairs.filter(
-                (thirdPartyRepair) =>
-                  thirdPartyRepair.repair_job_id === workOrder.id
-              )}
-              vehicleId={vehicleId}
-              vendors={vendors}
-              workOrder={workOrder}
-            />
-          ))}
+          {workOrders.map((workOrder, index) => {
+            const workOrderLaborLogs = laborLogs.filter(
+              (laborLog) => laborLog.repair_job_id === workOrder.id
+            );
+            const workOrderParts = partRequests.filter(
+              (partRequest) => partRequest.repair_job_id === workOrder.id
+            );
+            const workOrderPhotos = vehiclePhotos.filter(
+              (photo) => photo.repair_job_id === workOrder.id
+            );
+            const workOrderThirdPartyRepairs = thirdPartyRepairs.filter(
+              (thirdPartyRepair) =>
+                thirdPartyRepair.repair_job_id === workOrder.id
+            );
+
+            return (
+              <WorkOrderCard
+                canManageLabor={canManageLabor}
+                canManageParts={canManageParts}
+                canManagePhotos={canManagePhotos}
+                canManageDocuments={canManageDocuments}
+                canManageThirdPartyRepairs={canManageThirdPartyRepairs}
+                canUploadDocuments={canUploadDocuments}
+                currentProfile={currentProfile}
+                documents={documents}
+                isOpen={openWorkOrderId === workOrder.id}
+                key={workOrder.id ?? index}
+                laborLogs={workOrderLaborLogs}
+                onActivityLogged={onActivityLogged}
+                onDocumentAdded={onDocumentAdded}
+                onDocumentDeleted={onDocumentDeleted}
+                onLaborAdded={onLaborAdded}
+                onLaborDeleted={onLaborDeleted}
+                onPartAdded={onPartAdded}
+                onPartApprovalUpdated={onPartApprovalUpdated}
+                onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
+                onPhotoAdded={onPhotoAdded}
+                onPhotoDeleted={onPhotoDeleted}
+                onThirdPartyRepairAdded={onThirdPartyRepairAdded}
+                onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
+                onToggle={() =>
+                  setOpenWorkOrderId((currentId) =>
+                    currentId === workOrder.id ? null : workOrder.id
+                  )
+                }
+                parts={workOrderParts}
+                photos={workOrderPhotos}
+                profiles={profiles}
+                thirdPartyRepairs={workOrderThirdPartyRepairs}
+                vehicleId={vehicleId}
+                vendors={vendors}
+                workOrder={workOrder}
+              />
+            );
+          })}
         </div>
       )}
     </article>

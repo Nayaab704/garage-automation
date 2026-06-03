@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
+import AppIcon from "../ui/AppIcon";
+import { getServiceCategoryVisual } from "../../lib/serviceCategoryVisuals";
 import AddWorkOrderForm from "./AddWorkOrderForm";
 import ServiceCategoryCard from "./ServiceCategoryCard";
+
+const closedWorkOrderStatuses = ["completed", "cancelled"];
 
 function sortWorkOrders(workOrders) {
   return [...workOrders].sort((firstOrder, secondOrder) => {
@@ -8,6 +12,109 @@ function sortWorkOrders(workOrders) {
     const secondDate = new Date(secondOrder.created_at ?? 0).getTime();
     return secondDate - firstDate;
   });
+}
+
+function isOpenWorkOrder(workOrder) {
+  return !closedWorkOrderStatuses.includes(workOrder.status);
+}
+
+function isBodyShopCategory(category) {
+  const searchableText = `${category.slug ?? ""} ${category.name ?? ""}`
+    .toLowerCase()
+    .trim();
+
+  return searchableText.includes("body");
+}
+
+function getDefaultCategory(serviceCategories, workOrdersByCategoryId) {
+  const firstCategoryWithOpenWork = serviceCategories.find((category) =>
+    (workOrdersByCategoryId[category.id] ?? []).some(isOpenWorkOrder)
+  );
+
+  if (firstCategoryWithOpenWork) {
+    return firstCategoryWithOpenWork;
+  }
+
+  return (
+    serviceCategories.find(isBodyShopCategory) ?? serviceCategories[0] ?? null
+  );
+}
+
+function getCategoryAlert(workOrders) {
+  if (
+    workOrders.some(
+      (workOrder) =>
+        workOrder.priority === "urgent" && isOpenWorkOrder(workOrder)
+    )
+  ) {
+    return {
+      className: "bg-red-50 text-red-700 ring-red-200",
+      label: "Urgent",
+    };
+  }
+
+  if (workOrders.some((workOrder) => workOrder.status === "blocked")) {
+    return {
+      className: "bg-red-50 text-red-700 ring-red-200",
+      label: "Blocked",
+    };
+  }
+
+  if (workOrders.some((workOrder) => workOrder.status === "waiting_parts")) {
+    return {
+      className: "bg-amber-50 text-amber-700 ring-amber-200",
+      label: "Waiting",
+    };
+  }
+
+  return null;
+}
+
+function CategoryChip({ category, isSelected, onSelect, workOrders }) {
+  const alert = getCategoryAlert(workOrders);
+  const visual = getServiceCategoryVisual(category);
+
+  return (
+    <button
+      className={`min-h-36 min-w-[9rem] rounded-2xl border bg-white px-4 py-4 text-center shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-w-[9.75rem] ${
+        isSelected
+          ? "border-blue-500 text-blue-700 shadow-[0_12px_30px_rgba(37,99,235,0.18)] ring-1 ring-blue-100"
+          : "border-slate-200 text-slate-700 hover:border-blue-200 hover:shadow-md"
+      }`}
+      onClick={() => onSelect(category.id)}
+      type="button"
+    >
+      <span className="flex flex-col items-center">
+        <span
+          className={`mb-3 flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl transition ${
+            isSelected
+              ? "bg-blue-50 text-blue-600"
+              : "bg-slate-50 text-slate-500"
+          }`}
+        >
+          <AppIcon name={visual.icon} size={44} />
+        </span>
+        <span className="block text-sm font-bold leading-5 sm:text-[15px]">
+          {category.name}
+        </span>
+      </span>
+      <span
+        className={`mt-2 block text-xs font-medium ${
+          isSelected ? "text-blue-500" : "text-slate-500"
+        }`}
+      >
+        {workOrders.length}{" "}
+        {workOrders.length === 1 ? "work order" : "work orders"}
+      </span>
+      {alert && (
+        <span
+          className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${alert.className}`}
+        >
+          {alert.label}
+        </span>
+      )}
+    </button>
+  );
 }
 
 function ServiceWorkSection({
@@ -43,7 +150,8 @@ function ServiceWorkSection({
   vehiclePhotos = [],
   vendors = [],
 }) {
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [categoryForForm, setCategoryForForm] = useState(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
 
   const workOrdersByCategoryId = useMemo(() => {
     return serviceCategories.reduce((groupedWorkOrders, category) => {
@@ -61,6 +169,16 @@ function ServiceWorkSection({
       total + (workOrdersByCategoryId[category.id]?.length ?? 0),
     0
   );
+  const defaultCategory = getDefaultCategory(
+    serviceCategories,
+    workOrdersByCategoryId
+  );
+  const selectedCategory =
+    serviceCategories.find((category) => category.id === selectedCategoryId) ??
+    defaultCategory;
+  const selectedWorkOrders = selectedCategory
+    ? workOrdersByCategoryId[selectedCategory.id] ?? []
+    : [];
 
   function handleWorkOrderAdded() {
     onWorkOrderAdded?.();
@@ -72,7 +190,7 @@ function ServiceWorkSection({
         <div>
           <h2 className="text-lg font-bold text-zinc-950">Service Work</h2>
           <p className="mt-1 text-sm text-zinc-500">
-            Service Categories and Work Orders for this vehicle.
+            Pick a category, then open one work order.
           </p>
         </div>
 
@@ -99,7 +217,19 @@ function ServiceWorkSection({
         </div>
       ) : (
         <div className="space-y-4">
-          {serviceCategories.map((category) => (
+          <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2 sm:flex-wrap">
+            {serviceCategories.map((category) => (
+              <CategoryChip
+                category={category}
+                isSelected={selectedCategory?.id === category.id}
+                key={category.id}
+                onSelect={setSelectedCategoryId}
+                workOrders={workOrdersByCategoryId[category.id] ?? []}
+              />
+            ))}
+          </div>
+
+          {selectedCategory && (
             <ServiceCategoryCard
               canManage={canManage}
               canManageLabor={canManageLabor}
@@ -108,12 +238,12 @@ function ServiceWorkSection({
               canManageDocuments={canManageDocuments}
               canManageThirdPartyRepairs={canManageThirdPartyRepairs}
               canUploadDocuments={canUploadDocuments}
-              category={category}
+              category={selectedCategory}
               currentProfile={currentProfile}
               documents={documents}
               laborLogs={laborLogs}
-              key={category.id}
-              onAddWorkOrder={setSelectedCategory}
+              key={selectedCategory.id}
+              onAddWorkOrder={setCategoryForForm}
               onActivityLogged={onActivityLogged}
               onDocumentAdded={onDocumentAdded}
               onDocumentDeleted={onDocumentDeleted}
@@ -128,22 +258,23 @@ function ServiceWorkSection({
               onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
               partRequests={partRequests}
               profiles={profiles}
+              selectedCategory={selectedCategory}
               thirdPartyRepairs={thirdPartyRepairs}
               vehicleId={vehicleId}
               vehiclePhotos={vehiclePhotos}
               vendors={vendors}
-              workOrders={workOrdersByCategoryId[category.id] ?? []}
+              workOrders={selectedWorkOrders}
             />
-          ))}
+          )}
         </div>
       )}
 
-      {selectedCategory && canManage && (
+      {categoryForForm && canManage && (
         <AddWorkOrderForm
-          category={selectedCategory}
+          category={categoryForForm}
           currentProfile={currentProfile}
           onActivityLogged={onActivityLogged}
-          onClose={() => setSelectedCategory(null)}
+          onClose={() => setCategoryForForm(null)}
           onWorkOrderAdded={handleWorkOrderAdded}
           vehicleId={vehicleId}
         />

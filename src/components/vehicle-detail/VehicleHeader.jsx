@@ -1,3 +1,4 @@
+import { useState } from "react";
 import VehicleOriginBadge from "../VehicleOriginBadge";
 import VehicleStatusBadge from "../VehicleStatusBadge";
 import VehicleStatusDropdown from "./VehicleStatusDropdown";
@@ -75,7 +76,7 @@ function titleStatusClassName(status) {
 
 function DetailItem({ label, value }) {
   return (
-    <div className="rounded-md border border-zinc-200 bg-zinc-50 px-4 py-3">
+    <div className="rounded-md bg-zinc-50 px-3 py-2.5">
       <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
         {label}
       </dt>
@@ -83,6 +84,16 @@ function DetailItem({ label, value }) {
         {value}
       </dd>
     </div>
+  );
+}
+
+function CompactBadge({ children, className }) {
+  return (
+    <span
+      className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${className}`}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -97,36 +108,36 @@ function VehicleHeader({
   onStatusChange,
   vehicle,
 }) {
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm sm:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <section className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <p className="text-sm font-bold uppercase tracking-wide text-emerald-700">
+          <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
             Overview
           </p>
-          <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-2">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Stock Number
-              </p>
-              <h2 className="mt-1 text-3xl font-bold tracking-tight text-zinc-950 sm:text-4xl">
-                {displayValue(vehicle.stock_number)}
-              </h2>
-            </div>
-            <div className="pb-1">
-              <p className="text-xl font-bold text-zinc-900">
-                {displayValue(vehicle.year)} {displayValue(vehicle.make)}{" "}
-                {displayValue(vehicle.model)}
-              </p>
-              {vehicle.trim && (
-                <p className="mt-1 text-sm text-zinc-500">{vehicle.trim}</p>
-              )}
-            </div>
+          <div className="mt-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Stock Number
+            </p>
+            <h2 className="mt-1 text-3xl font-bold tracking-tight text-zinc-950">
+              {displayValue(vehicle.stock_number)}
+            </h2>
+          </div>
+          <div className="mt-3 min-w-0">
+            <p className="text-xl font-bold text-zinc-900">
+              {displayValue(vehicle.year)} {displayValue(vehicle.make)}{" "}
+              {displayValue(vehicle.model)}
+            </p>
+            {vehicle.trim && (
+              <p className="mt-1 text-sm text-zinc-500">{vehicle.trim}</p>
+            )}
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 sm:items-end">
-          <div className="flex flex-wrap gap-2 sm:justify-end">
+        <div className="flex flex-col gap-3 lg:items-end">
+          <div className="flex flex-wrap gap-2 lg:justify-end">
             {canChangeStatus ? (
               <VehicleStatusDropdown
                 currentStatus={vehicle.status}
@@ -136,14 +147,13 @@ function VehicleHeader({
             ) : (
               <VehicleStatusBadge status={vehicle.status} />
             )}
-            <VehicleOriginBadge origin={vehicle.vehicle_origin} />
             {vehicle.color && (
-              <span className="w-fit rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-200">
+              <CompactBadge className="bg-zinc-100 text-zinc-700 ring-zinc-200">
                 {vehicle.color}
-              </span>
+              </CompactBadge>
             )}
             <span
-              className={`w-fit rounded-full px-3 py-1 text-sm font-medium ring-1 ring-inset ${titleStatusClassName(
+              className={`w-fit rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset ${titleStatusClassName(
                 vehicle.title_status
               )}`}
             >
@@ -152,10 +162,10 @@ function VehicleHeader({
           </div>
 
           {(canEdit || (canSell && !isSold)) && (
-            <div className="flex flex-wrap gap-2 sm:justify-end">
+            <div className="flex flex-wrap gap-2 lg:justify-end">
               {canEdit && (
                 <button
-                  className="w-fit rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
+                  className="min-h-10 w-fit rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
                   onClick={onEdit}
                   type="button"
                 >
@@ -165,7 +175,7 @@ function VehicleHeader({
 
               {canSell && !isSold && (
                 <button
-                  className="w-fit rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
+                  className="min-h-10 w-fit rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
                   onClick={onSell}
                   type="button"
                 >
@@ -177,7 +187,7 @@ function VehicleHeader({
         </div>
       </div>
 
-      <dl className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <dl className="mt-4 grid gap-2 sm:grid-cols-2">
         <DetailItem
           label="VIN"
           value={displayValue(vehicle.vin)}
@@ -186,6 +196,24 @@ function VehicleHeader({
           label="Mileage"
           value={formatNumber(vehicle.mileage)}
         />
+      </dl>
+
+      <div className="mt-4 border-t border-zinc-100 pt-3">
+        <button
+          className="flex min-h-10 w-full items-center justify-between gap-3 rounded-md px-1 text-left text-sm font-bold text-zinc-950 transition hover:bg-zinc-50"
+          onClick={() => setIsDetailsOpen((isOpen) => !isOpen)}
+          type="button"
+        >
+          <span>Vehicle Details</span>
+          <span className="text-zinc-500">
+            {isDetailsOpen ? "Hide" : "Show"}
+          </span>
+        </button>
+      </div>
+
+      {isDetailsOpen && (
+        <div className="mt-3 rounded-md border border-zinc-200 bg-white p-3">
+          <dl className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         <DetailItem
           label="Purchase Price"
           value={formatCurrency(vehicle.purchase_price)}
@@ -194,14 +222,24 @@ function VehicleHeader({
           label="Target Sale Price"
           value={formatCurrency(vehicle.target_sale_price)}
         />
-      </dl>
+            <div className="rounded-md bg-zinc-50 px-3 py-2.5">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Vehicle Origin
+              </dt>
+              <dd className="mt-2">
+                <VehicleOriginBadge origin={vehicle.vehicle_origin} />
+              </dd>
+            </div>
+          </dl>
 
       {vehicle.notes && (
-        <div className="mt-5 rounded-md border border-zinc-200 bg-zinc-50 p-4">
-          <p className="text-sm font-bold text-zinc-950">Notes</p>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-zinc-700">
-            {vehicle.notes}
-          </p>
+            <div className="mt-3 rounded-md bg-zinc-50 p-3">
+              <p className="text-sm font-bold text-zinc-950">Notes</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-zinc-700">
+                {vehicle.notes}
+              </p>
+            </div>
+          )}
         </div>
       )}
     </section>

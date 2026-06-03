@@ -184,7 +184,7 @@ function ThirdPartyRepairsList({
   }
 
   return (
-    <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-4">
+    <div className="rounded-md bg-zinc-50 p-3">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h5 className="text-sm font-bold text-zinc-950">
           Third-Party Repairs
@@ -196,8 +196,8 @@ function ThirdPartyRepairsList({
       </div>
 
       {thirdPartyRepairs.length === 0 ? (
-        <div className="rounded-md border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-500">
-          No third-party repairs yet.
+        <div className="rounded-md border border-dashed border-zinc-200 bg-white p-3 text-sm text-zinc-500">
+          No third-party repairs recorded yet.
         </div>
       ) : (
         <div className="space-y-3">
@@ -207,7 +207,7 @@ function ThirdPartyRepairsList({
 
             return (
               <article
-                className="rounded-md border border-zinc-200 bg-white p-4"
+                className="rounded-md border border-zinc-100 bg-white p-3"
                 key={thirdPartyRepair.id ?? index}
               >
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -231,7 +231,7 @@ function ThirdPartyRepairsList({
 
                     {canManage && (
                       <button
-                        className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="min-h-9 rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                         disabled={deletingRepairId === thirdPartyRepair.id}
                         onClick={() => handleDelete(thirdPartyRepair)}
                         type="button"

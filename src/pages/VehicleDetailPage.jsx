@@ -678,6 +678,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
           )}
 
           <InvestmentSummary
+            currentProfile={currentProfile}
             investmentSummary={investmentSummary}
             vehicle={vehicle}
           />

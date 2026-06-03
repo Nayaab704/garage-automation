@@ -232,7 +232,7 @@ function WorkOrderPartsList({
   }
 
   return (
-    <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-4">
+    <div className="rounded-md bg-zinc-50 p-3">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h5 className="text-sm font-bold text-zinc-950">Required Parts</h5>
         <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-zinc-600 ring-1 ring-inset ring-zinc-200">
@@ -241,14 +241,14 @@ function WorkOrderPartsList({
       </div>
 
       {parts.length === 0 ? (
-        <div className="rounded-md border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-500">
+        <div className="rounded-md border border-dashed border-zinc-200 bg-white p-3 text-sm text-zinc-500">
           No parts added yet.
         </div>
       ) : (
         <div className="space-y-3">
           {parts.map((part, index) => (
             <article
-              className="rounded-md border border-zinc-200 bg-white p-4"
+              className="rounded-md border border-zinc-100 bg-white p-3"
               key={part.id ?? index}
             >
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -297,7 +297,7 @@ function WorkOrderPartsList({
                   {canApprovePart(currentProfile, part) && (
                     <>
                       <button
-                        className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-300"
+                        className="min-h-9 rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-300"
                         disabled={updatingPartId === part.id}
                         onClick={() => handleApprovalChange(part, "approved")}
                         type="button"
@@ -305,7 +305,7 @@ function WorkOrderPartsList({
                         {updatingPartId === part.id ? "Saving..." : "Approve"}
                       </button>
                       <button
-                        className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="min-h-9 rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                         disabled={updatingPartId === part.id}
                         onClick={() => handleApprovalChange(part, "rejected")}
                         type="button"
@@ -317,7 +317,7 @@ function WorkOrderPartsList({
 
                   {canCreatePurchaseOrder(currentProfile, part) && (
                     <button
-                      className="rounded-md bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-zinc-800"
+                      className="min-h-9 rounded-md bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-zinc-800"
                       onClick={() => {
                         setErrorMessage("");
                         setSuccessMessage("");
