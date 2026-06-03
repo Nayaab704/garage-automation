@@ -148,8 +148,6 @@ function VehicleHeader({
   onQuickAddWorkOrder,
   onQuickPhotos,
   onStatusChange,
-  pendingPartReviewCount = 0,
-  partIssueCount = 0,
   primaryPhoto,
   vehicle,
 }) {
@@ -161,18 +159,6 @@ function VehicleHeader({
   const normalizedVehicleStatus = String(vehicle.status ?? "").toLowerCase();
   const shouldShowReadyAction =
     canMarkReady && !readyActionHiddenStatuses.has(normalizedVehicleStatus);
-  const attentionBadge =
-    partIssueCount > 0
-      ? { count: partIssueCount, label: "Part Issue", value: "issue" }
-      : null;
-  const reviewBadge =
-    !attentionBadge && pendingPartReviewCount > 0
-      ? {
-          count: pendingPartReviewCount,
-          label: "Parts Review",
-          value: "parts_review",
-        }
-      : null;
 
   return (
     <div className="space-y-3">
@@ -264,20 +250,6 @@ function VehicleHeader({
                     label={vehicleOriginLabel}
                     value={vehicleOrigin || "unknown"}
                     variant="gray"
-                  />
-                )}
-                {attentionBadge && (
-                  <HeroBadge
-                    count={attentionBadge.count}
-                    label={attentionBadge.label}
-                    value={attentionBadge.value}
-                  />
-                )}
-                {reviewBadge && (
-                  <HeroBadge
-                    count={reviewBadge.count}
-                    label={reviewBadge.label}
-                    value={reviewBadge.value}
                   />
                 )}
               </div>

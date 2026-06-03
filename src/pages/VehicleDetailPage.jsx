@@ -643,14 +643,6 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   const canSellVehicle = hasPermission(role, "sale:manage");
   const primaryVehiclePhoto =
     vehiclePhotos.find((photo) => !photo.repair_job_id) ?? vehiclePhotos[0];
-  const pendingPartReviewCount = partRequests.filter(
-    (partRequest) =>
-      partRequest.part_source === "needs_to_buy" &&
-      partRequest.approval_status === "pending"
-  ).length;
-  const partIssueCount = partRequests.filter(
-    (partRequest) => partRequest.approval_status === "rejected"
-  ).length;
 
   return (
     <div className="space-y-4 text-slate-950">
@@ -718,8 +710,6 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             onQuickAddWorkOrder={() => scrollToSection(serviceWorkRef)}
             onQuickPhotos={handleHeroPhotoClick}
             onStatusChange={handleVehicleStatusChange}
-            partIssueCount={partIssueCount}
-            pendingPartReviewCount={pendingPartReviewCount}
             primaryPhoto={primaryVehiclePhoto}
             vehicle={vehicle}
           />
