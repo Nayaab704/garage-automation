@@ -1,7 +1,10 @@
 import { useState } from "react";
 import {
+  formatHeroBadgeLabel,
+  getHeroBadgeClassName,
+} from "../../lib/heroBadge";
+import {
   formatVehicleStatus,
-  getVehicleStatusClassName,
   vehicleStatusOptions,
 } from "../../lib/vehicleStatus";
 
@@ -23,14 +26,17 @@ function VehicleStatusDropdown({ currentStatus, isUpdating, onChange }) {
       <button
         aria-expanded={isOpen}
         aria-haspopup="menu"
-        className={`inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 ${getVehicleStatusClassName(
-          currentStatus
-        )}`}
+        className={getHeroBadgeClassName(
+          currentStatus,
+          "transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        )}
         disabled={isUpdating}
         onClick={() => setIsOpen((currentValue) => !currentValue)}
         type="button"
       >
-        <span>{formatVehicleStatus(currentStatus)}</span>
+        <span className="min-w-0 truncate">
+          {formatHeroBadgeLabel(currentStatus)}
+        </span>
         {isUpdating ? (
           <span className="text-xs font-semibold">Saving</span>
         ) : (

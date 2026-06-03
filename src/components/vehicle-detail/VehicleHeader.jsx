@@ -1,7 +1,7 @@
 import { useState } from "react";
 import AppIcon from "../ui/AppIcon";
+import HeroBadge from "../ui/HeroBadge";
 import VehicleOriginBadge from "../VehicleOriginBadge";
-import VehicleStatusBadge from "../VehicleStatusBadge";
 import VehicleStatusDropdown from "./VehicleStatusDropdown";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -12,6 +12,11 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
 });
 
 const numberFormatter = new Intl.NumberFormat("en-US");
+const readyActionHiddenStatuses = new Set([
+  "ready_for_sale",
+  "sold",
+  "archived",
+]);
 
 function displayValue(value) {
   return value === null || value === undefined || value === ""
@@ -63,30 +68,6 @@ function getVehicleTitle(vehicle) {
   return titleParts.length > 0 ? titleParts.join(" ") : "Vehicle Details";
 }
 
-function formatTitleStatus(status) {
-  const labels = {
-    clean: "Clean Title",
-    salvage: "Salvage",
-    rebuilt: "Rebuilt",
-    flood: "Flood",
-    unknown: "Unknown",
-  };
-
-  return labels[status] ?? "Unknown";
-}
-
-function titleStatusClassName(status) {
-  if (status === "clean" || status === "rebuilt") {
-    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-  }
-
-  if (status === "salvage" || status === "flood") {
-    return "bg-red-50 text-red-700 ring-red-200";
-  }
-
-  return "bg-slate-100 text-slate-700 ring-slate-200";
-}
-
 function DetailItem({ label, value }) {
   return (
     <div className="rounded-2xl bg-slate-50 px-3 py-3">
@@ -97,16 +78,6 @@ function DetailItem({ label, value }) {
         {value}
       </dd>
     </div>
-  );
-}
-
-function CompactBadge({ children, className }) {
-  return (
-    <span
-      className={`inline-flex w-fit shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${className}`}
-    >
-      {children}
-    </span>
   );
 }
 
@@ -168,9 +139,11 @@ function MetadataRow({ vehicle }) {
       {items.map((item, index) => (
         <span className="inline-flex min-w-0 items-center gap-2" key={item.label}>
           {index > 0 && (
-            <span aria-hidden="true" className="text-slate-300">
-              ·
-            </span>
+            <>
+              <span aria-hidden="true" className="text-slate-300">
+                &middot;
+              </span>
+            </>
           )}
           <span className={item.label === "VIN" ? "break-all" : ""}>
             <span className="font-semibold text-slate-500">{item.label}:</span>{" "}
@@ -188,7 +161,6 @@ function VehicleHeader({
   canEdit = false,
   canManagePhotos = false,
   canMarkReady = false,
-  isSold,
   isStatusUpdating,
   onEdit,
   onMarkReady,
@@ -204,11 +176,25 @@ function VehicleHeader({
   const title = getVehicleTitle(vehicle);
   const stockNumber = displayValue(vehicle.stock_number);
   const thumbnailUrl = primaryPhoto?.photo_url;
-  const isReadyForSale = vehicle.status === "ready_for_sale";
+  const normalizedVehicleStatus = String(vehicle.status ?? "").toLowerCase();
+  const shouldShowReadyAction =
+    canMarkReady && !readyActionHiddenStatuses.has(normalizedVehicleStatus);
+  const attentionBadge =
+    partIssueCount > 0
+      ? { count: partIssueCount, label: "Part Issue", value: "issue" }
+      : null;
+  const reviewBadge =
+    !attentionBadge && pendingPartReviewCount > 0
+      ? {
+          count: pendingPartReviewCount,
+          label: "Parts Review",
+          value: "parts_review",
+        }
+      : null;
 
   return (
     <div className="space-y-3">
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <section className="rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="p-3 sm:p-4">
           <div className="flex gap-4">
             <button
@@ -259,7 +245,7 @@ function VehicleHeader({
                       onClick={onEdit}
                     />
                   )}
-                  {canMarkReady && !isSold && !isReadyForSale && (
+                  {shouldShowReadyAction && (
                     <CompactActionButton
                       disabled={isStatusUpdating}
                       icon="check"
@@ -280,7 +266,7 @@ function VehicleHeader({
                 </p>
               )}
 
-              <div className="mt-2 flex flex-nowrap gap-1.5 overflow-x-auto pb-1">
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 {canChangeStatus ? (
                   <VehicleStatusDropdown
                     currentStatus={vehicle.status}
@@ -288,27 +274,22 @@ function VehicleHeader({
                     onChange={onStatusChange}
                   />
                 ) : (
-                  <VehicleStatusBadge
-                    className="shrink-0 px-2.5 text-xs"
-                    status={vehicle.status}
+                  <HeroBadge value={vehicle.status} />
+                )}
+                <HeroBadge value={vehicle.title_status ?? "unknown"} />
+                {attentionBadge && (
+                  <HeroBadge
+                    count={attentionBadge.count}
+                    label={attentionBadge.label}
+                    value={attentionBadge.value}
                   />
                 )}
-                <span
-                  className={`w-fit shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${titleStatusClassName(
-                    vehicle.title_status
-                  )}`}
-                >
-                  {formatTitleStatus(vehicle.title_status)}
-                </span>
-                {pendingPartReviewCount > 0 && (
-                  <CompactBadge className="bg-amber-50 text-amber-800 ring-amber-200">
-                    Parts Review {pendingPartReviewCount}
-                  </CompactBadge>
-                )}
-                {partIssueCount > 0 && (
-                  <CompactBadge className="bg-red-50 text-red-700 ring-red-200">
-                    Part Issue {partIssueCount}
-                  </CompactBadge>
+                {reviewBadge && (
+                  <HeroBadge
+                    count={reviewBadge.count}
+                    label={reviewBadge.label}
+                    value={reviewBadge.value}
+                  />
                 )}
               </div>
 

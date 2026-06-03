@@ -12,12 +12,13 @@ export const vehicleStatusOptions = [
 const vehicleStatusLabels = {
   inspection: "Inspection",
   parts_needed: "Parts Needed",
-  waiting_for_parts: "Waiting For Parts",
+  waiting_for_parts: "Waiting Parts",
   repairing: "Repairing",
   quality_check: "Quality Check",
   ready_for_sale: "Ready For Sale",
   sold: "Sold",
   archived: "Archived",
+  waiting_parts: "Waiting Parts",
 };
 
 export function formatVehicleStatus(status) {
@@ -25,7 +26,11 @@ export function formatVehicleStatus(status) {
 }
 
 export function getVehicleStatusClassName(status) {
-  if (status === "parts_needed" || status === "waiting_for_parts") {
+  if (
+    status === "parts_needed" ||
+    status === "waiting_for_parts" ||
+    status === "waiting_parts"
+  ) {
     return "bg-amber-50 text-amber-800 ring-amber-200";
   }
 

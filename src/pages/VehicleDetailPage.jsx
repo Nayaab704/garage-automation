@@ -712,14 +712,11 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             canEdit={canEditVehicle}
             canManagePhotos={canManagePhotos}
             canMarkReady={canChangeVehicleStatus}
-            canSell={canSellVehicle}
-            isSold={isVehicleSold}
             isStatusUpdating={isVehicleStatusUpdating}
             onEdit={() => setIsEditFormOpen(true)}
             onMarkReady={() => handleVehicleStatusChange("ready_for_sale")}
             onQuickAddWorkOrder={() => scrollToSection(serviceWorkRef)}
             onQuickPhotos={handleHeroPhotoClick}
-            onSell={() => setIsSellFormOpen(true)}
             onStatusChange={handleVehicleStatusChange}
             partIssueCount={partIssueCount}
             pendingPartReviewCount={pendingPartReviewCount}
