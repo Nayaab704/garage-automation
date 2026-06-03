@@ -4,6 +4,7 @@ import {
   areFinalChecksComplete,
   finalCheckTemplates,
 } from "../../lib/finalChecks";
+import AppIcon from "../ui/AppIcon";
 import { supabase } from "../../lib/supabaseClient";
 
 function formatDateTime(value) {
@@ -169,6 +170,7 @@ function FinalCheckSection({
   profiles = [],
   vehicleId,
 }) {
+  const [isOpen, setIsOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [updatingCheckId, setUpdatingCheckId] = useState(null);
   const checksByKey = new Map(
@@ -181,6 +183,18 @@ function FinalCheckSection({
     (completedCount / finalCheckTemplates.length) * 100
   );
   const allChecksComplete = areFinalChecksComplete(finalChecks);
+  const technicianTemplates = finalCheckTemplates.filter(
+    (template) => template.required_role === "technician"
+  );
+  const adminTemplates = finalCheckTemplates.filter(
+    (template) => template.required_role === "admin"
+  );
+  const technicianCompletedCount = technicianTemplates.filter(
+    (template) => checksByKey.get(template.check_key)?.is_checked === true
+  ).length;
+  const adminCompletedCount = adminTemplates.filter(
+    (template) => checksByKey.get(template.check_key)?.is_checked === true
+  ).length;
 
   async function handleToggle(finalCheck, isChecked) {
     if (!canUpdateCheck(currentProfile, finalCheck)) {
@@ -250,69 +264,115 @@ function FinalCheckSection({
   }
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-5">
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-zinc-950">Final Check</h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            {completedCount} / {finalCheckTemplates.length} checks complete
-          </p>
-        </div>
-
-        <span
-          className={`w-fit rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset ${
-            allChecksComplete
-              ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-              : "bg-amber-50 text-amber-800 ring-amber-200"
-          }`}
-        >
-          {allChecksComplete ? "Cleared" : "Needs Review"}
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <button
+        className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
+        onClick={() => setIsOpen((currentValue) => !currentValue)}
+        type="button"
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-slate-600">
+            <AppIcon name="checklist" size={20} />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-base font-black text-slate-950">
+              Final Checklist
+            </span>
+            <span className="block text-sm text-slate-500">
+              Technician: {technicianCompletedCount}/{technicianTemplates.length}{" "}
+              | Admin: {adminCompletedCount}/{adminTemplates.length}
+            </span>
+          </span>
         </span>
-      </div>
 
-      <div className="mb-5">
-        <div className="h-2 overflow-hidden rounded-full bg-zinc-200">
-          <div
-            className={`h-full rounded-full transition-all ${
-              allChecksComplete ? "bg-emerald-600" : "bg-amber-500"
+        <span className="flex shrink-0 items-center gap-3">
+          <span
+            className={`w-fit rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset ${
+              allChecksComplete
+                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                : "bg-amber-50 text-amber-800 ring-amber-200"
             }`}
-            style={{ width: `${progressPercent}%` }}
+          >
+            {allChecksComplete ? "Ready" : "Not Ready"}
+          </span>
+          <AppIcon
+            className={`text-slate-500 transition ${
+              isOpen ? "rotate-90" : ""
+            }`}
+            name="chevron-right"
+            size={20}
           />
-        </div>
-      </div>
+        </span>
+      </button>
 
-      {allChecksComplete && (
-        <div className="mb-5 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800">
-          Vehicle is cleared to be marked Ready For Sale.
+      {isOpen && (
+        <div className="border-t border-slate-100 p-4">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-zinc-950">
+                Final Checklist
+              </h2>
+              <p className="mt-1 text-sm text-zinc-500">
+                {completedCount} / {finalCheckTemplates.length} checks complete
+              </p>
+            </div>
+
+            <span
+              className={`w-fit rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset ${
+                allChecksComplete
+                  ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                  : "bg-amber-50 text-amber-800 ring-amber-200"
+              }`}
+            >
+              {allChecksComplete ? "Cleared" : "Needs Review"}
+            </span>
+          </div>
+
+          <div className="mb-5">
+            <div className="h-2 overflow-hidden rounded-full bg-zinc-200">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  allChecksComplete ? "bg-emerald-600" : "bg-amber-500"
+                }`}
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+
+          {allChecksComplete && (
+            <div className="mb-5 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800">
+              Vehicle is cleared to be marked Ready For Sale.
+            </div>
+          )}
+
+          {errorMessage && (
+            <div className="mb-5 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {errorMessage}
+            </div>
+          )}
+
+          <div className="grid gap-5 xl:grid-cols-2">
+            <FinalCheckGroup
+              currentProfile={currentProfile}
+              finalChecks={finalChecks}
+              onToggle={handleToggle}
+              profiles={profiles}
+              requiredRole="technician"
+              title="Technician Checklist"
+              updatingCheckId={updatingCheckId}
+            />
+            <FinalCheckGroup
+              currentProfile={currentProfile}
+              finalChecks={finalChecks}
+              onToggle={handleToggle}
+              profiles={profiles}
+              requiredRole="admin"
+              title="Admin Checklist"
+              updatingCheckId={updatingCheckId}
+            />
+          </div>
         </div>
       )}
-
-      {errorMessage && (
-        <div className="mb-5 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-          {errorMessage}
-        </div>
-      )}
-
-      <div className="grid gap-5 xl:grid-cols-2">
-        <FinalCheckGroup
-          currentProfile={currentProfile}
-          finalChecks={finalChecks}
-          onToggle={handleToggle}
-          profiles={profiles}
-          requiredRole="technician"
-          title="Technician Checklist"
-          updatingCheckId={updatingCheckId}
-        />
-        <FinalCheckGroup
-          currentProfile={currentProfile}
-          finalChecks={finalChecks}
-          onToggle={handleToggle}
-          profiles={profiles}
-          requiredRole="admin"
-          title="Admin Checklist"
-          updatingCheckId={updatingCheckId}
-        />
-      </div>
     </section>
   );
 }

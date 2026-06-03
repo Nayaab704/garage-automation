@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import EditVehicleForm from "../components/EditVehicleForm";
 import AppIcon from "../components/ui/AppIcon";
 import AddVehiclePhotoForm from "../components/vehicle-detail/AddVehiclePhotoForm";
-import ActivityTimelineSection from "../components/vehicle-detail/ActivityTimelineSection";
 import ExtraCostsSection from "../components/vehicle-detail/ExtraCostsSection";
 import FinalCheckSection from "../components/vehicle-detail/FinalCheckSection";
 import {
@@ -10,7 +9,6 @@ import {
   finalCheckTemplates,
 } from "../lib/finalChecks";
 import InvestmentSummary from "../components/vehicle-detail/InvestmentSummary";
-import PurchaseOrdersSection from "../components/vehicle-detail/PurchaseOrdersSection";
 import SaleWarrantySection from "../components/vehicle-detail/SaleWarrantySection";
 import SellVehicleForm from "../components/vehicle-detail/SellVehicleForm";
 import ServiceWorkSection from "../components/vehicle-detail/ServiceWorkSection";
@@ -288,7 +286,6 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
   const [isSellFormOpen, setIsSellFormOpen] = useState(false);
   const [isVehiclePhotoFormOpen, setIsVehiclePhotoFormOpen] = useState(false);
-  const [activityRefreshCount, setActivityRefreshCount] = useState(0);
   const [refreshCount, setRefreshCount] = useState(0);
   const serviceWorkRef = useRef(null);
   const vehiclePhotosRef = useRef(null);
@@ -374,7 +371,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   }
 
   function refreshActivityTimeline() {
-    setActivityRefreshCount((currentCount) => currentCount + 1);
+    // Activity is still logged, but the timeline is hidden from Vehicle Detail.
   }
 
   function scrollToSection(sectionRef) {
@@ -633,7 +630,6 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   const canManageLabor = hasPermission(role, "labor:manage");
   const canManagePartRequests = hasPermission(role, "part_request:manage");
   const canManagePhotos = hasPermission(role, "photo:manage");
-  const canManagePurchaseOrders = hasPermission(role, "purchase_order:manage");
   const canManageRepairJobs = hasPermission(role, "repair:manage");
   const canManageWorkOrderParts = canManageRepairJobs || canManagePartRequests;
   const canUploadDocuments =
@@ -774,6 +770,14 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             />
           </div>
 
+          <ExtraCostsSection
+            canManage={canManageExtraCosts}
+            costEntries={costEntries}
+            onActivityLogged={refreshActivityTimeline}
+            onExtraCostChanged={refreshVehicleDetails}
+            vehicleId={vehicleId}
+          />
+
           <FinalCheckSection
             currentProfile={currentProfile}
             finalChecks={finalChecks}
@@ -783,38 +787,12 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             vehicleId={vehicleId}
           />
 
-          {/* Legacy repair process workflow hidden after migration to service-category work orders. */}
-          <ExtraCostsSection
-            canManage={canManageExtraCosts}
-            costEntries={costEntries}
-            onActivityLogged={refreshActivityTimeline}
-            onExtraCostChanged={refreshVehicleDetails}
-            vehicleId={vehicleId}
-          />
-
-          <PurchaseOrdersSection
-            canManage={canManagePurchaseOrders}
-            currentProfile={currentProfile}
-            onActivityLogged={refreshActivityTimeline}
-            onPurchaseOrderCreated={refreshVehicleDetails}
-            partRequests={partRequests}
-            purchaseOrderItems={purchaseOrderItems}
-            purchaseOrders={purchaseOrders}
-            vehicleId={vehicleId}
-            vendors={vendors}
-          />
-
           {isVehicleSold && (
             <SaleWarrantySection
               sales={sales}
               warranties={warranties}
             />
           )}
-
-          <ActivityTimelineSection
-            refreshKey={activityRefreshCount}
-            vehicleId={vehicleId}
-          />
 
           {isEditFormOpen && canEditVehicle && (
             <EditVehicleForm
