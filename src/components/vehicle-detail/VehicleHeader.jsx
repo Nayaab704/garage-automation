@@ -1,4 +1,5 @@
 import { useState } from "react";
+import AppIcon from "../ui/AppIcon";
 import VehicleOriginBadge from "../VehicleOriginBadge";
 import VehicleStatusBadge from "../VehicleStatusBadge";
 import VehicleStatusDropdown from "./VehicleStatusDropdown";
@@ -46,6 +47,22 @@ function formatNumber(value) {
   return numberFormatter.format(numberValue);
 }
 
+function formatMileage(value) {
+  const formattedNumber = formatNumber(value);
+
+  return formattedNumber === "Not available"
+    ? formattedNumber
+    : `${formattedNumber} mi`;
+}
+
+function getVehicleTitle(vehicle) {
+  const titleParts = [vehicle.year, vehicle.make, vehicle.model].filter(
+    Boolean
+  );
+
+  return titleParts.length > 0 ? titleParts.join(" ") : "Vehicle Details";
+}
+
 function formatTitleStatus(status) {
   const labels = {
     clean: "Clean Title",
@@ -59,7 +76,7 @@ function formatTitleStatus(status) {
 }
 
 function titleStatusClassName(status) {
-  if (status === "clean") {
+  if (status === "clean" || status === "rebuilt") {
     return "bg-emerald-50 text-emerald-700 ring-emerald-200";
   }
 
@@ -67,20 +84,16 @@ function titleStatusClassName(status) {
     return "bg-red-50 text-red-700 ring-red-200";
   }
 
-  if (status === "rebuilt") {
-    return "bg-blue-50 text-blue-700 ring-blue-200";
-  }
-
-  return "bg-zinc-100 text-zinc-700 ring-zinc-200";
+  return "bg-slate-100 text-slate-700 ring-slate-200";
 }
 
 function DetailItem({ label, value }) {
   return (
-    <div className="rounded-md bg-zinc-50 px-3 py-2.5">
-      <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+    <div className="rounded-2xl bg-slate-50 px-3 py-3">
+      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
         {label}
       </dt>
-      <dd className="mt-1 break-words text-sm font-bold text-zinc-950">
+      <dd className="mt-1 break-words text-sm font-bold text-slate-950">
         {value}
       </dd>
     </div>
@@ -90,159 +103,286 @@ function DetailItem({ label, value }) {
 function CompactBadge({ children, className }) {
   return (
     <span
-      className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${className}`}
+      className={`inline-flex w-fit shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${className}`}
     >
       {children}
     </span>
   );
 }
 
+function QuickActionButton({ icon, label, onClick, primary = false }) {
+  return (
+    <button
+      className={`flex min-h-12 items-center justify-center gap-2 rounded-2xl border px-3 py-2 text-sm font-bold shadow-sm transition ${
+        primary
+          ? "border-blue-100 bg-blue-50 text-blue-700 hover:border-blue-200 hover:bg-blue-100"
+          : "border-slate-200 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50"
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      <AppIcon name={icon} size={20} />
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function CompactActionButton({
+  disabled = false,
+  icon,
+  label,
+  onClick,
+  tone = "default",
+}) {
+  const toneClassName =
+    tone === "blue"
+      ? "border-blue-100 bg-blue-50 text-blue-700 hover:border-blue-200 hover:bg-blue-100"
+      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50";
+
+  return (
+    <button
+      className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${toneClassName}`}
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
+    >
+      <AppIcon name={icon} size={15} />
+      <span className="hidden sm:inline">{label}</span>
+    </button>
+  );
+}
+
+function MetadataRow({ vehicle }) {
+  const items = [
+    { label: "Mileage", value: formatMileage(vehicle.mileage) },
+    { label: "Color", value: vehicle.color },
+    { label: "VIN", value: vehicle.vin },
+  ].filter((item) => item.value && item.value !== "Not available");
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-slate-500 sm:text-sm">
+      {items.map((item, index) => (
+        <span className="inline-flex min-w-0 items-center gap-2" key={item.label}>
+          {index > 0 && (
+            <span aria-hidden="true" className="text-slate-300">
+              ·
+            </span>
+          )}
+          <span className={item.label === "VIN" ? "break-all" : ""}>
+            <span className="font-semibold text-slate-500">{item.label}:</span>{" "}
+            {item.value}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function VehicleHeader({
   canChangeStatus = false,
+  canAddWorkOrder = false,
   canEdit = false,
-  canSell = false,
+  canManagePhotos = false,
+  canMarkReady = false,
   isSold,
   isStatusUpdating,
   onEdit,
-  onSell,
+  onMarkReady,
+  onQuickAddWorkOrder,
+  onQuickPhotos,
   onStatusChange,
+  pendingPartReviewCount = 0,
+  partIssueCount = 0,
+  primaryPhoto,
   vehicle,
 }) {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const title = getVehicleTitle(vehicle);
+  const stockNumber = displayValue(vehicle.stock_number);
+  const thumbnailUrl = primaryPhoto?.photo_url;
+  const isReadyForSale = vehicle.status === "ready_for_sale";
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm sm:p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
-            Overview
-          </p>
-          <div className="mt-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Stock Number
-            </p>
-            <h2 className="mt-1 text-3xl font-bold tracking-tight text-zinc-950">
-              {displayValue(vehicle.stock_number)}
-            </h2>
-          </div>
-          <div className="mt-3 min-w-0">
-            <p className="text-xl font-bold text-zinc-900">
-              {displayValue(vehicle.year)} {displayValue(vehicle.make)}{" "}
-              {displayValue(vehicle.model)}
-            </p>
-            {vehicle.trim && (
-              <p className="mt-1 text-sm text-zinc-500">{vehicle.trim}</p>
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3 lg:items-end">
-          <div className="flex flex-wrap gap-2 lg:justify-end">
-            {canChangeStatus ? (
-              <VehicleStatusDropdown
-                currentStatus={vehicle.status}
-                isUpdating={isStatusUpdating}
-                onChange={onStatusChange}
-              />
-            ) : (
-              <VehicleStatusBadge status={vehicle.status} />
-            )}
-            {vehicle.color && (
-              <CompactBadge className="bg-zinc-100 text-zinc-700 ring-zinc-200">
-                {vehicle.color}
-              </CompactBadge>
-            )}
-            <span
-              className={`w-fit rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset ${titleStatusClassName(
-                vehicle.title_status
-              )}`}
+    <div className="space-y-3">
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="p-3 sm:p-4">
+          <div className="flex gap-4">
+            <button
+              aria-label={
+                canManagePhotos
+                  ? "Upload vehicle photo"
+                  : "View vehicle photos"
+              }
+              className="group relative h-[72px] w-[92px] shrink-0 overflow-hidden rounded-2xl bg-slate-100 text-left ring-1 ring-inset ring-slate-200 transition hover:ring-blue-200 sm:h-[90px] sm:w-[132px]"
+              onClick={onQuickPhotos}
+              type="button"
             >
-              {formatTitleStatus(vehicle.title_status)}
-            </span>
-          </div>
+              {thumbnailUrl ? (
+                <img
+                  alt={`${title} thumbnail`}
+                  className="h-full w-full object-cover"
+                  src={thumbnailUrl}
+                />
+              ) : (
+                <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-slate-400">
+                  <AppIcon name="camera" size={32} />
+                  {canManagePhotos && (
+                    <span className="text-[11px] font-bold text-slate-500">
+                      Photo
+                    </span>
+                  )}
+                </div>
+              )}
+              {canManagePhotos && thumbnailUrl && (
+                <span className="absolute inset-x-2 bottom-2 rounded-full bg-slate-950/75 px-2 py-1 text-center text-[11px] font-bold text-white opacity-0 transition group-hover:opacity-100">
+                  Change
+                </span>
+              )}
+            </button>
 
-          {(canEdit || (canSell && !isSold)) && (
-            <div className="flex flex-wrap gap-2 lg:justify-end">
-              {canEdit && (
-                <button
-                  className="min-h-10 w-fit rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
-                  onClick={onEdit}
-                  type="button"
-                >
-                  Edit Vehicle
-                </button>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-500">
+                    {stockNumber}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {canEdit && (
+                    <CompactActionButton
+                      icon="checklist"
+                      label="Edit"
+                      onClick={onEdit}
+                    />
+                  )}
+                  {canMarkReady && !isSold && !isReadyForSale && (
+                    <CompactActionButton
+                      disabled={isStatusUpdating}
+                      icon="check"
+                      label="Ready"
+                      onClick={onMarkReady}
+                      tone="blue"
+                    />
+                  )}
+                </div>
+              </div>
+
+              <h2 className="mt-0.5 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
+                {title}
+              </h2>
+              {vehicle.trim && (
+                <p className="mt-0.5 text-sm font-medium text-slate-500">
+                  {vehicle.trim}
+                </p>
               )}
 
-              {canSell && !isSold && (
-                <button
-                  className="min-h-10 w-fit rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
-                  onClick={onSell}
-                  type="button"
+              <div className="mt-2 flex flex-nowrap gap-1.5 overflow-x-auto pb-1">
+                {canChangeStatus ? (
+                  <VehicleStatusDropdown
+                    currentStatus={vehicle.status}
+                    isUpdating={isStatusUpdating}
+                    onChange={onStatusChange}
+                  />
+                ) : (
+                  <VehicleStatusBadge
+                    className="shrink-0 px-2.5 text-xs"
+                    status={vehicle.status}
+                  />
+                )}
+                <span
+                  className={`w-fit shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${titleStatusClassName(
+                    vehicle.title_status
+                  )}`}
                 >
-                  Sell Vehicle
-                </button>
-              )}
+                  {formatTitleStatus(vehicle.title_status)}
+                </span>
+                {pendingPartReviewCount > 0 && (
+                  <CompactBadge className="bg-amber-50 text-amber-800 ring-amber-200">
+                    Parts Review {pendingPartReviewCount}
+                  </CompactBadge>
+                )}
+                {partIssueCount > 0 && (
+                  <CompactBadge className="bg-red-50 text-red-700 ring-red-200">
+                    Part Issue {partIssueCount}
+                  </CompactBadge>
+                )}
+              </div>
+
+              <MetadataRow vehicle={vehicle} />
             </div>
-          )}
+          </div>
         </div>
-      </div>
 
-      <dl className="mt-4 grid gap-2 sm:grid-cols-2">
-        <DetailItem
-          label="VIN"
-          value={displayValue(vehicle.vin)}
-        />
-        <DetailItem
-          label="Mileage"
-          value={formatNumber(vehicle.mileage)}
-        />
-      </dl>
+        <div className="border-t border-slate-100 px-3 py-2.5 sm:px-4">
+          <div className="grid gap-2 sm:max-w-sm">
+            <QuickActionButton
+              icon="plus"
+              label={canAddWorkOrder ? "Add Work Order" : "Service Work"}
+              onClick={onQuickAddWorkOrder}
+              primary
+            />
+          </div>
+        </div>
+      </section>
 
-      <div className="mt-4 border-t border-zinc-100 pt-3">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <button
-          className="flex min-h-10 w-full items-center justify-between gap-3 rounded-md px-1 text-left text-sm font-bold text-zinc-950 transition hover:bg-zinc-50"
+          className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
           onClick={() => setIsDetailsOpen((isOpen) => !isOpen)}
           type="button"
         >
-          <span>Vehicle Details</span>
-          <span className="text-zinc-500">
-            {isDetailsOpen ? "Hide" : "Show"}
+          <span className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-slate-500">
+              <AppIcon name="car" size={22} />
+            </span>
+            <span className="font-bold text-slate-950">Vehicle Details</span>
           </span>
+          <AppIcon
+            className={`text-slate-500 transition ${
+              isDetailsOpen ? "rotate-90" : ""
+            }`}
+            name="chevron-right"
+            size={20}
+          />
         </button>
-      </div>
 
-      {isDetailsOpen && (
-        <div className="mt-3 rounded-md border border-zinc-200 bg-white p-3">
-          <dl className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-        <DetailItem
-          label="Purchase Price"
-          value={formatCurrency(vehicle.purchase_price)}
-        />
-        <DetailItem
-          label="Target Sale Price"
-          value={formatCurrency(vehicle.target_sale_price)}
-        />
-            <div className="rounded-md bg-zinc-50 px-3 py-2.5">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Vehicle Origin
-              </dt>
-              <dd className="mt-2">
-                <VehicleOriginBadge origin={vehicle.vehicle_origin} />
-              </dd>
-            </div>
-          </dl>
+        {isDetailsOpen && (
+          <div className="border-t border-slate-100 p-4">
+            <dl className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              <DetailItem
+                label="Purchase Price"
+                value={formatCurrency(vehicle.purchase_price)}
+              />
+              <DetailItem
+                label="Target Sale Price"
+                value={formatCurrency(vehicle.target_sale_price)}
+              />
+              <div className="rounded-2xl bg-slate-50 px-3 py-3">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Vehicle Origin
+                </dt>
+                <dd className="mt-2">
+                  <VehicleOriginBadge origin={vehicle.vehicle_origin} />
+                </dd>
+              </div>
+            </dl>
 
-      {vehicle.notes && (
-            <div className="mt-3 rounded-md bg-zinc-50 p-3">
-              <p className="text-sm font-bold text-zinc-950">Notes</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-zinc-700">
-                {vehicle.notes}
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-    </section>
+            {vehicle.notes && (
+              <div className="mt-3 rounded-2xl bg-slate-50 p-3">
+                <p className="text-sm font-bold text-slate-950">Notes</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                  {vehicle.notes}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
 

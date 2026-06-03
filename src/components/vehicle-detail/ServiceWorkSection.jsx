@@ -76,7 +76,7 @@ function CategoryChip({ category, isSelected, onSelect, workOrders }) {
 
   return (
     <button
-      className={`min-h-36 min-w-[9rem] rounded-2xl border bg-white px-4 py-4 text-center shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-w-[9.75rem] ${
+      className={`min-h-32 min-w-[8.75rem] rounded-2xl border bg-white px-4 py-4 text-center shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-w-[9.5rem] ${
         isSelected
           ? "border-blue-500 text-blue-700 shadow-[0_12px_30px_rgba(37,99,235,0.18)] ring-1 ring-blue-100"
           : "border-slate-200 text-slate-700 hover:border-blue-200 hover:shadow-md"
@@ -185,26 +185,26 @@ function ServiceWorkSection({
   }
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-5">
+    <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-bold text-zinc-950">Service Work</h2>
-          <p className="mt-1 text-sm text-zinc-500">
+          <h2 className="text-lg font-black text-slate-950">Service Work</h2>
+          <p className="mt-1 text-sm text-slate-500">
             Pick a category, then open one work order.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="w-fit rounded-full bg-white px-3 py-1 text-sm font-semibold text-zinc-700 ring-1 ring-inset ring-zinc-200">
+          <span className="w-fit rounded-full bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200">
             {serviceCategories.length}{" "}
             {serviceCategories.length === 1 ? "category" : "categories"}
           </span>
-          <span className="w-fit rounded-full bg-white px-3 py-1 text-sm font-semibold text-zinc-700 ring-1 ring-inset ring-zinc-200">
+          <span className="w-fit rounded-full bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200">
             {totalWorkOrders}{" "}
             {totalWorkOrders === 1 ? "work order" : "work orders"}
           </span>
           {!canManage && (
-            <span className="w-fit rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-600">
+            <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-600">
               Read only
             </span>
           )}
@@ -212,7 +212,7 @@ function ServiceWorkSection({
       </div>
 
       {serviceCategories.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-6 text-sm text-zinc-500">
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
           No active service categories found.
         </div>
       ) : (

@@ -1,9 +1,10 @@
 import AppIcon from "./AppIcon";
 
 const variantClassNames = {
-  primary: "border-zinc-950 bg-zinc-950 text-white hover:bg-zinc-800",
+  primary:
+    "border-blue-100 bg-blue-50 text-blue-700 hover:border-blue-200 hover:bg-blue-100",
   secondary:
-    "border-zinc-300 bg-white text-zinc-800 hover:border-zinc-400 hover:bg-zinc-50",
+    "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
 };
 
 function ActionTile({
@@ -17,14 +18,14 @@ function ActionTile({
 }) {
   return (
     <button
-      className={`flex min-h-12 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+      className={`flex min-h-14 items-center justify-center gap-2 rounded-2xl border px-3 py-3 text-sm font-bold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
         variantClassNames[variant] ?? variantClassNames.secondary
       } ${className}`}
       disabled={disabled}
       onClick={onClick}
       type={type}
     >
-      {icon && <AppIcon className="h-4 w-4" name={icon} size={16} />}
+      {icon && <AppIcon className="h-5 w-5" name={icon} size={20} />}
       <span>{label}</span>
     </button>
   );

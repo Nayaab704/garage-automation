@@ -3,11 +3,11 @@ import AppIcon from "./AppIcon";
 function StatChip({ className = "", icon, label, value }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700 ring-1 ring-inset ring-zinc-200 ${className}`}
+      className={`inline-flex min-h-10 items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-100 ${className}`}
     >
-      {icon && <AppIcon className="h-3.5 w-3.5" name={icon} size={14} />}
+      {icon && <AppIcon className="h-4 w-4 text-slate-500" name={icon} size={16} />}
       <span>{label}</span>
-      <span className="text-zinc-950">{value}</span>
+      <span className="text-sm font-black text-slate-950">{value}</span>
     </span>
   );
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import ActionTile from "../ui/ActionTile";
+import AppIcon from "../ui/AppIcon";
 import PriorityBadge from "../ui/PriorityBadge";
 import StatChip from "../ui/StatChip";
 import StatusBadge from "../ui/StatusBadge";
@@ -80,6 +81,19 @@ function getProfileName(profiles, profileId) {
   return profile.full_name || profile.email || null;
 }
 
+function formatLaborHours(laborLogs) {
+  const totalHours = laborLogs.reduce(
+    (sum, laborLog) => sum + Number(laborLog.hours || 0),
+    0
+  );
+
+  if (totalHours === 0) {
+    return "0h";
+  }
+
+  return `${Number(totalHours.toFixed(2))}h`;
+}
+
 function Badge({ children, className }) {
   return (
     <span
@@ -99,6 +113,7 @@ function WorkOrderCard({
   canUploadDocuments,
   currentProfile,
   documents,
+  index,
   isOpen,
   laborLogs,
   onActivityLogged,
@@ -127,51 +142,79 @@ function WorkOrderCard({
   const [isPhotoFormOpen, setIsPhotoFormOpen] = useState(false);
   const [isThirdPartyFormOpen, setIsThirdPartyFormOpen] = useState(false);
   const creatorName = getProfileName(profiles, workOrder.created_by);
+  const laborValue = formatLaborHours(laborLogs);
 
   return (
-    <article className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div className="min-w-0">
-          <h4 className="text-base font-bold text-zinc-950">
-            {displayValue(workOrder.title)}
-          </h4>
-          {creatorName && (
-            <p className="mt-1 text-sm text-zinc-500">
-              Created by {creatorName}
-            </p>
-          )}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <StatChip icon="camera" label="Photos" value={photos.length} />
-            <StatChip icon="clock" label="Labor" value={laborLogs.length} />
-            <StatChip icon="box" label="Parts" value={parts.length} />
-            <StatChip
-              icon="users"
-              label="3rd-Party"
-              value={thirdPartyRepairs.length}
-            />
+    <article
+      className={`rounded-3xl border bg-white p-4 shadow-sm transition ${
+        isOpen
+          ? "border-blue-500 shadow-[0_12px_30px_rgba(37,99,235,0.14)]"
+          : "border-slate-200"
+      }`}
+    >
+      <button
+        className="flex w-full flex-col gap-4 text-left xl:flex-row xl:items-start xl:justify-between"
+        onClick={onToggle}
+        type="button"
+      >
+        <div className="flex min-w-0 gap-3">
+          <span
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg font-black ${
+              isOpen
+                ? "bg-blue-50 text-blue-700"
+                : "bg-slate-100 text-slate-600"
+            }`}
+          >
+            {index + 1}
+          </span>
+          <div className="min-w-0">
+            <h4 className="text-base font-black text-slate-950">
+              {displayValue(workOrder.title)}
+            </h4>
+            {creatorName && (
+              <p className="mt-1 text-sm text-slate-500">
+                Created by {creatorName}
+              </p>
+            )}
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+              <StatChip icon="camera" label="Photos" value={photos.length} />
+              <StatChip icon="clock" label="Labor" value={laborValue} />
+              <StatChip icon="box" label="Parts" value={parts.length} />
+              <StatChip
+                icon="users"
+                label="3rd-Party"
+                value={thirdPartyRepairs.length}
+              />
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 xl:items-end">
+        <div className="flex items-center justify-between gap-3 xl:flex-col xl:items-end">
           <div className="flex flex-wrap gap-2 xl:justify-end">
             <PriorityBadge priority={workOrder.priority} />
             <StatusBadge status={workOrder.status} />
           </div>
 
-          <button
-            className="min-h-10 w-fit rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800"
-            onClick={onToggle}
-            type="button"
+          <span
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+              isOpen
+                ? "bg-blue-50 text-blue-700"
+                : "bg-slate-50 text-slate-500"
+            }`}
           >
-            {isOpen ? "Close" : "Open"}
-          </button>
+            <AppIcon
+              className={`transition ${isOpen ? "-rotate-90" : "rotate-90"}`}
+              name="chevron-right"
+              size={18}
+            />
+          </span>
         </div>
-      </div>
+      </button>
 
       {isOpen && (
-        <div className="mt-4 border-t border-zinc-100 pt-4">
+        <div className="mt-4 border-t border-slate-100 pt-4">
           {workOrder.notes && (
-            <p className="mb-4 whitespace-pre-wrap rounded-md bg-zinc-50 p-3 text-sm leading-6 text-zinc-600">
+            <p className="mb-4 whitespace-pre-wrap rounded-2xl bg-slate-50 p-3 text-sm leading-6 text-slate-600">
               {workOrder.notes}
             </p>
           )}
@@ -180,7 +223,16 @@ function WorkOrderCard({
             canManageParts ||
             canManagePhotos ||
             canManageThirdPartyRepairs) && (
-            <div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mb-4 grid grid-cols-2 gap-2 xl:grid-cols-4">
+              {canManagePhotos && (
+                <ActionTile
+                  icon="camera"
+                  label="Add Photo"
+                  onClick={() => setIsPhotoFormOpen(true)}
+                  variant="primary"
+                />
+              )}
+
               {canManageLabor && (
                 <ActionTile
                   icon="clock"
@@ -194,15 +246,6 @@ function WorkOrderCard({
                   icon="box"
                   label="Add Part"
                   onClick={() => setIsPartFormOpen(true)}
-                />
-              )}
-
-              {canManagePhotos && (
-                <ActionTile
-                  icon="camera"
-                  label="Add Photo"
-                  onClick={() => setIsPhotoFormOpen(true)}
-                  variant="primary"
                 />
               )}
 
@@ -363,21 +406,21 @@ function ServiceCategoryCard({
   const statusSummary = getStatusSummary(workOrders);
 
   return (
-    <article className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+    <article className="rounded-3xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h3 className="text-lg font-bold text-zinc-950">
+            <h3 className="text-lg font-black text-slate-950">
               {displayValue(category.name)}
             </h3>
-            <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-semibold text-zinc-700">
+            <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200">
               {workOrders.length}{" "}
               {workOrders.length === 1 ? "work order" : "work orders"}
             </span>
           </div>
 
           {category.description && (
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
               {category.description}
             </p>
           )}
@@ -394,7 +437,7 @@ function ServiceCategoryCard({
                 </Badge>
               ))
             ) : (
-              <span className="text-sm text-zinc-500">
+              <span className="text-sm text-slate-500">
                 No work orders in this category yet.
               </span>
             )}
@@ -403,7 +446,7 @@ function ServiceCategoryCard({
 
         {canManage && (
           <button
-            className="min-h-11 w-full rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 sm:w-fit"
+            className="min-h-12 w-full rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 sm:w-fit"
             onClick={() => onAddWorkOrder(category)}
             type="button"
           >
@@ -439,6 +482,7 @@ function ServiceCategoryCard({
                 canUploadDocuments={canUploadDocuments}
                 currentProfile={currentProfile}
                 documents={documents}
+                index={index}
                 isOpen={openWorkOrderId === workOrder.id}
                 key={workOrder.id ?? index}
                 laborLogs={workOrderLaborLogs}

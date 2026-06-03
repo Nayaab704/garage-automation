@@ -1,4 +1,5 @@
 import { useState } from "react";
+import AppIcon from "../ui/AppIcon";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -23,16 +24,37 @@ function formatCurrency(value) {
 
 function InvestmentCard({ label, tone = "default", value }) {
   const valueClassName = {
-    default: "text-zinc-950",
+    default: "text-slate-950",
     negative: "text-red-700",
     positive: "text-emerald-700",
   }[tone];
 
   return (
-    <div className="rounded-md border border-zinc-200 bg-white p-4">
-      <p className="text-sm font-medium text-zinc-500">{label}</p>
-      <p className={`mt-2 text-2xl font-bold ${valueClassName}`}>{value}</p>
+    <div className="rounded-2xl bg-slate-50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <p className={`mt-2 text-xl font-black ${valueClassName}`}>{value}</p>
     </div>
+  );
+}
+
+function CompactMoneyValue({ label, tone = "default", value }) {
+  const valueClassName = {
+    default: "text-slate-950",
+    negative: "text-red-700",
+    positive: "text-emerald-700",
+  }[tone];
+
+  return (
+    <span className="min-w-0">
+      <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </span>
+      <span className={`block truncate text-sm font-black ${valueClassName}`}>
+        {value}
+      </span>
+    </span>
   );
 }
 
@@ -41,43 +63,71 @@ function InvestmentSummary({ currentProfile, investmentSummary, vehicle }) {
   const estimatedProfit = investmentSummary?.estimated_profit;
   const estimatedProfitNumber = Number(estimatedProfit ?? 0);
   const isTechnician = currentProfile?.role === "technician";
+  const profitTone = estimatedProfitNumber < 0 ? "negative" : "positive";
+  const canExpandFinancialDetails = !isTechnician;
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-zinc-950">
-            Investment Summary
-          </h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            Compact financial snapshot.
-          </p>
-        </div>
-        {!isTechnician && (
-          <button
-            className="min-h-10 w-fit rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
-            onClick={() => setIsExpanded((isOpen) => !isOpen)}
-            type="button"
-          >
-            {isExpanded ? "Hide Financial Details" : "View Financial Details"}
-          </button>
-        )}
-      </div>
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <button
+        className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50 disabled:cursor-default disabled:hover:bg-white"
+        disabled={!canExpandFinancialDetails}
+        onClick={() => setIsExpanded((isOpen) => !isOpen)}
+        type="button"
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-slate-500">
+            <AppIcon name="dollar" size={22} />
+          </span>
+          <span className="min-w-0">
+            <span className="block font-bold text-slate-950">
+              Financial Details
+            </span>
+            {isTechnician && (
+              <span className="block text-xs font-medium text-slate-500">
+                Minimized for technician view
+              </span>
+            )}
+          </span>
+        </span>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <InvestmentCard
+        <span className="flex min-w-0 items-center gap-4">
+          <span className="hidden min-w-0 grid-cols-2 gap-4 sm:grid">
+            <CompactMoneyValue
+              label="Invested"
+              value={formatCurrency(investmentSummary?.total_invested)}
+            />
+            <CompactMoneyValue
+              label="Profit"
+              tone={profitTone}
+              value={formatCurrency(investmentSummary?.estimated_profit)}
+            />
+          </span>
+          {canExpandFinancialDetails && (
+            <AppIcon
+              className={`shrink-0 text-slate-500 transition ${
+                isExpanded ? "rotate-90" : ""
+              }`}
+              name="chevron-right"
+              size={20}
+            />
+          )}
+        </span>
+      </button>
+
+      <div className="grid grid-cols-2 gap-2 border-t border-slate-100 px-4 py-3 sm:hidden">
+        <CompactMoneyValue
           label="Total Invested"
           value={formatCurrency(investmentSummary?.total_invested)}
         />
-        <InvestmentCard
+        <CompactMoneyValue
           label="Estimated Profit"
-          tone={estimatedProfitNumber < 0 ? "negative" : "positive"}
+          tone={profitTone}
           value={formatCurrency(investmentSummary?.estimated_profit)}
         />
       </div>
 
-      {!isTechnician && isExpanded && (
-        <div className="mt-3 grid gap-3 md:grid-cols-3">
+      {canExpandFinancialDetails && isExpanded && (
+        <div className="grid gap-3 border-t border-slate-100 p-4 md:grid-cols-3">
           <InvestmentCard
             label="Purchase Price"
             value={formatCurrency(
@@ -90,7 +140,7 @@ function InvestmentSummary({ currentProfile, investmentSummary, vehicle }) {
           />
           <InvestmentCard
             label="Estimated Profit"
-            tone={estimatedProfitNumber < 0 ? "negative" : "positive"}
+            tone={profitTone}
             value={formatCurrency(investmentSummary?.estimated_profit)}
           />
         </div>

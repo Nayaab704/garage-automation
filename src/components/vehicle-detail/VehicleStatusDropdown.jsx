@@ -23,7 +23,7 @@ function VehicleStatusDropdown({ currentStatus, isUpdating, onChange }) {
       <button
         aria-expanded={isOpen}
         aria-haspopup="menu"
-        className={`inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 ${getVehicleStatusClassName(
+        className={`inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 ${getVehicleStatusClassName(
           currentStatus
         )}`}
         disabled={isUpdating}

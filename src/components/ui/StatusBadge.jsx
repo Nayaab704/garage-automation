@@ -51,6 +51,7 @@ const redStatuses = new Set([
 
 const blueStatuses = new Set([
   "in_progress",
+  "inspection",
   "ordered",
   "quality_check",
   "repairing",

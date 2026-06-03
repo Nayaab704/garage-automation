@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import EditVehicleForm from "../components/EditVehicleForm";
+import AppIcon from "../components/ui/AppIcon";
+import AddVehiclePhotoForm from "../components/vehicle-detail/AddVehiclePhotoForm";
 import ActivityTimelineSection from "../components/vehicle-detail/ActivityTimelineSection";
 import ExtraCostsSection from "../components/vehicle-detail/ExtraCostsSection";
 import FinalCheckSection from "../components/vehicle-detail/FinalCheckSection";
@@ -285,8 +287,11 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   const [isVehicleStatusUpdating, setIsVehicleStatusUpdating] = useState(false);
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
   const [isSellFormOpen, setIsSellFormOpen] = useState(false);
+  const [isVehiclePhotoFormOpen, setIsVehiclePhotoFormOpen] = useState(false);
   const [activityRefreshCount, setActivityRefreshCount] = useState(0);
   const [refreshCount, setRefreshCount] = useState(0);
+  const serviceWorkRef = useRef(null);
+  const vehiclePhotosRef = useRef(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -370,6 +375,22 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
 
   function refreshActivityTimeline() {
     setActivityRefreshCount((currentCount) => currentCount + 1);
+  }
+
+  function scrollToSection(sectionRef) {
+    sectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  function handleHeroPhotoClick() {
+    if (canManagePhotos) {
+      setIsVehiclePhotoFormOpen(true);
+      return;
+    }
+
+    scrollToSection(vehiclePhotosRef);
   }
 
   async function refreshInvestmentSummary() {
@@ -620,26 +641,52 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
     (canManagePhotos || canManageRepairJobs);
   const canManageDocuments = canManagePhotos;
   const canSellVehicle = hasPermission(role, "sale:manage");
+  const primaryVehiclePhoto =
+    vehiclePhotos.find((photo) => !photo.repair_job_id) ?? vehiclePhotos[0];
+  const pendingPartReviewCount = partRequests.filter(
+    (partRequest) =>
+      partRequest.part_source === "needs_to_buy" &&
+      partRequest.approval_status === "pending"
+  ).length;
+  const partIssueCount = partRequests.filter(
+    (partRequest) => partRequest.approval_status === "rejected"
+  ).length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <button
-          className="w-fit rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50"
-          onClick={onBack}
-          type="button"
-        >
-          Back to Vehicles
-        </button>
+    <div className="space-y-4 text-slate-950">
+      <div className="sticky top-0 z-10 -mx-4 bg-slate-50/95 px-4 py-2 backdrop-blur sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:py-0">
+        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
+          <button
+            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 sm:w-auto sm:px-4"
+            onClick={onBack}
+            type="button"
+          >
+            <AppIcon
+              className="rotate-180 sm:mr-2"
+              name="chevron-right"
+              size={20}
+            />
+            <span className="hidden text-sm font-bold sm:inline">
+              Back to Vehicles
+            </span>
+          </button>
 
-        <button
-          className="w-fit rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
-          disabled={isLoading}
-          onClick={refreshVehicleDetails}
-          type="button"
-        >
-          Refresh
-        </button>
+          <div className="text-center">
+            <h1 className="text-base font-black text-slate-950 sm:text-xl">
+              Vehicle Details
+            </h1>
+          </div>
+
+          <button
+            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:px-4"
+            disabled={isLoading}
+            onClick={refreshVehicleDetails}
+            type="button"
+          >
+            <AppIcon className="sm:mr-2" name="refresh" size={18} />
+            <span className="hidden text-sm font-bold sm:inline">Refresh</span>
+          </button>
+        </div>
       </div>
 
       {isLoading && (
@@ -661,13 +708,22 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
         <>
           <VehicleHeader
             canChangeStatus={canChangeVehicleStatus}
+            canAddWorkOrder={canManageRepairJobs}
             canEdit={canEditVehicle}
+            canManagePhotos={canManagePhotos}
+            canMarkReady={canChangeVehicleStatus}
             canSell={canSellVehicle}
             isSold={isVehicleSold}
             isStatusUpdating={isVehicleStatusUpdating}
             onEdit={() => setIsEditFormOpen(true)}
+            onMarkReady={() => handleVehicleStatusChange("ready_for_sale")}
+            onQuickAddWorkOrder={() => scrollToSection(serviceWorkRef)}
+            onQuickPhotos={handleHeroPhotoClick}
             onSell={() => setIsSellFormOpen(true)}
             onStatusChange={handleVehicleStatusChange}
+            partIssueCount={partIssueCount}
+            pendingPartReviewCount={pendingPartReviewCount}
+            primaryPhoto={primaryVehiclePhoto}
             vehicle={vehicle}
           />
 
@@ -683,47 +739,51 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             vehicle={vehicle}
           />
 
-          <ServiceWorkSection
-            canManage={canManageRepairJobs}
-            canManageLabor={canManageLabor}
-            canManageParts={canManageWorkOrderParts}
-            canManagePhotos={canManagePhotos}
-            canManageDocuments={canManageDocuments}
-            canManageThirdPartyRepairs={canManageRepairJobs}
-            canUploadDocuments={canUploadDocuments}
-            currentProfile={currentProfile}
-            documents={vehicleDocuments}
-            laborLogs={laborLogs}
-            onActivityLogged={refreshActivityTimeline}
-            onDocumentAdded={handleDocumentAdded}
-            onDocumentDeleted={handleDocumentDeleted}
-            onLaborAdded={handleWorkOrderLaborAdded}
-            onLaborDeleted={handleWorkOrderLaborDeleted}
-            onPartAdded={handleWorkOrderPartAdded}
-            onPartApprovalUpdated={handleWorkOrderPartApprovalUpdated}
-            onPartPurchaseOrderCreated={handleWorkOrderPartPurchaseOrderCreated}
-            onPhotoAdded={handleWorkOrderPhotoAdded}
-            onPhotoDeleted={handleWorkOrderPhotoDeleted}
-            onThirdPartyRepairAdded={handleThirdPartyRepairAdded}
-            onThirdPartyRepairDeleted={handleThirdPartyRepairDeleted}
-            onWorkOrderAdded={refreshVehicleDetails}
-            partRequests={partRequests}
-            profiles={profiles}
-            repairJobs={repairJobs}
-            serviceCategories={serviceCategories}
-            thirdPartyRepairs={thirdPartyRepairs}
-            vehicleId={vehicleId}
-            vehiclePhotos={vehiclePhotos}
-            vendors={vendors}
-          />
+          <div ref={serviceWorkRef} className="scroll-mt-20 sm:scroll-mt-6">
+            <ServiceWorkSection
+              canManage={canManageRepairJobs}
+              canManageLabor={canManageLabor}
+              canManageParts={canManageWorkOrderParts}
+              canManagePhotos={canManagePhotos}
+              canManageDocuments={canManageDocuments}
+              canManageThirdPartyRepairs={canManageRepairJobs}
+              canUploadDocuments={canUploadDocuments}
+              currentProfile={currentProfile}
+              documents={vehicleDocuments}
+              laborLogs={laborLogs}
+              onActivityLogged={refreshActivityTimeline}
+              onDocumentAdded={handleDocumentAdded}
+              onDocumentDeleted={handleDocumentDeleted}
+              onLaborAdded={handleWorkOrderLaborAdded}
+              onLaborDeleted={handleWorkOrderLaborDeleted}
+              onPartAdded={handleWorkOrderPartAdded}
+              onPartApprovalUpdated={handleWorkOrderPartApprovalUpdated}
+              onPartPurchaseOrderCreated={handleWorkOrderPartPurchaseOrderCreated}
+              onPhotoAdded={handleWorkOrderPhotoAdded}
+              onPhotoDeleted={handleWorkOrderPhotoDeleted}
+              onThirdPartyRepairAdded={handleThirdPartyRepairAdded}
+              onThirdPartyRepairDeleted={handleThirdPartyRepairDeleted}
+              onWorkOrderAdded={refreshVehicleDetails}
+              partRequests={partRequests}
+              profiles={profiles}
+              repairJobs={repairJobs}
+              serviceCategories={serviceCategories}
+              thirdPartyRepairs={thirdPartyRepairs}
+              vehicleId={vehicleId}
+              vehiclePhotos={vehiclePhotos}
+              vendors={vendors}
+            />
+          </div>
 
-          <VehiclePhotosSection
-            canManage={canManagePhotos}
-            onActivityLogged={refreshActivityTimeline}
-            onVehiclePhotoChanged={refreshVehicleDetails}
-            vehicleId={vehicleId}
-            vehiclePhotos={vehiclePhotos.filter((photo) => !photo.repair_job_id)}
-          />
+          <div ref={vehiclePhotosRef} className="scroll-mt-20 sm:scroll-mt-6">
+            <VehiclePhotosSection
+              canManage={canManagePhotos}
+              onActivityLogged={refreshActivityTimeline}
+              onVehiclePhotoChanged={refreshVehicleDetails}
+              vehicleId={vehicleId}
+              vehiclePhotos={vehiclePhotos.filter((photo) => !photo.repair_job_id)}
+            />
+          </div>
 
           <FinalCheckSection
             currentProfile={currentProfile}
@@ -781,6 +841,18 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
               onActivityLogged={refreshActivityTimeline}
               onVehicleSold={refreshVehicleDetails}
               vehicle={vehicle}
+            />
+          )}
+
+          {isVehiclePhotoFormOpen && canManagePhotos && (
+            <AddVehiclePhotoForm
+              onActivityLogged={refreshActivityTimeline}
+              onClose={() => setIsVehiclePhotoFormOpen(false)}
+              onPhotoAdded={async () => {
+                refreshVehicleDetails();
+                setIsVehiclePhotoFormOpen(false);
+              }}
+              vehicleId={vehicleId}
             />
           )}
         </>

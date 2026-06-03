@@ -26,20 +26,24 @@ export function formatVehicleStatus(status) {
 
 export function getVehicleStatusClassName(status) {
   if (status === "parts_needed" || status === "waiting_for_parts") {
-    return "bg-yellow-50 text-yellow-800 ring-yellow-200";
+    return "bg-amber-50 text-amber-800 ring-amber-200";
   }
 
-  if (status === "repairing" || status === "quality_check") {
+  if (
+    status === "inspection" ||
+    status === "repairing" ||
+    status === "quality_check"
+  ) {
     return "bg-blue-50 text-blue-700 ring-blue-200";
   }
 
   if (status === "ready_for_sale" || status === "sold") {
-    return "bg-green-50 text-green-700 ring-green-200";
+    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
   }
 
   if (status === "archived") {
-    return "bg-red-50 text-red-700 ring-red-200";
+    return "bg-slate-100 text-slate-700 ring-slate-200";
   }
 
-  return "bg-zinc-100 text-zinc-700 ring-zinc-200";
+  return "bg-slate-100 text-slate-700 ring-slate-200";
 }
