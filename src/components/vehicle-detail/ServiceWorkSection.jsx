@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import AppIcon from "../ui/AppIcon";
-import { getServiceCategoryVisual } from "../../lib/serviceCategoryVisuals";
+import {
+  getPhaseOneServiceCategories,
+  getServiceCategoryVisual,
+} from "../../lib/serviceCategoryVisuals";
 import AddWorkOrderForm from "./AddWorkOrderForm";
 import ServiceCategoryCard from "./ServiceCategoryCard";
 
@@ -131,9 +134,13 @@ function ServiceWorkSection({
 }) {
   const [categoryForForm, setCategoryForForm] = useState(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+  const activeServiceCategories = useMemo(
+    () => getPhaseOneServiceCategories(serviceCategories),
+    [serviceCategories]
+  );
 
   const workOrdersByCategoryId = useMemo(() => {
-    return serviceCategories.reduce((groupedWorkOrders, category) => {
+    return activeServiceCategories.reduce((groupedWorkOrders, category) => {
       const categoryWorkOrders = repairJobs.filter(
         (repairJob) => repairJob.service_category_id === category.id
       );
@@ -141,14 +148,14 @@ function ServiceWorkSection({
       groupedWorkOrders[category.id] = sortWorkOrders(categoryWorkOrders);
       return groupedWorkOrders;
     }, {});
-  }, [repairJobs, serviceCategories]);
+  }, [activeServiceCategories, repairJobs]);
 
-  const totalWorkOrders = serviceCategories.reduce(
+  const totalWorkOrders = activeServiceCategories.reduce(
     (total, category) =>
       total + (workOrdersByCategoryId[category.id]?.length ?? 0),
     0
   );
-  const selectedCategory = serviceCategories.find(
+  const selectedCategory = activeServiceCategories.find(
     (category) => category.id === selectedCategoryId
   );
   const selectedWorkOrders = selectedCategory
@@ -177,8 +184,8 @@ function ServiceWorkSection({
 
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-fit rounded-full bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200">
-            {serviceCategories.length}{" "}
-            {serviceCategories.length === 1 ? "category" : "categories"}
+            {activeServiceCategories.length}{" "}
+            {activeServiceCategories.length === 1 ? "category" : "categories"}
           </span>
           <span className="w-fit rounded-full bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200">
             {totalWorkOrders}{" "}
@@ -192,14 +199,14 @@ function ServiceWorkSection({
         </div>
       </div>
 
-      {serviceCategories.length === 0 ? (
+      {activeServiceCategories.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
           No active service categories found.
         </div>
       ) : (
         <div className="space-y-4">
           <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2 sm:flex-wrap">
-            {serviceCategories.map((category) => (
+            {activeServiceCategories.map((category) => (
               <CategoryChip
                 category={category}
                 isSelected={selectedCategory?.id === category.id}

@@ -4,6 +4,37 @@ const defaultVisual = {
   shortLabel: "Other",
 };
 
+const phaseOneServiceCategorySlugs = new Set([
+  "body",
+  "body_shop",
+  "electrical",
+  "glass",
+  "interior",
+  "interior_detailing",
+  "mechanical",
+  "paint",
+  "paint_cosmetic",
+  "tires",
+  "tires_wheels",
+]);
+
+const phaseOneServiceCategoryNames = new Set([
+  "body",
+  "body shop",
+  "electrical",
+  "glass",
+  "interior",
+  "interior detailing",
+  "interior / detailing",
+  "mechanical",
+  "paint",
+  "paint cosmetic",
+  "paint / cosmetic",
+  "tires",
+  "tires wheels",
+  "tires / wheels",
+]);
+
 export const serviceCategoryVisuals = {
   body: {
     accentClassName: "border-slate-200 bg-white text-slate-600",
@@ -80,4 +111,28 @@ export function getServiceCategoryVisual(categoryOrSlug) {
       : categoryOrSlug?.slug;
 
   return serviceCategoryVisuals[slug] ?? defaultVisual;
+}
+
+export function isPhaseOneServiceCategory(categoryOrSlug) {
+  const slug =
+    typeof categoryOrSlug === "string"
+      ? categoryOrSlug
+      : categoryOrSlug?.slug;
+  const normalizedSlug = String(slug ?? "").trim().toLowerCase();
+
+  if (phaseOneServiceCategorySlugs.has(normalizedSlug)) {
+    return true;
+  }
+
+  const normalizedName = String(categoryOrSlug?.name ?? "")
+    .trim()
+    .toLowerCase();
+
+  return phaseOneServiceCategoryNames.has(normalizedName);
+}
+
+export function getPhaseOneServiceCategories(serviceCategories = []) {
+  return serviceCategories.filter((serviceCategory) =>
+    isPhaseOneServiceCategory(serviceCategory)
+  );
 }

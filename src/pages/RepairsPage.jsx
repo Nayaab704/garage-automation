@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import StatusDropdown from "../components/vehicle-detail/StatusDropdown";
 import { logVehicleActivity } from "../lib/activityLogger";
 import { hasPermission } from "../lib/permissions";
+import { getPhaseOneServiceCategories } from "../lib/serviceCategoryVisuals";
 import { supabase } from "../lib/supabaseClient";
 
 const repairJobColumns =
@@ -324,7 +325,10 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
     [profiles]
   );
   const activeServiceCategories = useMemo(
-    () => serviceCategories.filter((serviceCategory) => serviceCategory.is_active),
+    () =>
+      getPhaseOneServiceCategories(
+        serviceCategories.filter((serviceCategory) => serviceCategory.is_active)
+      ),
     [serviceCategories]
   );
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { logVehicleActivity } from "../../lib/activityLogger";
+import { isPhaseOneServiceCategory } from "../../lib/serviceCategoryVisuals";
 import { supabase } from "../../lib/supabaseClient";
 
 const emptyForm = {
@@ -91,6 +92,11 @@ function AddWorkOrderForm({
 
     if (!vehicleId || !category?.id) {
       setErrorMessage("Unable to create a work order for this category.");
+      return;
+    }
+
+    if (!isPhaseOneServiceCategory(category)) {
+      setErrorMessage("This service category is not active for Phase 1.");
       return;
     }
 
