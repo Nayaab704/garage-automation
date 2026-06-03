@@ -14,9 +14,17 @@ const mobileItems = [
 ];
 
 function getVisibleMobileItems(role) {
-  return mobileItems.filter(
-    (item) => item !== "Dashboard" || hasPermission(role, "dashboard:view")
-  );
+  return mobileItems.filter((item) => {
+    if (item === "Dashboard") {
+      return hasPermission(role, "dashboard:view");
+    }
+
+    if (item === "Purchase Orders") {
+      return hasPermission(role, "purchase_order:manage");
+    }
+
+    return true;
+  });
 }
 
 function Topbar({

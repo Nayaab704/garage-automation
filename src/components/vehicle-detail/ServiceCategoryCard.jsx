@@ -118,6 +118,7 @@ function WorkOrderCard({
   onLaborDeleted,
   onPartAdded,
   onPartApprovalUpdated,
+  onPartPurchaseOrderCreated,
   onThirdPartyRepairAdded,
   onThirdPartyRepairDeleted,
   parts,
@@ -208,8 +209,10 @@ function WorkOrderCard({
         currentProfile={currentProfile}
         onActivityLogged={onActivityLogged}
         onPartApprovalUpdated={onPartApprovalUpdated}
+        onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
         parts={parts}
         vehicleId={vehicleId}
+        vendors={vendors}
       />
 
       <ThirdPartyRepairsList
@@ -282,6 +285,7 @@ function ServiceCategoryCard({
   onLaborDeleted,
   onPartAdded,
   onPartApprovalUpdated,
+  onPartPurchaseOrderCreated,
   onThirdPartyRepairAdded,
   onThirdPartyRepairDeleted,
   partRequests = [],
@@ -360,6 +364,7 @@ function ServiceCategoryCard({
               onLaborDeleted={onLaborDeleted}
               onPartAdded={onPartAdded}
               onPartApprovalUpdated={onPartApprovalUpdated}
+              onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
               onThirdPartyRepairAdded={onThirdPartyRepairAdded}
               onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
               parts={partRequests.filter(

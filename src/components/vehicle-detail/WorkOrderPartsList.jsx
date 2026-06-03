@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { hasPermission } from "../../lib/permissions";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
+import CreatePurchaseOrderForm from "./CreatePurchaseOrderForm";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -30,6 +32,13 @@ const statusLabels = {
   received: "Received",
   installed: "Installed",
 };
+
+const purchaseOrderBlockedStatuses = [
+  "ordered",
+  "received",
+  "installed",
+  "cancelled",
+];
 
 function displayValue(value) {
   return value === null || value === undefined || value === ""
@@ -131,13 +140,26 @@ function canApprovePart(currentProfile, part) {
   );
 }
 
+function canCreatePurchaseOrder(currentProfile, part) {
+  return (
+    hasPermission(currentProfile?.role, "purchase_order:manage") &&
+    part.part_source === "needs_to_buy" &&
+    !purchaseOrderBlockedStatuses.includes(part.status)
+  );
+}
+
 function WorkOrderPartsList({
   currentProfile,
   onActivityLogged,
   onPartApprovalUpdated,
+  onPartPurchaseOrderCreated,
   parts = [],
   vehicleId,
+  vendors = [],
 }) {
+  const [selectedPartForPurchaseOrder, setSelectedPartForPurchaseOrder] =
+    useState(null);
+  const [successMessage, setSuccessMessage] = useState("");
   const [updatingPartId, setUpdatingPartId] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -149,6 +171,7 @@ function WorkOrderPartsList({
 
     setUpdatingPartId(part.id);
     setErrorMessage("");
+    setSuccessMessage("");
 
     try {
       const { data, error } = await supabase
@@ -181,6 +204,31 @@ function WorkOrderPartsList({
     } finally {
       setUpdatingPartId(null);
     }
+  }
+
+  function handlePurchaseOrderCreated(result) {
+    const partRequestId =
+      result?.partRequestId ?? selectedPartForPurchaseOrder?.id;
+
+    if (result?.partRequestStatusUpdated === false) {
+      setSelectedPartForPurchaseOrder(null);
+      setErrorMessage(
+        result.warningMessage ??
+          "Purchase order created, but the part status could not be updated."
+      );
+      return;
+    }
+
+    if (partRequestId && selectedPartForPurchaseOrder) {
+      onPartPurchaseOrderCreated?.({
+        ...selectedPartForPurchaseOrder,
+        status: "ordered",
+      });
+    }
+
+    setErrorMessage("");
+    setSelectedPartForPurchaseOrder(null);
+    setSuccessMessage("Purchase order created. Part status is now Ordered.");
   }
 
   return (
@@ -236,24 +284,50 @@ function WorkOrderPartsList({
                 </p>
               )}
 
-              {canApprovePart(currentProfile, part) && (
+              {canCreatePurchaseOrder(currentProfile, part) &&
+                part.approval_status === "pending" && (
+                  <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    Pending admin review, but PO can still be created.
+                  </p>
+                )}
+
+              {(canApprovePart(currentProfile, part) ||
+                canCreatePurchaseOrder(currentProfile, part)) && (
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-300"
-                    disabled={updatingPartId === part.id}
-                    onClick={() => handleApprovalChange(part, "approved")}
-                    type="button"
-                  >
-                    {updatingPartId === part.id ? "Saving..." : "Approve"}
-                  </button>
-                  <button
-                    className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={updatingPartId === part.id}
-                    onClick={() => handleApprovalChange(part, "rejected")}
-                    type="button"
-                  >
-                    Reject
-                  </button>
+                  {canApprovePart(currentProfile, part) && (
+                    <>
+                      <button
+                        className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-300"
+                        disabled={updatingPartId === part.id}
+                        onClick={() => handleApprovalChange(part, "approved")}
+                        type="button"
+                      >
+                        {updatingPartId === part.id ? "Saving..." : "Approve"}
+                      </button>
+                      <button
+                        className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={updatingPartId === part.id}
+                        onClick={() => handleApprovalChange(part, "rejected")}
+                        type="button"
+                      >
+                        Reject
+                      </button>
+                    </>
+                  )}
+
+                  {canCreatePurchaseOrder(currentProfile, part) && (
+                    <button
+                      className="rounded-md bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-zinc-800"
+                      onClick={() => {
+                        setErrorMessage("");
+                        setSuccessMessage("");
+                        setSelectedPartForPurchaseOrder(part);
+                      }}
+                      type="button"
+                    >
+                      Create PO
+                    </button>
+                  )}
                 </div>
               )}
             </article>
@@ -265,6 +339,26 @@ function WorkOrderPartsList({
         <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
           {errorMessage}
         </div>
+      )}
+
+      {successMessage && (
+        <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          {successMessage}
+        </div>
+      )}
+
+      {selectedPartForPurchaseOrder && (
+        <CreatePurchaseOrderForm
+          currentProfile={currentProfile}
+          initialPartRequest={selectedPartForPurchaseOrder}
+          lockPartRequest
+          onActivityLogged={onActivityLogged}
+          onClose={() => setSelectedPartForPurchaseOrder(null)}
+          onPurchaseOrderCreated={handlePurchaseOrderCreated}
+          partRequests={[selectedPartForPurchaseOrder]}
+          vehicleId={vehicleId}
+          vendors={vendors}
+        />
       )}
     </div>
   );

@@ -440,6 +440,20 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
     );
   }
 
+  async function handleWorkOrderPartPurchaseOrderCreated(updatedPartRequest) {
+    if (updatedPartRequest?.id) {
+      setPartRequests((currentPartRequests) =>
+        currentPartRequests.map((partRequest) =>
+          partRequest.id === updatedPartRequest.id
+            ? updatedPartRequest
+            : partRequest
+        )
+      );
+    }
+
+    await refreshInvestmentSummary();
+  }
+
   async function handleThirdPartyRepairAdded(thirdPartyRepair) {
     if (thirdPartyRepair?.id) {
       setThirdPartyRepairs((currentRepairs) => [
@@ -638,6 +652,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             onLaborDeleted={handleWorkOrderLaborDeleted}
             onPartAdded={handleWorkOrderPartAdded}
             onPartApprovalUpdated={handleWorkOrderPartApprovalUpdated}
+            onPartPurchaseOrderCreated={handleWorkOrderPartPurchaseOrderCreated}
             onThirdPartyRepairAdded={handleThirdPartyRepairAdded}
             onThirdPartyRepairDeleted={handleThirdPartyRepairDeleted}
             onWorkOrderAdded={refreshVehicleDetails}

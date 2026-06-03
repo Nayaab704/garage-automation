@@ -13,9 +13,17 @@ const sidebarItems = [
 ];
 
 function getVisibleSidebarItems(role) {
-  return sidebarItems.filter(
-    (item) => item !== "Dashboard" || hasPermission(role, "dashboard:view")
-  );
+  return sidebarItems.filter((item) => {
+    if (item === "Dashboard") {
+      return hasPermission(role, "dashboard:view");
+    }
+
+    if (item === "Purchase Orders") {
+      return hasPermission(role, "purchase_order:manage");
+    }
+
+    return true;
+  });
 }
 
 function Sidebar({ activePage = "Vehicles", currentProfile, onPageChange }) {

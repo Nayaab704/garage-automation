@@ -245,6 +245,7 @@ function CreatePurchaseOrderForm({
         quantity: validation.values.quantity,
         unit_cost: validation.values.unitCost,
         shipping_cost: validation.values.shippingCost,
+        status: "ordered",
         tax: validation.values.tax,
         notes: emptyToNull(formData.notes),
       };

@@ -412,6 +412,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     }
 
     const previousStatus = purchaseOrder.status;
+    const shouldCancelItems = newStatus === "cancelled";
     const shouldMarkReceived = newStatus === "received";
     const receivedAt =
       shouldMarkReceived && !purchaseOrder.received_at
@@ -446,33 +447,38 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
 
       const linkedItems = itemsByPurchaseOrderId[purchaseOrder.id] ?? [];
 
-      if (shouldMarkReceived && linkedItems.length > 0) {
+      if ((shouldMarkReceived || shouldCancelItems) && linkedItems.length > 0) {
         const itemIds = linkedItems.map((item) => item.id).filter(Boolean);
         const partRequestIds = uniqueValues(
           linkedItems.map((item) => item.part_request_id)
         );
+        const nextItemStatus = shouldMarkReceived ? "received" : "cancelled";
 
         if (itemIds.length > 0) {
           const itemResponse = await supabase
             .from("purchase_order_items")
-            .update({ status: "received" })
+            .update({ status: nextItemStatus })
             .in("id", itemIds);
 
           if (itemResponse.error) {
             setStatusErrorMessage(
-              `Purchase order marked received, but item statuses could not be updated: ${itemResponse.error.message}`
+              `Purchase order marked ${formatLabel(
+                newStatus
+              ).toLowerCase()}, but item statuses could not be updated: ${itemResponse.error.message}`
             );
             return;
           }
 
           setPurchaseOrderItems((currentItems) =>
             currentItems.map((item) =>
-              itemIds.includes(item.id) ? { ...item, status: "received" } : item
+              itemIds.includes(item.id)
+                ? { ...item, status: nextItemStatus }
+                : item
             )
           );
         }
 
-        if (partRequestIds.length > 0) {
+        if (shouldMarkReceived && partRequestIds.length > 0) {
           const partRequestResponse = await supabase
             .from("part_requests")
             .update({ status: "received" })
@@ -840,8 +846,12 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
                                   statuses={purchaseOrderItemStatuses}
                                 />
                               ) : (
-                                <Badge className={statusClassName(item.status)}>
-                                  {formatLabel(item.status)}
+                                <Badge
+                                  className={statusClassName(
+                                    item.status ?? "ordered"
+                                  )}
+                                >
+                                  {formatLabel(item.status ?? "ordered")}
                                 </Badge>
                               )}
                             </div>

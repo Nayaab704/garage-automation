@@ -22,6 +22,7 @@ function ServiceWorkSection({
   onLaborDeleted,
   onPartAdded,
   onPartApprovalUpdated,
+  onPartPurchaseOrderCreated,
   onThirdPartyRepairAdded,
   onThirdPartyRepairDeleted,
   onWorkOrderAdded,
@@ -98,6 +99,7 @@ function ServiceWorkSection({
               onLaborDeleted={onLaborDeleted}
               onPartAdded={onPartAdded}
               onPartApprovalUpdated={onPartApprovalUpdated}
+              onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
               onThirdPartyRepairAdded={onThirdPartyRepairAdded}
               onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
               partRequests={partRequests}
