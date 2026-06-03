@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import DocumentsList from "../components/vehicle-detail/DocumentsList";
 import StatusDropdown from "../components/vehicle-detail/StatusDropdown";
 import { logVehicleActivity } from "../lib/activityLogger";
 import { hasPermission } from "../lib/permissions";
@@ -9,6 +10,9 @@ const purchaseOrderColumns =
 
 const purchaseOrderItemColumns =
   "id, purchase_order_id, part_request_id, description, quantity, unit_cost, shipping_cost, tax, status, notes, created_at";
+
+const vehicleDocumentColumns =
+  "id, vehicle_id, repair_job_id, third_party_repair_id, purchase_order_id, document_type, file_url, file_path, file_name, file_mime_type, file_size_bytes, notes, uploaded_by, created_at";
 
 const purchaseOrderStatuses = [
   "draft",
@@ -161,6 +165,15 @@ function statusClassName(status) {
   return "bg-zinc-100 text-zinc-700 ring-zinc-200";
 }
 
+function canUploadDocumentsForProfile(profile) {
+  const role = profile?.role;
+
+  return (
+    (role === "admin" || role === "owner" || role === "technician") &&
+    (hasPermission(role, "photo:manage") || hasPermission(role, "repair:manage"))
+  );
+}
+
 function purchaseOrderMatchesFilters({
   items,
   purchaseOrder,
@@ -217,13 +230,25 @@ async function fetchPurchaseOrdersData() {
     purchaseOrders.map((purchaseOrder) => purchaseOrder.ordered_by)
   );
 
-  const [itemsResponse, vehiclesResponse, vendorsResponse, profilesResponse] =
-    await Promise.all([
+  const [
+    itemsResponse,
+    vehicleDocumentsResponse,
+    vehiclesResponse,
+    vendorsResponse,
+    profilesResponse,
+  ] = await Promise.all([
       purchaseOrderIds.length > 0
         ? supabase
             .from("purchase_order_items")
             .select(purchaseOrderItemColumns)
             .in("purchase_order_id", purchaseOrderIds)
+        : { data: [], error: null },
+      purchaseOrderIds.length > 0
+        ? supabase
+            .from("vehicle_documents")
+            .select(vehicleDocumentColumns)
+            .in("purchase_order_id", purchaseOrderIds)
+            .order("created_at", { ascending: false })
         : { data: [], error: null },
       vehicleIds.length > 0
         ? supabase
@@ -244,6 +269,7 @@ async function fetchPurchaseOrdersData() {
 
   const firstRelatedError =
     itemsResponse.error ??
+    vehicleDocumentsResponse.error ??
     vehiclesResponse.error ??
     vendorsResponse.error ??
     profilesResponse.error;
@@ -259,6 +285,7 @@ async function fetchPurchaseOrdersData() {
       ),
       purchaseOrderItems: itemsResponse.data ?? [],
       purchaseOrders,
+      vehicleDocuments: vehicleDocumentsResponse.data ?? [],
       vehiclesById: Object.fromEntries(
         (vehiclesResponse.data ?? []).map((vehicle) => [vehicle.id, vehicle])
       ),
@@ -302,6 +329,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [updatingItemId, setUpdatingItemId] = useState(null);
   const [updatingPurchaseOrderId, setUpdatingPurchaseOrderId] = useState(null);
+  const [vehicleDocuments, setVehicleDocuments] = useState([]);
   const [vehiclesById, setVehiclesById] = useState({});
   const [vendorsById, setVendorsById] = useState({});
 
@@ -309,6 +337,8 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     currentProfile?.role,
     "purchase_order:manage"
   );
+  const canUploadDocuments = canUploadDocumentsForProfile(currentProfile);
+  const canDeleteDocuments = hasPermission(currentProfile?.role, "photo:manage");
 
   const itemsByPurchaseOrderId = useMemo(() => {
     return purchaseOrderItems.reduce((groupedItems, item) => {
@@ -317,6 +347,18 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
       return groupedItems;
     }, {});
   }, [purchaseOrderItems]);
+
+  const documentsByPurchaseOrderId = useMemo(() => {
+    return vehicleDocuments.reduce((groupedDocuments, documentRecord) => {
+      const currentDocuments =
+        groupedDocuments[documentRecord.purchase_order_id] ?? [];
+      groupedDocuments[documentRecord.purchase_order_id] = [
+        ...currentDocuments,
+        documentRecord,
+      ];
+      return groupedDocuments;
+    }, {});
+  }, [vehicleDocuments]);
 
   const filteredPurchaseOrders = useMemo(() => {
     return purchaseOrders.filter((purchaseOrder) =>
@@ -379,6 +421,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
 
         setPurchaseOrders(data.purchaseOrders);
         setPurchaseOrderItems(data.purchaseOrderItems);
+        setVehicleDocuments(data.vehicleDocuments);
         setVehiclesById(data.vehiclesById);
         setVendorsById(data.vendorsById);
         setProfilesById(data.profilesById);
@@ -594,6 +637,31 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     setStatusFilter("all");
   }
 
+  function handleDocumentAdded(documentRecord) {
+    if (!documentRecord?.id) {
+      return;
+    }
+
+    setVehicleDocuments((currentDocuments) => [
+      documentRecord,
+      ...currentDocuments.filter(
+        (currentDocument) => currentDocument.id !== documentRecord.id
+      ),
+    ]);
+  }
+
+  function handleDocumentDeleted(deletedDocument) {
+    if (!deletedDocument?.id) {
+      return;
+    }
+
+    setVehicleDocuments((currentDocuments) =>
+      currentDocuments.filter(
+        (documentRecord) => documentRecord.id !== deletedDocument.id
+      )
+    );
+  }
+
   return (
     <div className="space-y-6">
       <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
@@ -795,6 +863,23 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
                     {purchaseOrder.notes}
                   </p>
                 )}
+
+                <DocumentsList
+                  canDelete={canDeleteDocuments}
+                  canUpload={canUploadDocuments}
+                  currentProfile={currentProfile}
+                  description="Upload a PDF or image receipt or invoice for this purchase order."
+                  documentType="purchase_receipt"
+                  documents={documentsByPurchaseOrderId[purchaseOrder.id] ?? []}
+                  emptyMessage="No receipts or invoices uploaded for this purchase order."
+                  onDocumentAdded={handleDocumentAdded}
+                  onDocumentDeleted={handleDocumentDeleted}
+                  purchaseOrderId={purchaseOrder.id}
+                  title="Documents"
+                  uploadButtonLabel="Upload Receipt / Invoice"
+                  uploadTitle="Upload Receipt / Invoice"
+                  vehicleId={purchaseOrder.vehicle_id}
+                />
 
                 <div className="mt-5 rounded-md border border-zinc-200 bg-zinc-50 p-4">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

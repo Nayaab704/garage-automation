@@ -112,10 +112,15 @@ function WorkOrderCard({
   canManageLabor,
   canManageParts,
   canManagePhotos,
+  canManageDocuments,
   canManageThirdPartyRepairs,
+  canUploadDocuments,
   currentProfile,
+  documents,
   laborLogs,
   onActivityLogged,
+  onDocumentAdded,
+  onDocumentDeleted,
   onLaborAdded,
   onLaborDeleted,
   onPartAdded,
@@ -232,7 +237,13 @@ function WorkOrderCard({
 
       <ThirdPartyRepairsList
         canManage={canManageThirdPartyRepairs}
+        canManageDocuments={canManageDocuments}
+        canUploadDocuments={canUploadDocuments}
+        currentProfile={currentProfile}
+        documents={documents}
         onActivityLogged={onActivityLogged}
+        onDocumentAdded={onDocumentAdded}
+        onDocumentDeleted={onDocumentDeleted}
         onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
         thirdPartyRepairs={thirdPartyRepairs}
         vehicleId={vehicleId}
@@ -291,12 +302,17 @@ function ServiceCategoryCard({
   canManageLabor = false,
   canManageParts = false,
   canManagePhotos = false,
+  canManageDocuments = false,
   canManageThirdPartyRepairs = false,
+  canUploadDocuments = false,
   category,
   currentProfile,
+  documents = [],
   laborLogs = [],
   onAddWorkOrder,
   onActivityLogged,
+  onDocumentAdded,
+  onDocumentDeleted,
   onLaborAdded,
   onLaborDeleted,
   onPartAdded,
@@ -373,13 +389,18 @@ function ServiceCategoryCard({
               canManageLabor={canManageLabor}
               canManageParts={canManageParts}
               canManagePhotos={canManagePhotos}
+              canManageDocuments={canManageDocuments}
               canManageThirdPartyRepairs={canManageThirdPartyRepairs}
+              canUploadDocuments={canUploadDocuments}
               currentProfile={currentProfile}
+              documents={documents}
               key={workOrder.id ?? index}
               laborLogs={laborLogs.filter(
                 (laborLog) => laborLog.repair_job_id === workOrder.id
               )}
               onActivityLogged={onActivityLogged}
+              onDocumentAdded={onDocumentAdded}
+              onDocumentDeleted={onDocumentDeleted}
               onLaborAdded={onLaborAdded}
               onLaborDeleted={onLaborDeleted}
               onPartAdded={onPartAdded}

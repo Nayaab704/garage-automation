@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
+import DocumentsList from "./DocumentsList";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -121,7 +122,13 @@ function DetailItem({ label, value }) {
 
 function ThirdPartyRepairsList({
   canManage = false,
+  canManageDocuments = false,
+  canUploadDocuments = false,
+  currentProfile,
+  documents = [],
   onActivityLogged,
+  onDocumentAdded,
+  onDocumentDeleted,
   onThirdPartyRepairDeleted,
   thirdPartyRepairs = [],
   vehicleId,
@@ -262,6 +269,29 @@ function ThirdPartyRepairsList({
                     {thirdPartyRepair.notes}
                   </p>
                 )}
+
+                <DocumentsList
+                  canDelete={canManageDocuments}
+                  canUpload={canUploadDocuments}
+                  currentProfile={currentProfile}
+                  description="Upload a PDF or image invoice for this outside repair."
+                  documentType="third_party_invoice"
+                  documents={documents.filter(
+                    (documentRecord) =>
+                      documentRecord.third_party_repair_id ===
+                      thirdPartyRepair.id
+                  )}
+                  emptyMessage="No invoices uploaded for this third-party repair."
+                  onActivityLogged={onActivityLogged}
+                  onDocumentAdded={onDocumentAdded}
+                  onDocumentDeleted={onDocumentDeleted}
+                  repairJobId={thirdPartyRepair.repair_job_id}
+                  thirdPartyRepairId={thirdPartyRepair.id}
+                  title="Invoices"
+                  uploadButtonLabel="Upload Invoice"
+                  uploadTitle="Upload Invoice"
+                  vehicleId={vehicleId}
+                />
               </article>
             );
           })}

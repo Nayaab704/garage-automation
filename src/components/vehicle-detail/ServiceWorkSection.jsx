@@ -15,10 +15,15 @@ function ServiceWorkSection({
   canManageLabor = false,
   canManageParts = false,
   canManagePhotos = false,
+  canManageDocuments = false,
   canManageThirdPartyRepairs = false,
+  canUploadDocuments = false,
   currentProfile,
+  documents = [],
   laborLogs = [],
   onActivityLogged,
+  onDocumentAdded,
+  onDocumentDeleted,
   onLaborAdded,
   onLaborDeleted,
   onPartAdded,
@@ -93,13 +98,18 @@ function ServiceWorkSection({
               canManageLabor={canManageLabor}
               canManageParts={canManageParts}
               canManagePhotos={canManagePhotos}
+              canManageDocuments={canManageDocuments}
               canManageThirdPartyRepairs={canManageThirdPartyRepairs}
+              canUploadDocuments={canUploadDocuments}
               category={category}
               currentProfile={currentProfile}
+              documents={documents}
               laborLogs={laborLogs}
               key={category.id}
               onAddWorkOrder={setSelectedCategory}
               onActivityLogged={onActivityLogged}
+              onDocumentAdded={onDocumentAdded}
+              onDocumentDeleted={onDocumentDeleted}
               onLaborAdded={onLaborAdded}
               onLaborDeleted={onLaborDeleted}
               onPartAdded={onPartAdded}

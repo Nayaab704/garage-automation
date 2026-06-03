@@ -39,6 +39,9 @@ async function fetchInvestmentSummary(vehicleId, stockNumber) {
 const finalCheckColumns =
   "id, vehicle_id, check_key, label, required_role, is_checked, checked_by, checked_at, notes, created_at";
 
+const vehicleDocumentColumns =
+  "id, vehicle_id, repair_job_id, third_party_repair_id, purchase_order_id, document_type, file_url, file_path, file_name, file_mime_type, file_size_bytes, notes, uploaded_by, created_at";
+
 async function fetchFinalChecks(vehicleId) {
   const existingChecksResponse = await supabase
     .from("vehicle_final_checks")
@@ -94,6 +97,7 @@ async function fetchVehicleDetails(vehicleId) {
     profilesResponse,
     costEntriesResponse,
     vehiclePhotosResponse,
+    vehicleDocumentsResponse,
     serviceCategoriesResponse,
     thirdPartyRepairsResponse,
     purchaseOrdersResponse,
@@ -115,6 +119,11 @@ async function fetchVehicleDetails(vehicleId) {
     supabase
       .from("vehicle_photos")
       .select("*")
+      .eq("vehicle_id", vehicleId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("vehicle_documents")
+      .select(vehicleDocumentColumns)
       .eq("vehicle_id", vehicleId)
       .order("created_at", { ascending: false }),
     supabase
@@ -174,6 +183,7 @@ async function fetchVehicleDetails(vehicleId) {
     profilesResponse,
     serviceCategoriesResponse,
     thirdPartyRepairsResponse,
+    vehicleDocumentsResponse,
     vehiclePhotosResponse,
     purchaseOrderItemsResponse,
     purchaseOrdersResponse,
@@ -195,6 +205,7 @@ function findFirstError(responses) {
     responses.profilesResponse.error ??
     responses.costEntriesResponse.error ??
     responses.vehiclePhotosResponse.error ??
+    responses.vehicleDocumentsResponse.error ??
     responses.serviceCategoriesResponse.error ??
     responses.thirdPartyRepairsResponse.error ??
     responses.purchaseOrdersResponse.error ??
@@ -219,6 +230,7 @@ function applyVehicleDetails(responses, setters) {
     setters.setProfiles([]);
     setters.setCostEntries([]);
     setters.setVehiclePhotos([]);
+    setters.setVehicleDocuments([]);
     setters.setServiceCategories([]);
     setters.setThirdPartyRepairs([]);
     setters.setPurchaseOrders([]);
@@ -238,6 +250,7 @@ function applyVehicleDetails(responses, setters) {
   setters.setProfiles(responses.profilesResponse.data ?? []);
   setters.setCostEntries(responses.costEntriesResponse.data ?? []);
   setters.setVehiclePhotos(responses.vehiclePhotosResponse.data ?? []);
+  setters.setVehicleDocuments(responses.vehicleDocumentsResponse.data ?? []);
   setters.setServiceCategories(responses.serviceCategoriesResponse.data ?? []);
   setters.setThirdPartyRepairs(responses.thirdPartyRepairsResponse.data ?? []);
   setters.setPurchaseOrders(responses.purchaseOrdersResponse.data ?? []);
@@ -257,6 +270,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   const [profiles, setProfiles] = useState([]);
   const [costEntries, setCostEntries] = useState([]);
   const [vehiclePhotos, setVehiclePhotos] = useState([]);
+  const [vehicleDocuments, setVehicleDocuments] = useState([]);
   const [serviceCategories, setServiceCategories] = useState([]);
   const [thirdPartyRepairs, setThirdPartyRepairs] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
@@ -305,6 +319,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
           setProfiles,
           setServiceCategories,
           setThirdPartyRepairs,
+          setVehicleDocuments,
           setVehiclePhotos,
           setPurchaseOrderItems,
           setPurchaseOrders,
@@ -325,6 +340,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
           setProfiles([]);
           setCostEntries([]);
           setVehiclePhotos([]);
+          setVehicleDocuments([]);
           setServiceCategories([]);
           setThirdPartyRepairs([]);
           setPurchaseOrders([]);
@@ -475,6 +491,29 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
     );
   }
 
+  function handleDocumentAdded(documentRecord) {
+    if (!documentRecord?.id) {
+      return;
+    }
+
+    setVehicleDocuments((currentDocuments) => [
+      documentRecord,
+      ...currentDocuments.filter(
+        (currentDocument) => currentDocument.id !== documentRecord.id
+      ),
+    ]);
+  }
+
+  function handleDocumentDeleted(deletedDocument) {
+    if (!deletedDocument?.id) {
+      return;
+    }
+
+    setVehicleDocuments((currentDocuments) =>
+      currentDocuments.filter((documentRecord) => documentRecord.id !== deletedDocument.id)
+    );
+  }
+
   async function handleThirdPartyRepairAdded(thirdPartyRepair) {
     if (thirdPartyRepair?.id) {
       setThirdPartyRepairs((currentRepairs) => [
@@ -576,6 +615,10 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   const canManagePurchaseOrders = hasPermission(role, "purchase_order:manage");
   const canManageRepairJobs = hasPermission(role, "repair:manage");
   const canManageWorkOrderParts = canManageRepairJobs || canManagePartRequests;
+  const canUploadDocuments =
+    (role === "admin" || role === "owner" || role === "technician") &&
+    (canManagePhotos || canManageRepairJobs);
+  const canManageDocuments = canManagePhotos;
   const canSellVehicle = hasPermission(role, "sale:manage");
 
   return (
@@ -666,10 +709,15 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             canManageLabor={canManageLabor}
             canManageParts={canManageWorkOrderParts}
             canManagePhotos={canManagePhotos}
+            canManageDocuments={canManageDocuments}
             canManageThirdPartyRepairs={canManageRepairJobs}
+            canUploadDocuments={canUploadDocuments}
             currentProfile={currentProfile}
+            documents={vehicleDocuments}
             laborLogs={laborLogs}
             onActivityLogged={refreshActivityTimeline}
+            onDocumentAdded={handleDocumentAdded}
+            onDocumentDeleted={handleDocumentDeleted}
             onLaborAdded={handleWorkOrderLaborAdded}
             onLaborDeleted={handleWorkOrderLaborDeleted}
             onPartAdded={handleWorkOrderPartAdded}
