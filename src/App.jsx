@@ -263,7 +263,13 @@ function App() {
 
   function renderActivePage() {
     if (effectiveActivePage === "Dashboard") {
-      return <Dashboard currentProfile={currentProfile} />;
+      return (
+        <Dashboard
+          currentProfile={currentProfile}
+          onNavigate={handlePageChange}
+          onSelectVehicle={handleSelectVehicle}
+        />
+      );
     }
 
     if (effectiveActivePage === "Vehicles") {
