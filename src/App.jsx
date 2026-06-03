@@ -25,7 +25,7 @@ const pageDetails = {
   },
   Vehicles: {
     title: "Vehicles",
-    description: "Add vehicles to inventory and review purchase details.",
+    description: "Browse inventory and open vehicle workspaces.",
   },
   Repairs: {
     title: "Repairs",
@@ -275,7 +275,6 @@ function App() {
     if (effectiveActivePage === "Vehicles") {
       return (
         <VehiclesPage
-          currentProfile={currentProfile}
           onSelectVehicle={handleSelectVehicle}
         />
       );

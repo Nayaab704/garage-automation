@@ -1,22 +1,14 @@
-import { useEffect, useState } from "react";
-import AddVehicleForm from "../components/AddVehicleForm";
-import VehicleOriginBadge from "../components/VehicleOriginBadge";
-import VehicleStatusBadge from "../components/VehicleStatusBadge";
-import { hasPermission } from "../lib/permissions";
+import { useEffect, useMemo, useState } from "react";
+import AppIcon from "../components/ui/AppIcon";
+import VehicleCard from "../components/VehicleCard";
 import { supabase } from "../lib/supabaseClient";
 import { formatVehicleStatus, vehicleStatusOptions } from "../lib/vehicleStatus";
 
 const vehicleColumns =
-  "id, stock_number, vin, year, make, model, trim, mileage, color, title_status, vehicle_origin, status, purchase_price, target_sale_price, notes";
+  "id, stock_number, vin, year, make, model, trim, mileage, color, title_status, status";
 
-const currencyFormatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-const numberFormatter = new Intl.NumberFormat("en-US");
+const vehiclePhotoColumns =
+  "id, vehicle_id, photo_url, repair_job_id, created_at";
 
 const titleStatusOptions = [
   { value: "clean", label: "Clean Title" },
@@ -25,68 +17,6 @@ const titleStatusOptions = [
   { value: "flood", label: "Flood" },
   { value: "unknown", label: "Unknown" },
 ];
-
-function displayValue(value) {
-  return value === null || value === undefined || value === ""
-    ? "Not available"
-    : value;
-}
-
-function formatCurrency(value) {
-  if (value === null || value === undefined) {
-    return "Not available";
-  }
-
-  const numberValue = Number(value);
-
-  if (!Number.isFinite(numberValue)) {
-    return "Not available";
-  }
-
-  return currencyFormatter.format(numberValue);
-}
-
-function formatNumber(value) {
-  if (value === null || value === undefined) {
-    return "Not available";
-  }
-
-  const numberValue = Number(value);
-
-  if (!Number.isFinite(numberValue)) {
-    return "Not available";
-  }
-
-  return numberFormatter.format(numberValue);
-}
-
-function formatTitleStatus(status) {
-  const labels = {
-    clean: "Clean Title",
-    salvage: "Salvage",
-    rebuilt: "Rebuilt",
-    flood: "Flood",
-    unknown: "Unknown",
-  };
-
-  return labels[status] ?? "Unknown";
-}
-
-function titleStatusClassName(status) {
-  if (status === "clean") {
-    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-  }
-
-  if (status === "salvage" || status === "flood") {
-    return "bg-red-50 text-red-700 ring-red-200";
-  }
-
-  if (status === "rebuilt") {
-    return "bg-blue-50 text-blue-700 ring-blue-200";
-  }
-
-  return "bg-slate-100 text-slate-700 ring-slate-200";
-}
 
 function valueMatchesSearch(value, searchText) {
   return String(value ?? "")
@@ -121,11 +51,93 @@ function getFilteredVehicles(vehicles, searchText, statusFilter, titleFilter) {
   });
 }
 
-function VehiclesPage({ currentProfile, onSelectVehicle }) {
+function buildVehiclePhotoMap(photos) {
+  return photos.reduce((photoMap, photo) => {
+    if (!photo.vehicle_id || !photo.photo_url) {
+      return photoMap;
+    }
+
+    const currentPhoto = photoMap[photo.vehicle_id];
+    const isVehicleLevelPhoto = !photo.repair_job_id;
+    const currentIsWorkOrderPhoto = currentPhoto?.repair_job_id;
+
+    if (!currentPhoto || (isVehicleLevelPhoto && currentIsWorkOrderPhoto)) {
+      photoMap[photo.vehicle_id] = photo;
+    }
+
+    return photoMap;
+  }, {});
+}
+
+function getActiveFilterCount(searchText, statusFilter, titleStatusFilter) {
+  let count = 0;
+
+  if (searchText.trim()) {
+    count += 1;
+  }
+
+  if (statusFilter !== "all") {
+    count += 1;
+  }
+
+  if (titleStatusFilter !== "all") {
+    count += 1;
+  }
+
+  return count;
+}
+
+function getVehicleSummary(vehicles) {
+  const activeVehicles = vehicles.filter(
+    (vehicle) => !["archived", "sold"].includes(vehicle.status)
+  );
+
+  return {
+    active: activeVehicles.length,
+    total: vehicles.length,
+  };
+}
+
+function FilterSelect({ children, id, label, onChange, value }) {
+  return (
+    <label className="block" htmlFor={id}>
+      <span className="text-sm font-semibold text-slate-700">{label}</span>
+      <select
+        className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+        id={id}
+        onChange={onChange}
+        value={value}
+      >
+        {children}
+      </select>
+    </label>
+  );
+}
+
+function StatCard({ helperText, icon, label, value }) {
+  return (
+    <div className="flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+        <AppIcon name={icon} size={20} />
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-xs font-medium text-slate-500">{label}</p>
+        <p className="text-lg font-black leading-none text-slate-950">
+          {value}
+        </p>
+        <p className="mt-0.5 truncate text-xs text-slate-500">{helperText}</p>
+      </div>
+    </div>
+  );
+}
+
+function VehiclesPage({ onSelectVehicle }) {
   const [vehicles, setVehicles] = useState([]);
+  const [vehiclePhotosByVehicleId, setVehiclePhotosByVehicleId] = useState({});
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [titleStatusFilter, setTitleStatusFilter] = useState("all");
+  const [areFiltersOpen, setAreFiltersOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [refreshCount, setRefreshCount] = useState(0);
@@ -150,13 +162,42 @@ function VehiclesPage({ currentProfile, onSelectVehicle }) {
         if (error) {
           setErrorMessage(error.message);
           setVehicles([]);
-        } else {
-          setVehicles(data ?? []);
+          setVehiclePhotosByVehicleId({});
+          return;
         }
+
+        const vehicleData = data ?? [];
+        setVehicles(vehicleData);
+
+        const vehicleIds = vehicleData
+          .map((vehicle) => vehicle.id)
+          .filter(Boolean);
+
+        if (vehicleIds.length === 0) {
+          setVehiclePhotosByVehicleId({});
+          return;
+        }
+
+        const photosResponse = await supabase
+          .from("vehicle_photos")
+          .select(vehiclePhotoColumns)
+          .in("vehicle_id", vehicleIds)
+          .order("created_at", { ascending: false });
+
+        if (!isMounted) {
+          return;
+        }
+
+        setVehiclePhotosByVehicleId(
+          photosResponse.error
+            ? {}
+            : buildVehiclePhotoMap(photosResponse.data ?? [])
+        );
       } catch (error) {
         if (isMounted) {
           setErrorMessage(error.message ?? "Something went wrong.");
           setVehicles([]);
+          setVehiclePhotosByVehicleId({});
         }
       } finally {
         if (isMounted) {
@@ -182,257 +223,194 @@ function VehiclesPage({ currentProfile, onSelectVehicle }) {
     setTitleStatusFilter("all");
   }
 
-  const filteredVehicles = getFilteredVehicles(
-    vehicles,
+  const filteredVehicles = useMemo(
+    () =>
+      getFilteredVehicles(
+        vehicles,
+        searchText,
+        statusFilter,
+        titleStatusFilter
+      ),
+    [searchText, statusFilter, titleStatusFilter, vehicles]
+  );
+  const activeFilterCount = getActiveFilterCount(
     searchText,
     statusFilter,
     titleStatusFilter
   );
-  const hasActiveFilters =
-    searchText.trim() !== "" ||
-    statusFilter !== "all" ||
-    titleStatusFilter !== "all";
-  const canCreateVehicle = hasPermission(
-    currentProfile?.role,
-    "vehicle:create"
-  );
+  const vehicleSummary = getVehicleSummary(vehicles);
+  const hasActiveFilters = activeFilterCount > 0;
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(320px,420px)_1fr] lg:items-start">
-      {canCreateVehicle ? (
-        <AddVehicleForm onVehicleAdded={refreshVehicles} />
-      ) : (
-        <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-bold text-slate-900">Add Vehicle</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            Your role can view inventory, but does not have permission to add
-            vehicles.
+    <div className="space-y-3">
+      <section className="space-y-3">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+          <label className="block min-w-0" htmlFor="vehicle-search">
+            <span className="sr-only">Search vehicles</span>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 sm:left-4">
+                <AppIcon name="search" size={19} />
+              </span>
+              <input
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 sm:pl-12 sm:text-base"
+                id="vehicle-search"
+                onChange={(event) => setSearchText(event.target.value)}
+                placeholder="Search stock, VIN, make, or model"
+                type="search"
+                value={searchText}
+              />
+            </div>
+          </label>
+
+          <div className="flex gap-2">
+            <button
+              className={`inline-flex h-12 w-12 items-center justify-center gap-1.5 rounded-2xl border px-0 text-sm font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-100 sm:w-auto sm:gap-2 sm:px-4 ${
+                areFiltersOpen
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+              onClick={() => setAreFiltersOpen((isOpen) => !isOpen)}
+              type="button"
+            >
+              <AppIcon name="filter" size={19} />
+              <span className="hidden sm:inline">Filters</span>
+              {activeFilterCount > 0 && (
+                <span className="rounded-full bg-emerald-600 px-1.5 py-0.5 text-[11px] leading-none text-white">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              aria-label="Refresh vehicles"
+              className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isLoading}
+              onClick={refreshVehicles}
+              type="button"
+            >
+              <AppIcon name="refresh" size={18} />
+            </button>
+          </div>
+        </div>
+
+        {hasActiveFilters && (
+          <button
+            className="w-fit rounded-xl px-1 text-sm font-semibold text-emerald-700 transition hover:text-emerald-800"
+            onClick={clearFilters}
+            type="button"
+          >
+            Clear filters
+          </button>
+        )}
+
+        {areFiltersOpen && (
+          <div className="grid gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-2">
+            <FilterSelect
+              id="vehicle-status-filter"
+              label="Status"
+              onChange={(event) => setStatusFilter(event.target.value)}
+              value={statusFilter}
+            >
+              <option value="all">All Statuses</option>
+              {vehicleStatusOptions.map((status) => (
+                <option key={status} value={status}>
+                  {formatVehicleStatus(status)}
+                </option>
+              ))}
+            </FilterSelect>
+
+            <FilterSelect
+              id="vehicle-title-status-filter"
+              label="Title Status"
+              onChange={(event) => setTitleStatusFilter(event.target.value)}
+              value={titleStatusFilter}
+            >
+              <option value="all">All Titles</option>
+              {titleStatusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </FilterSelect>
+          </div>
+        )}
+      </section>
+
+      <section className="grid grid-cols-2 gap-2 sm:gap-3">
+        <StatCard
+          helperText="All in inventory"
+          icon="car"
+          label="Total Vehicles"
+          value={vehicleSummary.total}
+        />
+        <StatCard
+          helperText="Open inventory"
+          icon="chart-up"
+          label="Active Vehicles"
+          value={vehicleSummary.active}
+        />
+      </section>
+
+      {isLoading && (
+        <section className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <p className="font-medium text-slate-700">Loading vehicles...</p>
+        </section>
+      )}
+
+      {!isLoading && errorMessage && (
+        <section className="rounded-3xl border border-red-200 bg-red-50 p-6 text-red-800 shadow-sm">
+          <h3 className="font-semibold">Unable to load vehicles</h3>
+          <p className="mt-2 text-sm">{errorMessage}</p>
+        </section>
+      )}
+
+      {!isLoading && !errorMessage && vehicles.length === 0 && (
+        <section className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-50 text-slate-400">
+            <AppIcon name="car" size={34} />
+          </div>
+          <h3 className="mt-4 text-lg font-black text-slate-950">
+            No vehicles found
+          </h3>
+          <p className="mt-2 text-sm text-slate-500">
+            Start with intake to add the first vehicle to inventory.
           </p>
         </section>
       )}
 
-      <section className="space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">Vehicle List</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Showing {filteredVehicles.length} of {vehicles.length} vehicle
-              {vehicles.length === 1 ? "" : "s"}
-            </p>
-          </div>
-
-          <button
-            className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isLoading}
-            onClick={refreshVehicles}
-            type="button"
-          >
-            Refresh
-          </button>
-        </div>
-
-        {!isLoading && !errorMessage && vehicles.length > 0 && (
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="grid gap-4 lg:grid-cols-[minmax(220px,1fr)_220px_220px_auto] lg:items-end">
-              <label className="block" htmlFor="vehicle-search">
-                <span className="text-sm font-medium text-slate-700">
-                  Search
-                </span>
-                <input
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-                  id="vehicle-search"
-                  onChange={(event) => setSearchText(event.target.value)}
-                  placeholder="Stock, VIN, make, or model"
-                  type="search"
-                  value={searchText}
-                />
-              </label>
-
-              <label className="block" htmlFor="vehicle-status-filter">
-                <span className="text-sm font-medium text-slate-700">
-                  Status
-                </span>
-                <select
-                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-                  id="vehicle-status-filter"
-                  onChange={(event) => setStatusFilter(event.target.value)}
-                  value={statusFilter}
-                >
-                  <option value="all">All Statuses</option>
-                  {vehicleStatusOptions.map((status) => (
-                    <option key={status} value={status}>
-                      {formatVehicleStatus(status)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block" htmlFor="vehicle-title-status-filter">
-                <span className="text-sm font-medium text-slate-700">
-                  Title Status
-                </span>
-                <select
-                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-                  id="vehicle-title-status-filter"
-                  onChange={(event) => setTitleStatusFilter(event.target.value)}
-                  value={titleStatusFilter}
-                >
-                  <option value="all">All Titles</option>
-                  {titleStatusOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <button
-                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!hasActiveFilters}
-                onClick={clearFilters}
-                type="button"
-              >
-                Clear Filters
-              </button>
-            </div>
-          </div>
-        )}
-
-        {isLoading && (
-          <div className="rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm">
-            <p className="font-medium text-slate-700">Loading vehicles...</p>
-          </div>
-        )}
-
-        {!isLoading && errorMessage && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-red-800">
-            <h3 className="font-semibold">Unable to load vehicles</h3>
-            <p className="mt-2 text-sm">{errorMessage}</p>
-          </div>
-        )}
-
-        {!isLoading && !errorMessage && vehicles.length === 0 && (
-          <div className="rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm">
-            <h3 className="text-lg font-semibold text-slate-900">
+      {!isLoading &&
+        !errorMessage &&
+        vehicles.length > 0 &&
+        filteredVehicles.length === 0 && (
+          <section className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">
+            <h3 className="text-lg font-black text-slate-950">
               No vehicles found
             </h3>
-            <p className="mt-2 text-slate-600">
-              Use the form to add your first vehicle.
+            <p className="mt-2 text-sm text-slate-500">
+              Try adjusting your search or filters.
             </p>
-          </div>
+            <button
+              className="mt-5 inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
+              onClick={clearFilters}
+              type="button"
+            >
+              Clear Filters
+            </button>
+          </section>
         )}
 
-        {!isLoading &&
-          !errorMessage &&
-          vehicles.length > 0 &&
-          filteredVehicles.length === 0 && (
-            <div className="rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm">
-              <h3 className="text-lg font-semibold text-slate-900">
-                No matching vehicles
-              </h3>
-              <p className="mt-2 text-slate-600">
-                Clear filters or try a different search.
-              </p>
-            </div>
-          )}
-
-        {!isLoading && !errorMessage && filteredVehicles.length > 0 && (
-          <div className="grid gap-4 xl:grid-cols-2">
-            {filteredVehicles.map((vehicle, index) => (
-              <article
-                className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
-                key={`${vehicle.stock_number}-${vehicle.vin ?? index}`}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-slate-500">
-                      Stock Number
-                    </p>
-                    <h3 className="mt-1 text-2xl font-bold text-slate-900">
-                      {displayValue(vehicle.stock_number)}
-                    </h3>
-                  </div>
-
-                  <div className="flex flex-wrap justify-end gap-2">
-                    <VehicleStatusBadge status={vehicle.status} />
-                    <VehicleOriginBadge origin={vehicle.vehicle_origin} />
-                    {vehicle.color && (
-                      <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-                        {vehicle.color}
-                      </span>
-                    )}
-                    <span
-                      className={`rounded-full px-3 py-1 text-sm font-medium ring-1 ring-inset ${titleStatusClassName(
-                        vehicle.title_status
-                      )}`}
-                    >
-                      {formatTitleStatus(vehicle.title_status)}
-                    </span>
-                  </div>
-                </div>
-
-                <p className="mt-4 text-lg font-semibold text-slate-800">
-                  {displayValue(vehicle.year)} {displayValue(vehicle.make)}{" "}
-                  {displayValue(vehicle.model)}
-                </p>
-                <p className="mt-1 text-sm text-slate-600">
-                  Trim: {displayValue(vehicle.trim)}
-                </p>
-
-                <dl className="mt-5 grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <dt className="text-sm text-slate-500">VIN</dt>
-                    <dd className="mt-1 break-words font-semibold text-slate-900">
-                      {displayValue(vehicle.vin)}
-                    </dd>
-                  </div>
-
-                  <div>
-                    <dt className="text-sm text-slate-500">Mileage</dt>
-                    <dd className="mt-1 font-semibold text-slate-900">
-                      {formatNumber(vehicle.mileage)}
-                    </dd>
-                  </div>
-
-                  <div>
-                    <dt className="text-sm text-slate-500">Purchase Price</dt>
-                    <dd className="mt-1 font-semibold text-slate-900">
-                      {formatCurrency(vehicle.purchase_price)}
-                    </dd>
-                  </div>
-
-                  <div>
-                    <dt className="text-sm text-slate-500">
-                      Target Sale Price
-                    </dt>
-                    <dd className="mt-1 font-semibold text-slate-900">
-                      {formatCurrency(vehicle.target_sale_price)}
-                    </dd>
-                  </div>
-                </dl>
-
-                {vehicle.notes && (
-                  <div className="mt-5 rounded-md bg-slate-50 p-3">
-                    <p className="text-sm font-medium text-slate-500">Notes</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">
-                      {vehicle.notes}
-                    </p>
-                  </div>
-                )}
-
-                <button
-                  className="mt-5 w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={!vehicle.id}
-                  onClick={() => onSelectVehicle(vehicle.id)}
-                  type="button"
-                >
-                  View Details
-                </button>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+      {!isLoading && !errorMessage && filteredVehicles.length > 0 && (
+        <section className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+          {filteredVehicles.map((vehicle) => (
+            <VehicleCard
+              key={vehicle.id}
+              onSelectVehicle={onSelectVehicle}
+              photo={vehiclePhotosByVehicleId[vehicle.id]}
+              vehicle={vehicle}
+            />
+          ))}
+        </section>
+      )}
     </div>
   );
 }

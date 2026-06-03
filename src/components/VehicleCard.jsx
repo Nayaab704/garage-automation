@@ -1,15 +1,33 @@
-import VehicleOriginBadge from "./VehicleOriginBadge";
+import AppIcon from "./ui/AppIcon";
 import VehicleStatusBadge from "./VehicleStatusBadge";
 
-const currencyFormatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+const numberFormatter = new Intl.NumberFormat("en-US");
 
-function formatCurrency(value) {
-  if (value === null || value === undefined) {
+const colorMap = {
+  beige: "#d6c6a8",
+  black: "#111827",
+  blue: "#2563eb",
+  brown: "#7c2d12",
+  gold: "#d97706",
+  gray: "#d1d5db",
+  green: "#059669",
+  grey: "#d1d5db",
+  orange: "#ea580c",
+  purple: "#7c3aed",
+  red: "#dc2626",
+  silver: "#cbd5e1",
+  white: "#ffffff",
+  yellow: "#facc15",
+};
+
+function displayValue(value) {
+  return value === null || value === undefined || value === ""
+    ? "Not available"
+    : value;
+}
+
+function formatNumber(value) {
+  if (value === null || value === undefined || value === "") {
     return "Not available";
   }
 
@@ -19,98 +37,104 @@ function formatCurrency(value) {
     return "Not available";
   }
 
-  return currencyFormatter.format(numberValue);
+  return numberFormatter.format(numberValue);
 }
 
-function formatTitleStatus(status) {
-  const labels = {
-    clean: "Clean Title",
-    salvage: "Salvage",
-    rebuilt: "Rebuilt",
-    flood: "Flood",
-    unknown: "Unknown",
+function getVehicleTitle(vehicle) {
+  const title = [vehicle.year, vehicle.make, vehicle.model]
+    .filter(Boolean)
+    .join(" ");
+
+  return title || "Vehicle";
+}
+
+function hasDisplayValue(value) {
+  return value !== null && value !== undefined && value !== "";
+}
+
+function getColorDotStyle(color) {
+  const normalizedColor = String(color ?? "").trim().toLowerCase();
+
+  return {
+    backgroundColor: colorMap[normalizedColor] ?? normalizedColor,
   };
-
-  return labels[status] ?? "Unknown";
 }
 
-function titleStatusClassName(status) {
-  if (status === "clean") {
-    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+function VehicleThumbnail({ photo, title }) {
+  if (photo?.photo_url) {
+    return (
+      <img
+        alt={title}
+        className="h-20 w-24 rounded-2xl object-cover sm:h-24 sm:w-32"
+        src={photo.photo_url}
+      />
+    );
   }
-
-  if (status === "salvage" || status === "flood") {
-    return "bg-red-50 text-red-700 ring-red-200";
-  }
-
-  if (status === "rebuilt") {
-    return "bg-blue-50 text-blue-700 ring-blue-200";
-  }
-
-  return "bg-slate-100 text-slate-700 ring-slate-200";
-}
-
-function VehicleCard({ vehicle }) {
-  const estimatedProfit = Number(vehicle.estimated_profit);
-  const profitClassName =
-    Number.isFinite(estimatedProfit) && estimatedProfit < 0
-      ? "mt-1 font-semibold text-red-700"
-      : "mt-1 font-semibold text-emerald-700";
 
   return (
-    <article className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-medium text-slate-500">Stock Number</p>
-          <h2 className="mt-1 text-2xl font-bold text-slate-900">
-            {vehicle.stock_number}
-          </h2>
-        </div>
+    <div className="flex h-20 w-24 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 sm:h-24 sm:w-32">
+      <AppIcon name="car" size={36} />
+    </div>
+  );
+}
 
-        <div className="flex flex-wrap justify-end gap-2">
-          <VehicleStatusBadge status={vehicle.status} />
-          <VehicleOriginBadge origin={vehicle.vehicle_origin} />
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-            {vehicle.make}
+function VehicleCard({ onSelectVehicle, photo, vehicle }) {
+  const title = getVehicleTitle(vehicle);
+  const mileageLabel = hasDisplayValue(vehicle.mileage)
+    ? `${formatNumber(vehicle.mileage)} mi`
+    : "Mileage n/a";
+  const colorLabel = vehicle.color || "Color n/a";
+
+  return (
+    <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:border-emerald-200 hover:shadow-md">
+      <button
+        className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
+        disabled={!vehicle.id}
+        onClick={() => onSelectVehicle?.(vehicle.id)}
+        type="button"
+      >
+        <div className="flex gap-3 p-3 sm:gap-4">
+          <VehicleThumbnail photo={photo} title={title} />
+
+          <div className="min-w-0 flex-1">
+            <p className="truncate whitespace-nowrap text-base font-black leading-tight text-slate-950 sm:text-lg">
+              {displayValue(vehicle.stock_number)}
+            </p>
+            <p className="mt-1 truncate text-sm font-medium text-slate-800 sm:text-base">
+              {title}
+              {vehicle.trim ? ` ${vehicle.trim}` : ""}
+            </p>
+
+            <div className="mt-2">
+              <VehicleStatusBadge
+                className="max-w-full truncate px-2.5 text-xs"
+                status={vehicle.status}
+              />
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600">
+              <span className="inline-flex items-center gap-1.5">
+                <AppIcon className="text-slate-400" name="mileage" size={15} />
+                {mileageLabel}
+              </span>
+              <span className="text-slate-300">|</span>
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                {vehicle.color && (
+                  <span
+                    className="h-4 w-4 shrink-0 rounded-full border border-slate-200 shadow-inner"
+                    style={getColorDotStyle(vehicle.color)}
+                  />
+                )}
+                <span className="truncate">{colorLabel}</span>
+              </span>
+            </div>
+          </div>
+
+          <span className="mt-1 inline-flex h-10 min-w-14 shrink-0 items-center justify-center rounded-2xl border border-emerald-200 bg-white px-3 text-sm font-black text-emerald-700 shadow-sm transition hover:bg-emerald-50 sm:min-w-24 sm:px-5">
+            Open
           </span>
-          {vehicle.title_status && (
-            <span
-              className={`rounded-full px-3 py-1 text-sm font-medium ring-1 ring-inset ${titleStatusClassName(
-                vehicle.title_status
-              )}`}
-            >
-              {formatTitleStatus(vehicle.title_status)}
-            </span>
-          )}
         </div>
-      </div>
-
-      <p className="mt-4 text-lg font-semibold text-slate-800">
-        {vehicle.make} {vehicle.model}
-      </p>
-
-      <dl className="mt-6 grid gap-4 sm:grid-cols-3">
-        <div>
-          <dt className="text-sm text-slate-500">Purchase Price</dt>
-          <dd className="mt-1 font-semibold text-slate-900">
-            {formatCurrency(vehicle.purchase_price)}
-          </dd>
-        </div>
-
-        <div>
-          <dt className="text-sm text-slate-500">Total Invested</dt>
-          <dd className="mt-1 font-semibold text-slate-900">
-            {formatCurrency(vehicle.total_invested)}
-          </dd>
-        </div>
-
-        <div>
-          <dt className="text-sm text-slate-500">Estimated Profit</dt>
-          <dd className={profitClassName}>
-            {formatCurrency(vehicle.estimated_profit)}
-          </dd>
-        </div>
-      </dl>
+      </button>
     </article>
   );
 }

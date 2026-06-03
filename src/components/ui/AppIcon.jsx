@@ -32,6 +32,13 @@ const iconPaths = {
       <circle cx="16" cy="17" r="1.5" />
     </>
   ),
+  "chart-up": (
+    <>
+      <path d="M4 19h16" />
+      <path d="M6 16l4-4 3 3 6-8" />
+      <path d="M15 7h4v4" />
+    </>
+  ),
   check: (
     <>
       <path d="M5 13l4 4L19 7" />
@@ -78,9 +85,23 @@ const iconPaths = {
       <path d="M9.5 17h7" />
     </>
   ),
+  filter: (
+    <>
+      <path d="M4 5h16l-6.5 7.4V18l-3 1.5v-7.1L4 5Z" />
+    </>
+  ),
   lightning: (
     <>
       <path d="M13 3 5.8 13h5.6L10.6 21 18.2 10.2h-5.6L13 3Z" />
+    </>
+  ),
+  mileage: (
+    <>
+      <rect height="10" rx="2" width="16" x="4" y="7" />
+      <path d="M7 12h.01" />
+      <path d="M10 12h.01" />
+      <path d="M13 12h.01" />
+      <path d="M16 12h.01" />
     </>
   ),
   "paint-spray": (
@@ -117,6 +138,12 @@ const iconPaths = {
       <path d="M4 18v-5h5" />
       <path d="M18 11a6.5 6.5 0 0 0-11-4.5L4 9" />
       <path d="M6 13a6.5 6.5 0 0 0 11 4.5L20 15" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m16 16 4 4" />
     </>
   ),
   seat: (
@@ -183,16 +210,21 @@ const aliases = {
   alert: "warning",
   body: "body-shop",
   camera: "camera",
+  chart: "chart-up",
+  "chart-up": "chart-up",
   document: "file",
   electrical: "lightning",
+  filter: "filter",
   glass: "windshield",
   interior: "seat",
   labor: "clock",
   mechanical: "wrench",
+  mileage: "mileage",
   money: "dollar",
   parts: "box",
   "paint-spray": "paint-spray",
   photo: "camera",
+  search: "search",
   spray: "paint-spray",
   status: "refresh",
   "third-party": "users",
