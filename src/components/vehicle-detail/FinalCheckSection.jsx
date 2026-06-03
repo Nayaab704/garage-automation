@@ -9,13 +9,13 @@ import { supabase } from "../../lib/supabaseClient";
 
 function formatDateTime(value) {
   if (!value) {
-    return "Not checked";
+    return "";
   }
 
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return "Not checked";
+    return "";
   }
 
   return date.toLocaleString("en-US", {
@@ -25,6 +25,27 @@ function formatDateTime(value) {
     month: "short",
     year: "numeric",
   });
+}
+
+function getReadinessLabel({
+  adminCompletedCount,
+  adminTotal,
+  allChecksComplete,
+  technicianCompletedCount,
+  technicianTotal,
+}) {
+  if (allChecksComplete) {
+    return "Ready For Sale";
+  }
+
+  if (
+    technicianCompletedCount === technicianTotal &&
+    adminCompletedCount < adminTotal
+  ) {
+    return "Ready for Admin Review";
+  }
+
+  return "Not Ready";
 }
 
 function getProfileName(profiles, profileId) {
@@ -65,68 +86,60 @@ function CheckRow({
 }) {
   const isAllowed = canUpdateCheck(currentProfile, finalCheck);
   const isUpdating = updatingCheckId === finalCheck.id;
+  const checkedMeta =
+    finalCheck.is_checked && finalCheck.checked_by
+      ? `Checked by ${getProfileName(profiles, finalCheck.checked_by)}${
+          finalCheck.checked_at
+            ? ` | ${formatDateTime(finalCheck.checked_at)}`
+            : ""
+        }`
+      : "";
 
   return (
-    <div
-      className={`rounded-md border p-4 ${
+    <label
+      className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 transition ${
         finalCheck.is_checked
-          ? "border-emerald-200 bg-emerald-50/60"
-          : "border-zinc-200 bg-white"
+          ? "border-emerald-200 bg-emerald-50/40"
+          : "border-slate-200 bg-white"
+      } ${
+        isAllowed && finalCheck.id
+          ? "cursor-pointer hover:border-blue-200 hover:bg-blue-50/40"
+          : "cursor-default"
       }`}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <label className="flex items-start gap-3">
-          <input
-            checked={Boolean(finalCheck.is_checked)}
-            className="mt-1 h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-400 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!isAllowed || isUpdating || !finalCheck.id}
-            onChange={(event) => onToggle(finalCheck, event.target.checked)}
-            type="checkbox"
-          />
-          <span>
-            <span className="block font-semibold text-zinc-950">
-              {finalCheck.label}
-            </span>
-            <span className="mt-1 block text-sm text-zinc-500">
-              {finalCheck.is_checked ? "Completed" : "Open"}
-            </span>
-          </span>
-        </label>
+      <input
+        checked={Boolean(finalCheck.is_checked)}
+        className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-200 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={!isAllowed || isUpdating || !finalCheck.id}
+        onChange={(event) => onToggle(finalCheck, event.target.checked)}
+        type="checkbox"
+      />
 
-        <span
-          className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${
-            finalCheck.is_checked
-              ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-              : "bg-zinc-100 text-zinc-700 ring-zinc-200"
-          }`}
-        >
-          {finalCheck.is_checked ? "Checked" : "Open"}
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-bold text-slate-950">
+          {finalCheck.label}
         </span>
-      </div>
+        {checkedMeta ? (
+          <span className="mt-0.5 block truncate text-xs text-slate-500">
+            {checkedMeta}
+          </span>
+        ) : finalCheck.notes ? (
+          <span className="mt-0.5 block truncate text-xs text-slate-500">
+            {finalCheck.notes}
+          </span>
+        ) : null}
+      </span>
 
-      <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-        <div>
-          <p className="text-zinc-500">Checked By</p>
-          <p className="mt-1 font-medium text-zinc-800">
-            {finalCheck.checked_by
-              ? getProfileName(profiles, finalCheck.checked_by)
-              : "Not checked"}
-          </p>
-        </div>
-        <div>
-          <p className="text-zinc-500">Checked At</p>
-          <p className="mt-1 font-medium text-zinc-800">
-            {formatDateTime(finalCheck.checked_at)}
-          </p>
-        </div>
-      </div>
-
-      {finalCheck.notes && (
-        <p className="mt-3 whitespace-pre-wrap rounded-md bg-zinc-50 p-3 text-sm leading-6 text-zinc-600">
-          {finalCheck.notes}
-        </p>
-      )}
-    </div>
+      <span
+        className={`mt-0.5 w-fit shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${
+          finalCheck.is_checked
+            ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+            : "bg-slate-100 text-slate-700 ring-slate-200"
+        }`}
+      >
+        {finalCheck.is_checked ? "Checked" : "Needed"}
+      </span>
+    </label>
   );
 }
 
@@ -142,11 +155,20 @@ function FinalCheckGroup({
   const templates = finalCheckTemplates.filter(
     (template) => template.required_role === requiredRole
   );
+  const completedCount = templates.filter(
+    (template) =>
+      getCheckByTemplate(finalChecks, template).is_checked === true
+  ).length;
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4">
-      <h3 className="text-base font-bold text-zinc-950">{title}</h3>
-      <div className="mt-3 space-y-3">
+    <section className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-black text-slate-950">{title}</h3>
+        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-200">
+          {completedCount}/{templates.length}
+        </span>
+      </div>
+      <div className="space-y-2">
         {templates.map((template) => (
           <CheckRow
             currentProfile={currentProfile}
@@ -158,7 +180,7 @@ function FinalCheckGroup({
           />
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -195,6 +217,13 @@ function FinalCheckSection({
   const adminCompletedCount = adminTemplates.filter(
     (template) => checksByKey.get(template.check_key)?.is_checked === true
   ).length;
+  const readinessLabel = getReadinessLabel({
+    adminCompletedCount,
+    adminTotal: adminTemplates.length,
+    allChecksComplete,
+    technicianCompletedCount,
+    technicianTotal: technicianTemplates.length,
+  });
 
   async function handleToggle(finalCheck, isChecked) {
     if (!canUpdateCheck(currentProfile, finalCheck)) {
@@ -293,7 +322,7 @@ function FinalCheckSection({
                 : "bg-amber-50 text-amber-800 ring-amber-200"
             }`}
           >
-            {allChecksComplete ? "Ready" : "Not Ready"}
+            {readinessLabel}
           </span>
           <AppIcon
             className={`text-slate-500 transition ${
@@ -307,27 +336,6 @@ function FinalCheckSection({
 
       {isOpen && (
         <div className="border-t border-slate-100 p-4">
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-zinc-950">
-                Final Checklist
-              </h2>
-              <p className="mt-1 text-sm text-zinc-500">
-                {completedCount} / {finalCheckTemplates.length} checks complete
-              </p>
-            </div>
-
-            <span
-              className={`w-fit rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset ${
-                allChecksComplete
-                  ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                  : "bg-amber-50 text-amber-800 ring-amber-200"
-              }`}
-            >
-              {allChecksComplete ? "Cleared" : "Needs Review"}
-            </span>
-          </div>
-
           <div className="mb-5">
             <div className="h-2 overflow-hidden rounded-full bg-zinc-200">
               <div
@@ -351,7 +359,7 @@ function FinalCheckSection({
             </div>
           )}
 
-          <div className="grid gap-5 xl:grid-cols-2">
+          <div className="grid gap-3 xl:grid-cols-2">
             <FinalCheckGroup
               currentProfile={currentProfile}
               finalChecks={finalChecks}
