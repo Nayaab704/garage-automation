@@ -25,9 +25,12 @@ const textFields = [
   { name: "color", label: "Color" },
 ];
 
-const numberFields = [
+const basicNumberFields = [
   { name: "year", label: "Year", min: "1900", step: "1" },
   { name: "mileage", label: "Mileage", min: "0", step: "1" },
+];
+
+const adminNumberFields = [
   {
     name: "purchase_price",
     label: "Purchase Price",
@@ -52,6 +55,14 @@ const titleStatusOptions = [
 
 const allowedTitleStatuses = titleStatusOptions.map((option) => option.value);
 const allowedVehicleOrigins = vehicleOriginOptions.map((option) => option.value);
+
+const inputClassName =
+  "mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100";
+
+const selectClassName =
+  "mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 shadow-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100";
+
+const labelClassName = "text-sm font-bold text-slate-700";
 
 function emptyToNull(value) {
   const trimmedValue = String(value ?? "").trim();
@@ -173,107 +184,114 @@ function AddVehicleForm({ initialValues = {}, onVehicleAdded }) {
   }
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-slate-900">Add Vehicle</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Create a new inventory record.
-        </p>
+    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <div className="mb-5">
+        <h2 className="text-xl font-black text-slate-950">Vehicle Details</h2>
       </div>
 
-      <form className="space-y-6" onSubmit={handleSubmit}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {textFields.map((field) => (
-            <label
-              className="block"
-              htmlFor={field.name}
-              key={field.name}
-            >
-              <span className="text-sm font-medium text-slate-700">
-                {field.label}
-              </span>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-                id={field.name}
-                maxLength={field.name === "vin" ? 17 : undefined}
-                name={field.name}
+      <form className="space-y-5" onSubmit={handleSubmit}>
+        <fieldset className="space-y-4">
+          <legend className="text-sm font-black text-slate-950">
+            Basic Details
+          </legend>
+          <div className="grid gap-4 md:grid-cols-2">
+            {textFields.map((field) => (
+              <label className="block" htmlFor={field.name} key={field.name}>
+                <span className={labelClassName}>{field.label}</span>
+                <input
+                  className={`${inputClassName} ${
+                    field.name === "vin" ? "font-mono uppercase tracking-wide" : ""
+                  }`}
+                  id={field.name}
+                  maxLength={field.name === "vin" ? 17 : undefined}
+                  name={field.name}
+                  onChange={handleChange}
+                  required={field.required}
+                  type="text"
+                  value={formData[field.name]}
+                />
+              </label>
+            ))}
+
+            {basicNumberFields.map((field) => (
+              <label className="block" htmlFor={field.name} key={field.name}>
+                <span className={labelClassName}>{field.label}</span>
+                <input
+                  className={inputClassName}
+                  id={field.name}
+                  min={field.min}
+                  name={field.name}
+                  onChange={handleChange}
+                  step={field.step}
+                  type="number"
+                  value={formData[field.name]}
+                />
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="space-y-4 rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
+          <legend className="px-1 text-sm font-black text-slate-950">
+            Purchase / Admin Details
+          </legend>
+          <div className="grid gap-4 md:grid-cols-2">
+            {adminNumberFields.map((field) => (
+              <label className="block" htmlFor={field.name} key={field.name}>
+                <span className={labelClassName}>{field.label}</span>
+                <input
+                  className={inputClassName}
+                  id={field.name}
+                  min={field.min}
+                  name={field.name}
+                  onChange={handleChange}
+                  step={field.step}
+                  type="number"
+                  value={formData[field.name]}
+                />
+              </label>
+            ))}
+
+            <label className="block" htmlFor="title_status">
+              <span className={labelClassName}>Title Status</span>
+              <select
+                className={selectClassName}
+                id="title_status"
+                name="title_status"
                 onChange={handleChange}
-                required={field.required}
-                type="text"
-                value={formData[field.name]}
-              />
+                value={formData.title_status}
+              >
+                {titleStatusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
-          ))}
-        </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {numberFields.map((field) => (
-            <label
-              className="block"
-              htmlFor={field.name}
-              key={field.name}
-            >
-              <span className="text-sm font-medium text-slate-700">
-                {field.label}
-              </span>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-                id={field.name}
-                min={field.min}
-                name={field.name}
+            <label className="block" htmlFor="vehicle_origin">
+              <span className={labelClassName}>Vehicle Origin</span>
+              <select
+                className={selectClassName}
+                id="vehicle_origin"
+                name="vehicle_origin"
                 onChange={handleChange}
-                step={field.step}
-                type="number"
-                value={formData[field.name]}
-              />
+                value={formData.vehicle_origin}
+              >
+                {vehicleOriginOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
-          ))}
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block" htmlFor="title_status">
-            <span className="text-sm font-medium text-slate-700">
-              Title Status
-            </span>
-            <select
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-              id="title_status"
-              name="title_status"
-              onChange={handleChange}
-              value={formData.title_status}
-            >
-              {titleStatusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block" htmlFor="vehicle_origin">
-            <span className="text-sm font-medium text-slate-700">
-              Vehicle Origin
-            </span>
-            <select
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-              id="vehicle_origin"
-              name="vehicle_origin"
-              onChange={handleChange}
-              value={formData.vehicle_origin}
-            >
-              {vehicleOriginOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+          </div>
+        </fieldset>
 
         <label className="block" htmlFor="notes">
-          <span className="text-sm font-medium text-slate-700">Notes</span>
+          <span className={labelClassName}>Notes</span>
           <textarea
-            className="mt-1 min-h-28 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+            className="mt-2 min-h-28 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-950 shadow-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
             id="notes"
             name="notes"
             onChange={handleChange}
@@ -282,23 +300,23 @@ function AddVehicleForm({ initialValues = {}, onVehicleAdded }) {
         </label>
 
         {errorMessage && (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
             {errorMessage}
           </div>
         )}
 
         {successMessage && (
-          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
             {successMessage}
           </div>
         )}
 
         <button
-          className="w-full rounded-md bg-slate-900 px-4 py-2.5 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+          className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-400"
           disabled={isSubmitting}
           type="submit"
         >
-          {isSubmitting ? "Adding Vehicle..." : "Add Vehicle"}
+          {isSubmitting ? "Creating Vehicle..." : "Create Vehicle"}
         </button>
       </form>
     </section>

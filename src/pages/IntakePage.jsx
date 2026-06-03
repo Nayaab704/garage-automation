@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AddVehicleForm from "../components/AddVehicleForm";
+import AppIcon from "../components/ui/AppIcon";
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 
@@ -83,61 +84,63 @@ function IntakePage({ currentProfile, onViewVehicles }) {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
-              Intake Workflow
-            </p>
-            <h2 className="mt-3 text-3xl font-bold text-slate-950">
-              Start Vehicle Intake
-            </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-              Camera VIN scanning will be added later. For now, enter VIN
-              manually.
-            </p>
+    <div className="mx-auto max-w-3xl space-y-4">
+      {!showVehicleForm && !createdVehicle && (
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+              <AppIcon name="car" size={26} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-xl font-black text-slate-950">Enter VIN</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Enter the vehicle VIN to start a new record.
+              </p>
+            </div>
           </div>
 
           <form
-            className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+            className="space-y-4"
             onSubmit={handleContinue}
           >
             <label className="block" htmlFor="intake-vin">
-              <span className="text-sm font-medium text-slate-700">VIN</span>
+              <span className="text-sm font-bold text-slate-700">VIN</span>
               <input
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-slate-900 shadow-sm outline-none transition placeholder:font-sans placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+                className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 font-mono text-base uppercase tracking-wide text-slate-950 shadow-sm outline-none transition placeholder:font-sans placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
                 id="intake-vin"
                 maxLength={17}
                 onChange={handleVinChange}
-                placeholder="Enter 17-character VIN"
+                placeholder="17-character VIN"
                 type="text"
                 value={vin}
               />
+              <span className="mt-2 block text-xs text-slate-400">
+                VIN is editable on the vehicle details step.
+              </span>
             </label>
 
             {errorMessage && (
-              <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
                 {errorMessage}
               </div>
             )}
 
             {!canCreateVehicle && (
-              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                 Your role can view intake, but cannot create vehicles.
               </div>
             )}
 
             <button
-              className="mt-4 w-full rounded-md bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-400"
               disabled={isCheckingVin || !canCreateVehicle}
               type="submit"
             >
-              {isCheckingVin ? "Checking VIN..." : "Continue to Vehicle Form"}
+              {isCheckingVin ? "Checking VIN..." : "Continue"}
             </button>
           </form>
-        </div>
-      </section>
+        </section>
+      )}
 
       {showVehicleForm && canCreateVehicle && (
         <AddVehicleForm
@@ -148,8 +151,8 @@ function IntakePage({ currentProfile, onViewVehicles }) {
       )}
 
       {createdVehicle && (
-        <section className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-emerald-950">
+        <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
+          <h2 className="text-lg font-black text-emerald-950">
             Vehicle intake created
           </h2>
           <p className="mt-2 text-sm text-emerald-800">
@@ -161,7 +164,7 @@ function IntakePage({ currentProfile, onViewVehicles }) {
             </p>
           )}
           <button
-            className="mt-4 rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800"
+            className="mt-4 inline-flex min-h-11 items-center justify-center rounded-2xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-800"
             onClick={onViewVehicles}
             type="button"
           >
