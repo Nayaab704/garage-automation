@@ -753,6 +753,8 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
               onWorkOrderAdded={refreshVehicleDetails}
               partRequests={partRequests}
               profiles={profiles}
+              purchaseOrderItems={purchaseOrderItems}
+              purchaseOrders={purchaseOrders}
               repairJobs={repairJobs}
               serviceCategories={serviceCategories}
               thirdPartyRepairs={thirdPartyRepairs}

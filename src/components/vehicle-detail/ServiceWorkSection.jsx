@@ -4,8 +4,6 @@ import { getServiceCategoryVisual } from "../../lib/serviceCategoryVisuals";
 import AddWorkOrderForm from "./AddWorkOrderForm";
 import ServiceCategoryCard from "./ServiceCategoryCard";
 
-const closedWorkOrderStatuses = ["completed", "cancelled"];
-
 function sortWorkOrders(workOrders) {
   return [...workOrders].sort((firstOrder, secondOrder) => {
     const firstDate = new Date(firstOrder.created_at ?? 0).getTime();
@@ -15,29 +13,8 @@ function sortWorkOrders(workOrders) {
 }
 
 function isOpenWorkOrder(workOrder) {
+  const closedWorkOrderStatuses = ["completed", "cancelled"];
   return !closedWorkOrderStatuses.includes(workOrder.status);
-}
-
-function isBodyShopCategory(category) {
-  const searchableText = `${category.slug ?? ""} ${category.name ?? ""}`
-    .toLowerCase()
-    .trim();
-
-  return searchableText.includes("body");
-}
-
-function getDefaultCategory(serviceCategories, workOrdersByCategoryId) {
-  const firstCategoryWithOpenWork = serviceCategories.find((category) =>
-    (workOrdersByCategoryId[category.id] ?? []).some(isOpenWorkOrder)
-  );
-
-  if (firstCategoryWithOpenWork) {
-    return firstCategoryWithOpenWork;
-  }
-
-  return (
-    serviceCategories.find(isBodyShopCategory) ?? serviceCategories[0] ?? null
-  );
 }
 
 function getCategoryAlert(workOrders) {
@@ -81,7 +58,7 @@ function CategoryChip({ category, isSelected, onSelect, workOrders }) {
           ? "border-blue-500 text-blue-700 shadow-[0_12px_30px_rgba(37,99,235,0.18)] ring-1 ring-blue-100"
           : "border-slate-200 text-slate-700 hover:border-blue-200 hover:shadow-md"
       }`}
-      onClick={() => onSelect(category.id)}
+      onClick={() => onSelect(category)}
       type="button"
     >
       <span className="flex flex-col items-center">
@@ -143,6 +120,8 @@ function ServiceWorkSection({
   onWorkOrderAdded,
   partRequests = [],
   profiles = [],
+  purchaseOrderItems = [],
+  purchaseOrders = [],
   repairJobs = [],
   serviceCategories = [],
   thirdPartyRepairs = [],
@@ -169,13 +148,9 @@ function ServiceWorkSection({
       total + (workOrdersByCategoryId[category.id]?.length ?? 0),
     0
   );
-  const defaultCategory = getDefaultCategory(
-    serviceCategories,
-    workOrdersByCategoryId
+  const selectedCategory = serviceCategories.find(
+    (category) => category.id === selectedCategoryId
   );
-  const selectedCategory =
-    serviceCategories.find((category) => category.id === selectedCategoryId) ??
-    defaultCategory;
   const selectedWorkOrders = selectedCategory
     ? workOrdersByCategoryId[selectedCategory.id] ?? []
     : [];
@@ -184,13 +159,19 @@ function ServiceWorkSection({
     onWorkOrderAdded?.();
   }
 
+  function handleCategorySelect(category) {
+    setSelectedCategoryId((currentCategoryId) =>
+      currentCategoryId === category.id ? null : category.id
+    );
+  }
+
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-black text-slate-950">Service Work</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Pick a category, then open one work order.
+            Pick a category to view work orders.
           </p>
         </div>
 
@@ -223,7 +204,7 @@ function ServiceWorkSection({
                 category={category}
                 isSelected={selectedCategory?.id === category.id}
                 key={category.id}
-                onSelect={setSelectedCategoryId}
+                onSelect={handleCategorySelect}
                 workOrders={workOrdersByCategoryId[category.id] ?? []}
               />
             ))}
@@ -258,6 +239,8 @@ function ServiceWorkSection({
               onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
               partRequests={partRequests}
               profiles={profiles}
+              purchaseOrderItems={purchaseOrderItems}
+              purchaseOrders={purchaseOrders}
               selectedCategory={selectedCategory}
               thirdPartyRepairs={thirdPartyRepairs}
               vehicleId={vehicleId}

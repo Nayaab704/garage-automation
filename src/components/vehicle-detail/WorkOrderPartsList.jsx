@@ -150,6 +150,7 @@ function canCreatePurchaseOrder(currentProfile, part) {
 
 function WorkOrderPartsList({
   currentProfile,
+  hideHeader = false,
   onActivityLogged,
   onPartApprovalUpdated,
   onPartPurchaseOrderCreated,
@@ -233,12 +234,14 @@ function WorkOrderPartsList({
 
   return (
     <div className="rounded-md bg-zinc-50 p-3">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h5 className="text-sm font-bold text-zinc-950">Required Parts</h5>
-        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-zinc-600 ring-1 ring-inset ring-zinc-200">
-          {parts.length} {parts.length === 1 ? "part" : "parts"}
-        </span>
-      </div>
+      {!hideHeader && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h5 className="text-sm font-bold text-zinc-950">Required Parts</h5>
+          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-zinc-600 ring-1 ring-inset ring-zinc-200">
+            {parts.length} {parts.length === 1 ? "part" : "parts"}
+          </span>
+        </div>
+      )}
 
       {parts.length === 0 ? (
         <div className="rounded-md border border-dashed border-zinc-200 bg-white p-3 text-sm text-zinc-500">

@@ -126,6 +126,7 @@ function ThirdPartyRepairsList({
   canUploadDocuments = false,
   currentProfile,
   documents = [],
+  hideHeader = false,
   onActivityLogged,
   onDocumentAdded,
   onDocumentDeleted,
@@ -185,15 +186,17 @@ function ThirdPartyRepairsList({
 
   return (
     <div className="rounded-md bg-zinc-50 p-3">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h5 className="text-sm font-bold text-zinc-950">
-          Third-Party Repairs
-        </h5>
-        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-zinc-600 ring-1 ring-inset ring-zinc-200">
-          {thirdPartyRepairs.length}{" "}
-          {thirdPartyRepairs.length === 1 ? "repair" : "repairs"}
-        </span>
-      </div>
+      {!hideHeader && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h5 className="text-sm font-bold text-zinc-950">
+            Third-Party Repairs
+          </h5>
+          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-zinc-600 ring-1 ring-inset ring-zinc-200">
+            {thirdPartyRepairs.length}{" "}
+            {thirdPartyRepairs.length === 1 ? "repair" : "repairs"}
+          </span>
+        </div>
+      )}
 
       {thirdPartyRepairs.length === 0 ? (
         <div className="rounded-md border border-dashed border-zinc-200 bg-white p-3 text-sm text-zinc-500">
