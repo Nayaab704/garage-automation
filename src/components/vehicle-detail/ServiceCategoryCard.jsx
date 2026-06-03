@@ -5,6 +5,7 @@ import AddWorkOrderPartForm from "./AddWorkOrderPartForm";
 import ThirdPartyRepairsList from "./ThirdPartyRepairsList";
 import WorkOrderLaborList from "./WorkOrderLaborList";
 import WorkOrderPartsList from "./WorkOrderPartsList";
+import WorkOrderPhotosList from "./WorkOrderPhotosList";
 
 const priorityLabels = {
   low: "Low",
@@ -110,6 +111,7 @@ function Badge({ children, className }) {
 function WorkOrderCard({
   canManageLabor,
   canManageParts,
+  canManagePhotos,
   canManageThirdPartyRepairs,
   currentProfile,
   laborLogs,
@@ -119,9 +121,12 @@ function WorkOrderCard({
   onPartAdded,
   onPartApprovalUpdated,
   onPartPurchaseOrderCreated,
+  onPhotoAdded,
+  onPhotoDeleted,
   onThirdPartyRepairAdded,
   onThirdPartyRepairDeleted,
   parts,
+  photos,
   profiles,
   thirdPartyRepairs,
   vehicleId,
@@ -194,6 +199,16 @@ function WorkOrderCard({
           {workOrder.notes}
         </p>
       )}
+
+      <WorkOrderPhotosList
+        canManage={canManagePhotos}
+        onActivityLogged={onActivityLogged}
+        onPhotoAdded={onPhotoAdded}
+        onPhotoDeleted={onPhotoDeleted}
+        photos={photos}
+        vehicleId={vehicleId}
+        workOrder={workOrder}
+      />
 
       <WorkOrderLaborList
         canManage={canManageLabor}
@@ -275,6 +290,7 @@ function ServiceCategoryCard({
   canManage = false,
   canManageLabor = false,
   canManageParts = false,
+  canManagePhotos = false,
   canManageThirdPartyRepairs = false,
   category,
   currentProfile,
@@ -286,12 +302,15 @@ function ServiceCategoryCard({
   onPartAdded,
   onPartApprovalUpdated,
   onPartPurchaseOrderCreated,
+  onPhotoAdded,
+  onPhotoDeleted,
   onThirdPartyRepairAdded,
   onThirdPartyRepairDeleted,
   partRequests = [],
   profiles = [],
   thirdPartyRepairs = [],
   vehicleId,
+  vehiclePhotos = [],
   vendors = [],
   workOrders = [],
 }) {
@@ -353,6 +372,7 @@ function ServiceCategoryCard({
             <WorkOrderCard
               canManageLabor={canManageLabor}
               canManageParts={canManageParts}
+              canManagePhotos={canManagePhotos}
               canManageThirdPartyRepairs={canManageThirdPartyRepairs}
               currentProfile={currentProfile}
               key={workOrder.id ?? index}
@@ -365,10 +385,15 @@ function ServiceCategoryCard({
               onPartAdded={onPartAdded}
               onPartApprovalUpdated={onPartApprovalUpdated}
               onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
+              onPhotoAdded={onPhotoAdded}
+              onPhotoDeleted={onPhotoDeleted}
               onThirdPartyRepairAdded={onThirdPartyRepairAdded}
               onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
               parts={partRequests.filter(
                 (partRequest) => partRequest.repair_job_id === workOrder.id
+              )}
+              photos={vehiclePhotos.filter(
+                (photo) => photo.repair_job_id === workOrder.id
               )}
               profiles={profiles}
               thirdPartyRepairs={thirdPartyRepairs.filter(

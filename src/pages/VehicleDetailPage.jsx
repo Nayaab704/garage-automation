@@ -454,6 +454,27 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
     await refreshInvestmentSummary();
   }
 
+  function handleWorkOrderPhotoAdded(photo) {
+    if (!photo?.id) {
+      return;
+    }
+
+    setVehiclePhotos((currentPhotos) => [
+      photo,
+      ...currentPhotos.filter((currentPhoto) => currentPhoto.id !== photo.id),
+    ]);
+  }
+
+  function handleWorkOrderPhotoDeleted(deletedPhoto) {
+    if (!deletedPhoto?.id) {
+      return;
+    }
+
+    setVehiclePhotos((currentPhotos) =>
+      currentPhotos.filter((photo) => photo.id !== deletedPhoto.id)
+    );
+  }
+
   async function handleThirdPartyRepairAdded(thirdPartyRepair) {
     if (thirdPartyRepair?.id) {
       setThirdPartyRepairs((currentRepairs) => [
@@ -637,13 +658,14 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             onActivityLogged={refreshActivityTimeline}
             onVehiclePhotoChanged={refreshVehicleDetails}
             vehicleId={vehicleId}
-            vehiclePhotos={vehiclePhotos}
+            vehiclePhotos={vehiclePhotos.filter((photo) => !photo.repair_job_id)}
           />
 
           <ServiceWorkSection
             canManage={canManageRepairJobs}
             canManageLabor={canManageLabor}
             canManageParts={canManageWorkOrderParts}
+            canManagePhotos={canManagePhotos}
             canManageThirdPartyRepairs={canManageRepairJobs}
             currentProfile={currentProfile}
             laborLogs={laborLogs}
@@ -653,6 +675,8 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             onPartAdded={handleWorkOrderPartAdded}
             onPartApprovalUpdated={handleWorkOrderPartApprovalUpdated}
             onPartPurchaseOrderCreated={handleWorkOrderPartPurchaseOrderCreated}
+            onPhotoAdded={handleWorkOrderPhotoAdded}
+            onPhotoDeleted={handleWorkOrderPhotoDeleted}
             onThirdPartyRepairAdded={handleThirdPartyRepairAdded}
             onThirdPartyRepairDeleted={handleThirdPartyRepairDeleted}
             onWorkOrderAdded={refreshVehicleDetails}
@@ -662,6 +686,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             serviceCategories={serviceCategories}
             thirdPartyRepairs={thirdPartyRepairs}
             vehicleId={vehicleId}
+            vehiclePhotos={vehiclePhotos}
             vendors={vendors}
           />
 

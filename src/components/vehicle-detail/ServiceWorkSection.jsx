@@ -14,6 +14,7 @@ function ServiceWorkSection({
   canManage = false,
   canManageLabor = false,
   canManageParts = false,
+  canManagePhotos = false,
   canManageThirdPartyRepairs = false,
   currentProfile,
   laborLogs = [],
@@ -23,6 +24,8 @@ function ServiceWorkSection({
   onPartAdded,
   onPartApprovalUpdated,
   onPartPurchaseOrderCreated,
+  onPhotoAdded,
+  onPhotoDeleted,
   onThirdPartyRepairAdded,
   onThirdPartyRepairDeleted,
   onWorkOrderAdded,
@@ -32,6 +35,7 @@ function ServiceWorkSection({
   serviceCategories = [],
   thirdPartyRepairs = [],
   vehicleId,
+  vehiclePhotos = [],
   vendors = [],
 }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -88,6 +92,7 @@ function ServiceWorkSection({
               canManage={canManage}
               canManageLabor={canManageLabor}
               canManageParts={canManageParts}
+              canManagePhotos={canManagePhotos}
               canManageThirdPartyRepairs={canManageThirdPartyRepairs}
               category={category}
               currentProfile={currentProfile}
@@ -100,12 +105,15 @@ function ServiceWorkSection({
               onPartAdded={onPartAdded}
               onPartApprovalUpdated={onPartApprovalUpdated}
               onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
+              onPhotoAdded={onPhotoAdded}
+              onPhotoDeleted={onPhotoDeleted}
               onThirdPartyRepairAdded={onThirdPartyRepairAdded}
               onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
               partRequests={partRequests}
               profiles={profiles}
               thirdPartyRepairs={thirdPartyRepairs}
               vehicleId={vehicleId}
+              vehiclePhotos={vehiclePhotos}
               vendors={vendors}
               workOrders={workOrdersByCategoryId[category.id] ?? []}
             />
