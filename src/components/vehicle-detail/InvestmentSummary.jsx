@@ -39,38 +39,23 @@ function InvestmentCard({ label, tone = "default", value }) {
   );
 }
 
-function CompactMoneyValue({ label, tone = "default", value }) {
-  const valueClassName = {
-    default: "text-slate-950",
-    negative: "text-red-700",
-    positive: "text-emerald-700",
-  }[tone];
-
-  return (
-    <span className="min-w-0">
-      <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {label}
-      </span>
-      <span className={`block truncate text-sm font-black ${valueClassName}`}>
-        {value}
-      </span>
-    </span>
-  );
-}
-
 function InvestmentSummary({ currentProfile, investmentSummary, vehicle }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const estimatedProfit = investmentSummary?.estimated_profit;
   const estimatedProfitNumber = Number(estimatedProfit ?? 0);
-  const isTechnician = currentProfile?.role === "technician";
   const profitTone = estimatedProfitNumber < 0 ? "negative" : "positive";
-  const canExpandFinancialDetails = !isTechnician;
+  const canViewFinancialDetails = ["admin", "owner"].includes(
+    currentProfile?.role
+  );
+
+  if (!canViewFinancialDetails) {
+    return null;
+  }
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <button
-        className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50 disabled:cursor-default disabled:hover:bg-white"
-        disabled={!canExpandFinancialDetails}
+        className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
         onClick={() => setIsExpanded((isOpen) => !isOpen)}
         type="button"
       >
@@ -82,51 +67,19 @@ function InvestmentSummary({ currentProfile, investmentSummary, vehicle }) {
             <span className="block font-bold text-slate-950">
               Financial Details
             </span>
-            {isTechnician && (
-              <span className="block text-xs font-medium text-slate-500">
-                Minimized for technician view
-              </span>
-            )}
           </span>
         </span>
 
-        <span className="flex min-w-0 items-center gap-4">
-          <span className="hidden min-w-0 grid-cols-2 gap-4 sm:grid">
-            <CompactMoneyValue
-              label="Invested"
-              value={formatCurrency(investmentSummary?.total_invested)}
-            />
-            <CompactMoneyValue
-              label="Profit"
-              tone={profitTone}
-              value={formatCurrency(investmentSummary?.estimated_profit)}
-            />
-          </span>
-          {canExpandFinancialDetails && (
-            <AppIcon
-              className={`shrink-0 text-slate-500 transition ${
-                isExpanded ? "rotate-90" : ""
-              }`}
-              name="chevron-right"
-              size={20}
-            />
-          )}
-        </span>
+        <AppIcon
+          className={`shrink-0 text-slate-500 transition ${
+            isExpanded ? "rotate-90" : ""
+          }`}
+          name="chevron-right"
+          size={20}
+        />
       </button>
 
-      <div className="grid grid-cols-2 gap-2 border-t border-slate-100 px-4 py-3 sm:hidden">
-        <CompactMoneyValue
-          label="Total Invested"
-          value={formatCurrency(investmentSummary?.total_invested)}
-        />
-        <CompactMoneyValue
-          label="Estimated Profit"
-          tone={profitTone}
-          value={formatCurrency(investmentSummary?.estimated_profit)}
-        />
-      </div>
-
-      {canExpandFinancialDetails && isExpanded && (
+      {isExpanded && (
         <div className="grid gap-3 border-t border-slate-100 p-4 md:grid-cols-3">
           <InvestmentCard
             label="Purchase Price"

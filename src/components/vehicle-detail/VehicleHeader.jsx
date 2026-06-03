@@ -1,15 +1,6 @@
-import { useState } from "react";
 import AppIcon from "../ui/AppIcon";
 import HeroBadge from "../ui/HeroBadge";
-import VehicleOriginBadge from "../VehicleOriginBadge";
 import VehicleStatusDropdown from "./VehicleStatusDropdown";
-
-const currencyFormatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 const readyActionHiddenStatuses = new Set([
@@ -22,20 +13,6 @@ function displayValue(value) {
   return value === null || value === undefined || value === ""
     ? "Not available"
     : value;
-}
-
-function formatCurrency(value) {
-  if (value === null || value === undefined) {
-    return "Not available";
-  }
-
-  const numberValue = Number(value);
-
-  if (!Number.isFinite(numberValue)) {
-    return "Not available";
-  }
-
-  return currencyFormatter.format(numberValue);
 }
 
 function formatNumber(value) {
@@ -66,19 +43,6 @@ function getVehicleTitle(vehicle) {
   );
 
   return titleParts.length > 0 ? titleParts.join(" ") : "Vehicle Details";
-}
-
-function DetailItem({ label, value }) {
-  return (
-    <div className="rounded-2xl bg-slate-50 px-3 py-3">
-      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {label}
-      </dt>
-      <dd className="mt-1 break-words text-sm font-bold text-slate-950">
-        {value}
-      </dd>
-    </div>
-  );
 }
 
 function QuickActionButton({ icon, label, onClick, primary = false }) {
@@ -121,6 +85,23 @@ function CompactActionButton({
       <span className="hidden sm:inline">{label}</span>
     </button>
   );
+}
+
+function getVehicleOrigin(vehicle) {
+  return vehicle.vehicle_origin || vehicle.origin || "";
+}
+
+function formatHeroOrigin(origin) {
+  const labels = {
+    auction: "Auction",
+    customer_trade_in: "Customer Trade",
+    other: "Other",
+    personal: "Personal",
+    training: "Training",
+    unknown: "Unknown Origin",
+  };
+
+  return labels[origin] ?? "";
 }
 
 function MetadataRow({ vehicle }) {
@@ -172,10 +153,11 @@ function VehicleHeader({
   primaryPhoto,
   vehicle,
 }) {
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const title = getVehicleTitle(vehicle);
   const stockNumber = displayValue(vehicle.stock_number);
   const thumbnailUrl = primaryPhoto?.photo_url;
+  const vehicleOrigin = getVehicleOrigin(vehicle);
+  const vehicleOriginLabel = formatHeroOrigin(vehicleOrigin);
   const normalizedVehicleStatus = String(vehicle.status ?? "").toLowerCase();
   const shouldShowReadyAction =
     canMarkReady && !readyActionHiddenStatuses.has(normalizedVehicleStatus);
@@ -277,6 +259,13 @@ function VehicleHeader({
                   <HeroBadge value={vehicle.status} />
                 )}
                 <HeroBadge value={vehicle.title_status ?? "unknown"} />
+                {vehicleOriginLabel && (
+                  <HeroBadge
+                    label={vehicleOriginLabel}
+                    value={vehicleOrigin || "unknown"}
+                    variant="gray"
+                  />
+                )}
                 {attentionBadge && (
                   <HeroBadge
                     count={attentionBadge.count}
@@ -310,59 +299,6 @@ function VehicleHeader({
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <button
-          className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
-          onClick={() => setIsDetailsOpen((isOpen) => !isOpen)}
-          type="button"
-        >
-          <span className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-slate-500">
-              <AppIcon name="car" size={22} />
-            </span>
-            <span className="font-bold text-slate-950">Vehicle Details</span>
-          </span>
-          <AppIcon
-            className={`text-slate-500 transition ${
-              isDetailsOpen ? "rotate-90" : ""
-            }`}
-            name="chevron-right"
-            size={20}
-          />
-        </button>
-
-        {isDetailsOpen && (
-          <div className="border-t border-slate-100 p-4">
-            <dl className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              <DetailItem
-                label="Purchase Price"
-                value={formatCurrency(vehicle.purchase_price)}
-              />
-              <DetailItem
-                label="Target Sale Price"
-                value={formatCurrency(vehicle.target_sale_price)}
-              />
-              <div className="rounded-2xl bg-slate-50 px-3 py-3">
-                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Vehicle Origin
-                </dt>
-                <dd className="mt-2">
-                  <VehicleOriginBadge origin={vehicle.vehicle_origin} />
-                </dd>
-              </div>
-            </dl>
-
-            {vehicle.notes && (
-              <div className="mt-3 rounded-2xl bg-slate-50 p-3">
-                <p className="text-sm font-bold text-slate-950">Notes</p>
-                <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                  {vehicle.notes}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
     </div>
   );
 }
