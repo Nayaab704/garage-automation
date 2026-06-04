@@ -1,6 +1,11 @@
 import { useState } from "react";
 import AddVehicleForm from "../components/AddVehicleForm";
 import AppIcon from "../components/ui/AppIcon";
+import {
+  buttonClassNames,
+  cardClassNames,
+  formControlClassNames,
+} from "../components/ui/uiStyles";
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 
@@ -86,7 +91,7 @@ function IntakePage({ currentProfile, onViewVehicles }) {
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       {!showVehicleForm && !createdVehicle && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className={`p-5 sm:p-6 ${cardClassNames.elevated}`}>
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
               <AppIcon name="car" size={26} />
@@ -104,9 +109,9 @@ function IntakePage({ currentProfile, onViewVehicles }) {
             onSubmit={handleContinue}
           >
             <label className="block" htmlFor="intake-vin">
-              <span className="text-sm font-bold text-slate-700">VIN</span>
+              <span className={formControlClassNames.label}>VIN</span>
               <input
-                className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 font-mono text-base uppercase tracking-wide text-slate-950 shadow-sm outline-none transition placeholder:font-sans placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+                className={`${formControlClassNames.input} font-mono text-base uppercase tracking-wide placeholder:font-sans placeholder:normal-case placeholder:tracking-normal`}
                 id="intake-vin"
                 maxLength={17}
                 onChange={handleVinChange}
@@ -132,7 +137,7 @@ function IntakePage({ currentProfile, onViewVehicles }) {
             )}
 
             <button
-              className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+              className={`w-full ${buttonClassNames.primary}`}
               disabled={isCheckingVin || !canCreateVehicle}
               type="submit"
             >
@@ -164,7 +169,7 @@ function IntakePage({ currentProfile, onViewVehicles }) {
             </p>
           )}
           <button
-            className="mt-4 inline-flex min-h-11 items-center justify-center rounded-2xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-800"
+            className={`mt-4 ${buttonClassNames.primary}`}
             onClick={onViewVehicles}
             type="button"
           >

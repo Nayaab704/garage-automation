@@ -1,4 +1,9 @@
 import { useState } from "react";
+import {
+  buttonClassNames,
+  cardClassNames,
+  formControlClassNames,
+} from "./ui/uiStyles";
 import { supabase } from "../lib/supabaseClient";
 import { vehicleOriginOptions } from "../lib/vehicleOrigin";
 
@@ -55,14 +60,6 @@ const titleStatusOptions = [
 
 const allowedTitleStatuses = titleStatusOptions.map((option) => option.value);
 const allowedVehicleOrigins = vehicleOriginOptions.map((option) => option.value);
-
-const inputClassName =
-  "mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100";
-
-const selectClassName =
-  "mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 shadow-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100";
-
-const labelClassName = "text-sm font-bold text-slate-700";
 
 function emptyToNull(value) {
   const trimmedValue = String(value ?? "").trim();
@@ -184,7 +181,7 @@ function AddVehicleForm({ initialValues = {}, onVehicleAdded }) {
   }
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+    <section className={`p-5 sm:p-6 ${cardClassNames.elevated}`}>
       <div className="mb-5">
         <h2 className="text-xl font-black text-slate-950">Vehicle Details</h2>
       </div>
@@ -197,9 +194,11 @@ function AddVehicleForm({ initialValues = {}, onVehicleAdded }) {
           <div className="grid gap-4 md:grid-cols-2">
             {textFields.map((field) => (
               <label className="block" htmlFor={field.name} key={field.name}>
-                <span className={labelClassName}>{field.label}</span>
+                <span className={formControlClassNames.label}>
+                  {field.label}
+                </span>
                 <input
-                  className={`${inputClassName} ${
+                  className={`${formControlClassNames.input} ${
                     field.name === "vin" ? "font-mono uppercase tracking-wide" : ""
                   }`}
                   id={field.name}
@@ -215,9 +214,11 @@ function AddVehicleForm({ initialValues = {}, onVehicleAdded }) {
 
             {basicNumberFields.map((field) => (
               <label className="block" htmlFor={field.name} key={field.name}>
-                <span className={labelClassName}>{field.label}</span>
+                <span className={formControlClassNames.label}>
+                  {field.label}
+                </span>
                 <input
-                  className={inputClassName}
+                  className={formControlClassNames.input}
                   id={field.name}
                   min={field.min}
                   name={field.name}
@@ -238,9 +239,11 @@ function AddVehicleForm({ initialValues = {}, onVehicleAdded }) {
           <div className="grid gap-4 md:grid-cols-2">
             {adminNumberFields.map((field) => (
               <label className="block" htmlFor={field.name} key={field.name}>
-                <span className={labelClassName}>{field.label}</span>
+                <span className={formControlClassNames.label}>
+                  {field.label}
+                </span>
                 <input
-                  className={inputClassName}
+                  className={formControlClassNames.input}
                   id={field.name}
                   min={field.min}
                   name={field.name}
@@ -253,9 +256,9 @@ function AddVehicleForm({ initialValues = {}, onVehicleAdded }) {
             ))}
 
             <label className="block" htmlFor="title_status">
-              <span className={labelClassName}>Title Status</span>
+              <span className={formControlClassNames.label}>Title Status</span>
               <select
-                className={selectClassName}
+                className={formControlClassNames.select}
                 id="title_status"
                 name="title_status"
                 onChange={handleChange}
@@ -270,9 +273,11 @@ function AddVehicleForm({ initialValues = {}, onVehicleAdded }) {
             </label>
 
             <label className="block" htmlFor="vehicle_origin">
-              <span className={labelClassName}>Vehicle Origin</span>
+              <span className={formControlClassNames.label}>
+                Vehicle Origin
+              </span>
               <select
-                className={selectClassName}
+                className={formControlClassNames.select}
                 id="vehicle_origin"
                 name="vehicle_origin"
                 onChange={handleChange}
@@ -289,9 +294,9 @@ function AddVehicleForm({ initialValues = {}, onVehicleAdded }) {
         </fieldset>
 
         <label className="block" htmlFor="notes">
-          <span className={labelClassName}>Notes</span>
+          <span className={formControlClassNames.label}>Notes</span>
           <textarea
-            className="mt-2 min-h-28 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-950 shadow-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+            className={formControlClassNames.textarea}
             id="notes"
             name="notes"
             onChange={handleChange}
@@ -312,7 +317,7 @@ function AddVehicleForm({ initialValues = {}, onVehicleAdded }) {
         )}
 
         <button
-          className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+          className={`w-full ${buttonClassNames.primary}`}
           disabled={isSubmitting}
           type="submit"
         >
