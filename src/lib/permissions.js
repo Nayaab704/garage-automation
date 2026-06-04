@@ -1,6 +1,7 @@
 const ALL_PERMISSIONS = [
   "vehicle:create",
   "vehicle:edit",
+  "vehicle:delete",
   "vehicle:change_status",
   "repair:manage",
   "repair_process:manage",
