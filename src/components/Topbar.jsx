@@ -1,5 +1,5 @@
 import AuthHeader from "./AuthHeader";
-import { APP_NAME, APP_SHORT_NAME } from "../config/appConfig";
+import BrandLogo from "./branding/BrandLogo";
 import { hasPermission } from "../lib/permissions";
 
 const mobileItems = [
@@ -46,9 +46,7 @@ function Topbar({
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
       <div className="flex min-h-16 items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <div className="min-w-0">
-          <p className="truncate text-sm font-black tracking-wide text-emerald-700">
-            {APP_NAME}
-          </p>
+          <BrandLogo className="max-w-[210px] sm:max-w-none" size="compact" />
           {showTitle && (
             <h1 className="mt-1 truncate text-xl font-bold text-zinc-950 sm:text-2xl">
               {title}
@@ -68,9 +66,6 @@ function Topbar({
             profileError={profileError}
             userEmail={userEmail}
           />
-          <div className="flex size-9 items-center justify-center rounded-md bg-emerald-600 text-sm font-bold text-white lg:hidden">
-            {APP_SHORT_NAME}
-          </div>
         </div>
       </div>
 

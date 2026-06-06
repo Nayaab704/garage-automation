@@ -1,4 +1,8 @@
 import { useState } from "react";
+import FormActions from "../ui/FormActions";
+import FormMessage from "../ui/FormMessage";
+import ModalShell from "../ui/ModalShell";
+import { buttonClassNames, formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 
@@ -146,35 +150,17 @@ function AddWorkOrderPhotoForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 px-4 py-6">
-      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-lg border border-zinc-200 bg-white p-6 shadow-xl">
-        <div className="mb-6 flex items-start justify-between gap-4">
+    <ModalShell
+      description="Take or upload a photo for this work order."
+      eyebrow={getWorkOrderTitle(workOrder)}
+      isCloseDisabled={isSubmitting}
+      onClose={onClose}
+      title="Add Photo"
+    >
+      <form className="space-y-5" onSubmit={handleSubmit}>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              {getWorkOrderTitle(workOrder)}
-            </p>
-            <h3 className="mt-1 text-lg font-bold text-zinc-950">
-              Add Photo
-            </h3>
-            <p className="mt-1 text-sm text-zinc-500">
-              Take or upload a photo for this work order.
-            </p>
-          </div>
-
-          <button
-            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isSubmitting}
-            onClick={onClose}
-            type="button"
-          >
-            Close
-          </button>
-        </div>
-
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          <div>
-            <span className="text-sm font-medium text-zinc-700">Photo</span>
-            <div className="mt-1">
+            <span className={formControlClassNames.label}>Photo</span>
+            <div className="mt-2">
               <input
                 accept="image/*"
                 capture="environment"
@@ -185,7 +171,7 @@ function AddWorkOrderPhotoForm({
                 type="file"
               />
               <label
-                className="inline-flex cursor-pointer rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 focus-within:ring-2 focus-within:ring-zinc-200"
+                className={buttonClassNames.file}
                 htmlFor="work-order-photo-file"
               >
                 Take or Upload Photo
@@ -195,9 +181,9 @@ function AddWorkOrderPhotoForm({
               On phone or tablet, this can open the camera.
             </p>
             {selectedFile && (
-              <p className="mt-2 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700">
+              <p className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                 Selected:{" "}
-                <span className="font-semibold text-zinc-950">
+                <span className="font-semibold text-slate-950">
                   {selectedFile.name}
                 </span>
               </p>
@@ -205,11 +191,9 @@ function AddWorkOrderPhotoForm({
           </div>
 
           <label className="block" htmlFor="work-order-photo-caption">
-            <span className="text-sm font-medium text-zinc-700">
-              Caption
-            </span>
+            <span className={formControlClassNames.label}>Caption</span>
             <textarea
-              className="mt-1 min-h-24 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              className={formControlClassNames.textarea}
               id="work-order-photo-caption"
               name="caption"
               onChange={handleChange}
@@ -218,39 +202,18 @@ function AddWorkOrderPhotoForm({
             />
           </label>
 
-          {errorMessage && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {errorMessage}
-            </div>
-          )}
+          <FormMessage tone="error">{errorMessage}</FormMessage>
 
-          {successMessage && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              {successMessage}
-            </div>
-          )}
+          <FormMessage tone="success">{successMessage}</FormMessage>
 
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button
-              className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isSubmitting}
-              onClick={onClose}
-              type="button"
-            >
-              Cancel
-            </button>
-
-            <button
-              className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
-              disabled={isSubmitting}
-              type="submit"
-            >
-              {isSubmitting ? "Uploading..." : "Add Photo"}
-            </button>
-          </div>
+          <FormActions
+            isSubmitting={isSubmitting}
+            onCancel={onClose}
+            submitLabel="Add Photo"
+            submittingLabel="Uploading..."
+          />
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 

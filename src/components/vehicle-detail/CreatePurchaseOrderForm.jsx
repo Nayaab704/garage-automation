@@ -1,4 +1,8 @@
 import { useState } from "react";
+import FormActions from "../ui/FormActions";
+import FormMessage from "../ui/FormMessage";
+import ModalShell from "../ui/ModalShell";
+import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 
@@ -336,36 +340,23 @@ function CreatePurchaseOrderForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 px-4 py-6">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-zinc-200 bg-white p-6 shadow-xl">
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-bold text-zinc-950">
-              Create Purchase Order
-            </h3>
-            <p className="mt-1 text-sm text-zinc-500">
-              Order a requested part from a vendor.
-            </p>
-          </div>
-
-          <button
-            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isSubmitting}
-            onClick={onClose}
-            type="button"
-          >
-            Close
-          </button>
-        </div>
-
-        <form className="space-y-5" onSubmit={handleSubmit}>
+    <ModalShell
+      description="Order a requested part from a vendor."
+      isCloseDisabled={isSubmitting}
+      onClose={onClose}
+      size="lg"
+      title="Create Purchase Order"
+    >
+      <form className="space-y-5" onSubmit={handleSubmit}>
+          <fieldset className="space-y-4">
+            <legend className="text-sm font-black text-slate-950">
+              Vendor / Part
+            </legend>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block" htmlFor="purchase-order-vendor">
-              <span className="text-sm font-medium text-zinc-700">
-                Vendor
-              </span>
+              <span className={formControlClassNames.label}>Vendor</span>
               <select
-                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.select}
                 id="purchase-order-vendor"
                 name="vendor_id"
                 onChange={handleChange}
@@ -382,11 +373,9 @@ function CreatePurchaseOrderForm({
             </label>
 
             <label className="block" htmlFor="purchase-order-part-request">
-              <span className="text-sm font-medium text-zinc-700">
-                Part Request
-              </span>
+              <span className={formControlClassNames.label}>Part Request</span>
               <select
-                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.select}
                 disabled={lockPartRequest}
                 id="purchase-order-part-request"
                 name="part_request_id"
@@ -403,19 +392,18 @@ function CreatePurchaseOrderForm({
               </select>
             </label>
           </div>
+          </fieldset>
 
           {selectedPartRequest?.approval_status === "pending" && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
               Pending admin review, but PO can still be created.
             </div>
           )}
 
           <label className="block" htmlFor="purchase-order-description">
-            <span className="text-sm font-medium text-zinc-700">
-              Description
-            </span>
+            <span className={formControlClassNames.label}>Description</span>
             <input
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              className={formControlClassNames.input}
               id="purchase-order-description"
               name="description"
               onChange={handleChange}
@@ -425,13 +413,15 @@ function CreatePurchaseOrderForm({
             />
           </label>
 
+          <fieldset className="space-y-4 rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
+            <legend className="px-1 text-sm font-black text-slate-950">
+              Cost Details
+            </legend>
           <div className="grid gap-4 sm:grid-cols-4">
             <label className="block" htmlFor="purchase-order-quantity">
-              <span className="text-sm font-medium text-zinc-700">
-                Quantity
-              </span>
+              <span className={formControlClassNames.label}>Quantity</span>
               <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.input}
                 id="purchase-order-quantity"
                 min="1"
                 name="quantity"
@@ -443,11 +433,9 @@ function CreatePurchaseOrderForm({
             </label>
 
             <label className="block" htmlFor="purchase-order-unit-cost">
-              <span className="text-sm font-medium text-zinc-700">
-                Unit Cost
-              </span>
+              <span className={formControlClassNames.label}>Unit Cost</span>
               <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.input}
                 id="purchase-order-unit-cost"
                 min="0"
                 name="unit_cost"
@@ -459,11 +447,9 @@ function CreatePurchaseOrderForm({
             </label>
 
             <label className="block" htmlFor="purchase-order-shipping">
-              <span className="text-sm font-medium text-zinc-700">
-                Shipping
-              </span>
+              <span className={formControlClassNames.label}>Shipping</span>
               <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.input}
                 id="purchase-order-shipping"
                 min="0"
                 name="shipping_cost"
@@ -475,9 +461,9 @@ function CreatePurchaseOrderForm({
             </label>
 
             <label className="block" htmlFor="purchase-order-tax">
-              <span className="text-sm font-medium text-zinc-700">Tax</span>
+              <span className={formControlClassNames.label}>Tax</span>
               <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.input}
                 id="purchase-order-tax"
                 min="0"
                 name="tax"
@@ -488,11 +474,12 @@ function CreatePurchaseOrderForm({
               />
             </label>
           </div>
+          </fieldset>
 
           <label className="block" htmlFor="purchase-order-notes">
-            <span className="text-sm font-medium text-zinc-700">Notes</span>
+            <span className={formControlClassNames.label}>Notes</span>
             <textarea
-              className="mt-1 min-h-24 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              className={formControlClassNames.textarea}
               id="purchase-order-notes"
               name="notes"
               onChange={handleChange}
@@ -500,45 +487,20 @@ function CreatePurchaseOrderForm({
             />
           </label>
 
-          {errorMessage && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {errorMessage}
-            </div>
-          )}
+          <FormMessage tone="error">{errorMessage}</FormMessage>
 
-          {successMessage && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              {successMessage}
-            </div>
-          )}
+          <FormMessage tone="success">{successMessage}</FormMessage>
 
-          {warningMessage && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              {warningMessage}
-            </div>
-          )}
+          <FormMessage tone="warning">{warningMessage}</FormMessage>
 
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button
-              className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isSubmitting}
-              onClick={onClose}
-              type="button"
-            >
-              Cancel
-            </button>
-
-            <button
-              className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
-              disabled={isSubmitting}
-              type="submit"
-            >
-              {isSubmitting ? "Creating..." : "Create Purchase Order"}
-            </button>
-          </div>
+          <FormActions
+            isSubmitting={isSubmitting}
+            onCancel={onClose}
+            submitLabel="Create Purchase Order"
+            submittingLabel="Creating..."
+          />
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 

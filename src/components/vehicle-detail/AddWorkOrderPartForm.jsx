@@ -1,4 +1,8 @@
 import { useState } from "react";
+import FormActions from "../ui/FormActions";
+import FormMessage from "../ui/FormMessage";
+import ModalShell from "../ui/ModalShell";
+import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 
@@ -145,36 +149,18 @@ function AddWorkOrderPartForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 px-4 py-6">
-      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-lg border border-zinc-200 bg-white p-6 shadow-xl">
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              {getWorkOrderTitle(workOrder)}
-            </p>
-            <h3 className="mt-1 text-lg font-bold text-zinc-950">Add Part</h3>
-            <p className="mt-1 text-sm text-zinc-500">
-              Add a required part directly to this work order.
-            </p>
-          </div>
-
-          <button
-            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isSubmitting}
-            onClick={onClose}
-            type="button"
-          >
-            Close
-          </button>
-        </div>
-
-        <form className="space-y-5" onSubmit={handleSubmit}>
+    <ModalShell
+      description="Add a required part directly to this work order."
+      eyebrow={getWorkOrderTitle(workOrder)}
+      isCloseDisabled={isSubmitting}
+      onClose={onClose}
+      title="Add Part"
+    >
+      <form className="space-y-5" onSubmit={handleSubmit}>
           <label className="block" htmlFor="work-order-part-name">
-            <span className="text-sm font-medium text-zinc-700">
-              Part Name
-            </span>
+            <span className={formControlClassNames.label}>Part Name</span>
             <input
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              className={formControlClassNames.input}
               id="work-order-part-name"
               name="part_name"
               onChange={handleChange}
@@ -186,11 +172,9 @@ function AddWorkOrderPartForm({
 
           <div className="grid gap-4 sm:grid-cols-3">
             <label className="block" htmlFor="work-order-part-quantity">
-              <span className="text-sm font-medium text-zinc-700">
-                Quantity
-              </span>
+              <span className={formControlClassNames.label}>Quantity</span>
               <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.input}
                 id="work-order-part-quantity"
                 min="1"
                 name="quantity"
@@ -202,11 +186,9 @@ function AddWorkOrderPartForm({
             </label>
 
             <label className="block sm:col-span-2" htmlFor="work-order-part-source">
-              <span className="text-sm font-medium text-zinc-700">
-                Part Source
-              </span>
+              <span className={formControlClassNames.label}>Part Source</span>
               <select
-                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.select}
                 id="work-order-part-source"
                 name="part_source"
                 onChange={handleChange}
@@ -222,11 +204,9 @@ function AddWorkOrderPartForm({
           </div>
 
           <label className="block" htmlFor="work-order-part-unit-cost">
-            <span className="text-sm font-medium text-zinc-700">
-              Unit Cost
-            </span>
+            <span className={formControlClassNames.label}>Unit Cost</span>
             <input
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              className={formControlClassNames.input}
               id="work-order-part-unit-cost"
               min="0"
               name="unit_cost"
@@ -238,9 +218,9 @@ function AddWorkOrderPartForm({
           </label>
 
           <label className="block" htmlFor="work-order-part-notes">
-            <span className="text-sm font-medium text-zinc-700">Notes</span>
+            <span className={formControlClassNames.label}>Notes</span>
             <textarea
-              className="mt-1 min-h-24 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              className={formControlClassNames.textarea}
               id="work-order-part-notes"
               name="notes"
               onChange={handleChange}
@@ -248,39 +228,18 @@ function AddWorkOrderPartForm({
             />
           </label>
 
-          {errorMessage && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {errorMessage}
-            </div>
-          )}
+          <FormMessage tone="error">{errorMessage}</FormMessage>
 
-          {successMessage && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              {successMessage}
-            </div>
-          )}
+          <FormMessage tone="success">{successMessage}</FormMessage>
 
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button
-              className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isSubmitting}
-              onClick={onClose}
-              type="button"
-            >
-              Cancel
-            </button>
-
-            <button
-              className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
-              disabled={isSubmitting}
-              type="submit"
-            >
-              {isSubmitting ? "Adding..." : "Add Part"}
-            </button>
-          </div>
+          <FormActions
+            isSubmitting={isSubmitting}
+            onCancel={onClose}
+            submitLabel="Add Part"
+            submittingLabel="Adding..."
+          />
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 

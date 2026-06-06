@@ -1,4 +1,8 @@
 import { useState } from "react";
+import FormActions from "../ui/FormActions";
+import FormMessage from "../ui/FormMessage";
+import ModalShell from "../ui/ModalShell";
+import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 
@@ -156,34 +160,25 @@ function SellVehicleForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 px-4 py-6">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-zinc-200 bg-white p-6 shadow-xl">
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-bold text-zinc-950">Sell Vehicle</h3>
-            <p className="mt-1 text-sm text-zinc-500">
-              Record sale details and optional warranty coverage.
-            </p>
-          </div>
-
-          <button
-            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isSubmitting}
-            onClick={onClose}
-            type="button"
-          >
-            Close
-          </button>
-        </div>
-
-        <form className="space-y-5" onSubmit={handleSubmit}>
+    <ModalShell
+      description="Record sale details and optional warranty coverage."
+      isCloseDisabled={isSubmitting}
+      onClose={onClose}
+      size="lg"
+      title="Sell Vehicle"
+    >
+      <form className="space-y-5" onSubmit={handleSubmit}>
+          <fieldset className="space-y-4">
+            <legend className="text-sm font-black text-slate-950">
+              Customer / Sale Details
+            </legend>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block" htmlFor="sale-customer-name">
-              <span className="text-sm font-medium text-zinc-700">
+              <span className={formControlClassNames.label}>
                 Customer Name
               </span>
               <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.input}
                 id="sale-customer-name"
                 name="customer_name"
                 onChange={handleChange}
@@ -194,11 +189,11 @@ function SellVehicleForm({
             </label>
 
             <label className="block" htmlFor="sale-customer-phone">
-              <span className="text-sm font-medium text-zinc-700">
+              <span className={formControlClassNames.label}>
                 Customer Phone
               </span>
               <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.input}
                 id="sale-customer-phone"
                 name="customer_phone"
                 onChange={handleChange}
@@ -210,11 +205,11 @@ function SellVehicleForm({
 
           <div className="grid gap-4 sm:grid-cols-3">
             <label className="block" htmlFor="sale-price">
-              <span className="text-sm font-medium text-zinc-700">
+              <span className={formControlClassNames.label}>
                 Sale Price
               </span>
               <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.input}
                 id="sale-price"
                 min="0.01"
                 name="sale_price"
@@ -227,11 +222,11 @@ function SellVehicleForm({
             </label>
 
             <label className="block" htmlFor="sale-date">
-              <span className="text-sm font-medium text-zinc-700">
+              <span className={formControlClassNames.label}>
                 Sale Date
               </span>
               <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.input}
                 id="sale-date"
                 name="sale_date"
                 onChange={handleChange}
@@ -242,11 +237,11 @@ function SellVehicleForm({
             </label>
 
             <label className="block" htmlFor="payment-method">
-              <span className="text-sm font-medium text-zinc-700">
+              <span className={formControlClassNames.label}>
                 Payment Method
               </span>
               <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.input}
                 id="payment-method"
                 name="payment_method"
                 onChange={handleChange}
@@ -255,17 +250,20 @@ function SellVehicleForm({
               />
             </label>
           </div>
+          </fieldset>
 
-          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-            <h4 className="text-sm font-bold text-zinc-950">Warranty</h4>
+          <fieldset className="space-y-4 rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
+            <legend className="px-1 text-sm font-black text-slate-950">
+              Warranty
+            </legend>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-3">
               <label className="block" htmlFor="warranty-type">
-                <span className="text-sm font-medium text-zinc-700">
+                <span className={formControlClassNames.label}>
                   Warranty Type
                 </span>
                 <input
-                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                  className={formControlClassNames.input}
                   id="warranty-type"
                   name="warranty_type"
                   onChange={handleChange}
@@ -275,11 +273,11 @@ function SellVehicleForm({
               </label>
 
               <label className="block" htmlFor="warranty-start-date">
-                <span className="text-sm font-medium text-zinc-700">
+                <span className={formControlClassNames.label}>
                   Start Date
                 </span>
                 <input
-                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                  className={formControlClassNames.input}
                   id="warranty-start-date"
                   name="warranty_start_date"
                   onChange={handleChange}
@@ -289,11 +287,11 @@ function SellVehicleForm({
               </label>
 
               <label className="block" htmlFor="warranty-end-date">
-                <span className="text-sm font-medium text-zinc-700">
+                <span className={formControlClassNames.label}>
                   End Date
                 </span>
                 <input
-                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                  className={formControlClassNames.input}
                   id="warranty-end-date"
                   name="warranty_end_date"
                   onChange={handleChange}
@@ -304,23 +302,23 @@ function SellVehicleForm({
             </div>
 
             <label className="mt-4 block" htmlFor="warranty-terms">
-              <span className="text-sm font-medium text-zinc-700">
+              <span className={formControlClassNames.label}>
                 Warranty Terms
               </span>
               <textarea
-                className="mt-1 min-h-20 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.textarea}
                 id="warranty-terms"
                 name="warranty_terms"
                 onChange={handleChange}
                 value={formData.warranty_terms}
               />
             </label>
-          </div>
+          </fieldset>
 
           <label className="block" htmlFor="sale-notes">
-            <span className="text-sm font-medium text-zinc-700">Notes</span>
+            <span className={formControlClassNames.label}>Notes</span>
             <textarea
-              className="mt-1 min-h-24 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              className={formControlClassNames.textarea}
               id="sale-notes"
               name="notes"
               onChange={handleChange}
@@ -328,39 +326,18 @@ function SellVehicleForm({
             />
           </label>
 
-          {errorMessage && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {errorMessage}
-            </div>
-          )}
+          <FormMessage tone="error">{errorMessage}</FormMessage>
 
-          {successMessage && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              {successMessage}
-            </div>
-          )}
+          <FormMessage tone="success">{successMessage}</FormMessage>
 
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button
-              className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isSubmitting}
-              onClick={onClose}
-              type="button"
-            >
-              Cancel
-            </button>
-
-            <button
-              className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
-              disabled={isSubmitting}
-              type="submit"
-            >
-              {isSubmitting ? "Selling..." : "Sell Vehicle"}
-            </button>
-          </div>
+          <FormActions
+            isSubmitting={isSubmitting}
+            onCancel={onClose}
+            submitLabel="Sell Vehicle"
+            submittingLabel="Selling..."
+          />
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 

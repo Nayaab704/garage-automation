@@ -1,4 +1,8 @@
 import { useState } from "react";
+import FormActions from "./ui/FormActions";
+import FormMessage from "./ui/FormMessage";
+import ModalShell from "./ui/ModalShell";
+import { formControlClassNames } from "./ui/uiStyles";
 import { supabase } from "../lib/supabaseClient";
 import { vehicleOriginOptions } from "../lib/vehicleOrigin";
 
@@ -147,27 +151,18 @@ function EditVehicleForm({ onClose, onVehicleUpdated, vehicle }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 px-4 py-6">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-zinc-200 bg-white p-6 shadow-xl">
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-bold text-zinc-950">Edit Vehicle</h3>
-            <p className="mt-1 text-sm text-zinc-500">
-              Update this vehicle inventory record.
-            </p>
-          </div>
-
-          <button
-            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isSubmitting}
-            onClick={onClose}
-            type="button"
-          >
-            Close
-          </button>
-        </div>
-
-        <form className="space-y-5" onSubmit={handleSubmit}>
+    <ModalShell
+      description="Update this vehicle inventory record."
+      isCloseDisabled={isSubmitting}
+      onClose={onClose}
+      size="lg"
+      title="Edit Vehicle"
+    >
+      <form className="space-y-5" onSubmit={handleSubmit}>
+          <fieldset className="space-y-4">
+            <legend className="text-sm font-black text-slate-950">
+              Basic Details
+            </legend>
           <div className="grid gap-4 sm:grid-cols-2">
             {textFields.map((field) => (
               <label
@@ -175,11 +170,11 @@ function EditVehicleForm({ onClose, onVehicleUpdated, vehicle }) {
                 htmlFor={`edit-${field.name}`}
                 key={field.name}
               >
-                <span className="text-sm font-medium text-zinc-700">
+                <span className={formControlClassNames.label}>
                   {field.label}
                 </span>
                 <input
-                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                  className={formControlClassNames.input}
                   id={`edit-${field.name}`}
                   name={field.name}
                   onChange={handleChange}
@@ -190,7 +185,12 @@ function EditVehicleForm({ onClose, onVehicleUpdated, vehicle }) {
               </label>
             ))}
           </div>
+          </fieldset>
 
+          <fieldset className="space-y-4 rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
+            <legend className="px-1 text-sm font-black text-slate-950">
+              Vehicle / Financial Details
+            </legend>
           <div className="grid gap-4 sm:grid-cols-2">
             {numberFields.map((field) => (
               <label
@@ -198,11 +198,11 @@ function EditVehicleForm({ onClose, onVehicleUpdated, vehicle }) {
                 htmlFor={`edit-${field.name}`}
                 key={field.name}
               >
-                <span className="text-sm font-medium text-zinc-700">
+                <span className={formControlClassNames.label}>
                   {field.label}
                 </span>
                 <input
-                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                  className={formControlClassNames.input}
                   id={`edit-${field.name}`}
                   min={field.min}
                   name={field.name}
@@ -217,11 +217,11 @@ function EditVehicleForm({ onClose, onVehicleUpdated, vehicle }) {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block" htmlFor="edit-title-status">
-              <span className="text-sm font-medium text-zinc-700">
+              <span className={formControlClassNames.label}>
                 Title Status
               </span>
               <select
-                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.select}
                 id="edit-title-status"
                 name="title_status"
                 onChange={handleChange}
@@ -236,11 +236,11 @@ function EditVehicleForm({ onClose, onVehicleUpdated, vehicle }) {
             </label>
 
             <label className="block" htmlFor="edit-vehicle-origin">
-              <span className="text-sm font-medium text-zinc-700">
+              <span className={formControlClassNames.label}>
                 Vehicle Origin
               </span>
               <select
-                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.select}
                 id="edit-vehicle-origin"
                 name="vehicle_origin"
                 onChange={handleChange}
@@ -254,11 +254,12 @@ function EditVehicleForm({ onClose, onVehicleUpdated, vehicle }) {
               </select>
             </label>
           </div>
+          </fieldset>
 
           <label className="block" htmlFor="edit-notes">
-            <span className="text-sm font-medium text-zinc-700">Notes</span>
+            <span className={formControlClassNames.label}>Notes</span>
             <textarea
-              className="mt-1 min-h-28 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              className={formControlClassNames.textarea}
               id="edit-notes"
               name="notes"
               onChange={handleChange}
@@ -266,33 +267,16 @@ function EditVehicleForm({ onClose, onVehicleUpdated, vehicle }) {
             />
           </label>
 
-          {errorMessage && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {errorMessage}
-            </div>
-          )}
+          <FormMessage tone="error">{errorMessage}</FormMessage>
 
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button
-              className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isSubmitting}
-              onClick={onClose}
-              type="button"
-            >
-              Cancel
-            </button>
-
-            <button
-              className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
-              disabled={isSubmitting}
-              type="submit"
-            >
-              {isSubmitting ? "Saving..." : "Save Vehicle"}
-            </button>
-          </div>
+          <FormActions
+            isSubmitting={isSubmitting}
+            onCancel={onClose}
+            submitLabel="Save Vehicle"
+            submittingLabel="Saving..."
+          />
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 

@@ -1,4 +1,8 @@
 import { useState } from "react";
+import FormActions from "../ui/FormActions";
+import FormMessage from "../ui/FormMessage";
+import ModalShell from "../ui/ModalShell";
+import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 
@@ -162,36 +166,20 @@ function AddLaborLogForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 px-4 py-6">
-      <div className="w-full max-w-xl rounded-lg border border-zinc-200 bg-white p-6 shadow-xl">
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-bold text-zinc-950">
-              Add Labor Log
-            </h3>
-            <p className="mt-1 text-sm text-zinc-500">
-              Record technician time for this vehicle.
-            </p>
-          </div>
-
-          <button
-            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isSubmitting}
-            onClick={onClose}
-            type="button"
-          >
-            Close
-          </button>
-        </div>
-
-        <form className="space-y-5" onSubmit={handleSubmit}>
+    <ModalShell
+      description="Record technician time for this vehicle."
+      isCloseDisabled={isSubmitting}
+      onClose={onClose}
+      title="Add Labor Log"
+    >
+      <form className="space-y-5" onSubmit={handleSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block" htmlFor="labor-repair-job">
-              <span className="text-sm font-medium text-zinc-700">
+              <span className={formControlClassNames.label}>
                 Repair Job
               </span>
               <select
-                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.select}
                 id="labor-repair-job"
                 name="repair_job_id"
                 onChange={handleChange}
@@ -208,11 +196,11 @@ function AddLaborLogForm({
             </label>
 
             <label className="block" htmlFor="labor-technician">
-              <span className="text-sm font-medium text-zinc-700">
+              <span className={formControlClassNames.label}>
                 Technician
               </span>
               <select
-                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.select}
                 id="labor-technician"
                 name="technician_id"
                 onChange={handleChange}
@@ -231,9 +219,9 @@ function AddLaborLogForm({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block" htmlFor="labor-hours">
-              <span className="text-sm font-medium text-zinc-700">Hours</span>
+              <span className={formControlClassNames.label}>Hours</span>
               <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.input}
                 id="labor-hours"
                 min="0.25"
                 name="hours"
@@ -246,11 +234,11 @@ function AddLaborLogForm({
             </label>
 
             <label className="block" htmlFor="labor-hourly-rate">
-              <span className="text-sm font-medium text-zinc-700">
+              <span className={formControlClassNames.label}>
                 Hourly Rate
               </span>
               <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.input}
                 id="labor-hourly-rate"
                 min="0.01"
                 name="hourly_rate"
@@ -264,9 +252,9 @@ function AddLaborLogForm({
           </div>
 
           <label className="block" htmlFor="labor-notes">
-            <span className="text-sm font-medium text-zinc-700">Notes</span>
+            <span className={formControlClassNames.label}>Notes</span>
             <textarea
-              className="mt-1 min-h-24 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              className={formControlClassNames.textarea}
               id="labor-notes"
               name="notes"
               onChange={handleChange}
@@ -274,39 +262,18 @@ function AddLaborLogForm({
             />
           </label>
 
-          {errorMessage && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {errorMessage}
-            </div>
-          )}
+          <FormMessage tone="error">{errorMessage}</FormMessage>
 
-          {successMessage && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              {successMessage}
-            </div>
-          )}
+          <FormMessage tone="success">{successMessage}</FormMessage>
 
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button
-              className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isSubmitting}
-              onClick={onClose}
-              type="button"
-            >
-              Cancel
-            </button>
-
-            <button
-              className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
-              disabled={isSubmitting}
-              type="submit"
-            >
-              {isSubmitting ? "Adding..." : "Add Labor Log"}
-            </button>
-          </div>
+          <FormActions
+            isSubmitting={isSubmitting}
+            onCancel={onClose}
+            submitLabel="Add Labor Log"
+            submittingLabel="Adding..."
+          />
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 

@@ -1,4 +1,8 @@
 import { useState } from "react";
+import FormActions from "../ui/FormActions";
+import FormMessage from "../ui/FormMessage";
+import ModalShell from "../ui/ModalShell";
+import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 
@@ -147,32 +151,18 @@ function AddVehiclePhotoForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 px-4 py-6">
-      <div className="w-full max-w-xl rounded-lg border border-zinc-200 bg-white p-6 shadow-xl">
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-bold text-zinc-950">Upload Photo</h3>
-            <p className="mt-1 text-sm text-zinc-500">
-              Add a vehicle image to the photo gallery.
-            </p>
-          </div>
-
-          <button
-            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isSubmitting}
-            onClick={onClose}
-            type="button"
-          >
-            Close
-          </button>
-        </div>
-
-        <form className="space-y-5" onSubmit={handleSubmit}>
+    <ModalShell
+      description="Add a vehicle image to the photo gallery."
+      isCloseDisabled={isSubmitting}
+      onClose={onClose}
+      title="Upload Photo"
+    >
+      <form className="space-y-5" onSubmit={handleSubmit}>
           <label className="block" htmlFor="vehicle-photo-file">
-            <span className="text-sm font-medium text-zinc-700">Image</span>
+            <span className={formControlClassNames.label}>Image</span>
             <input
               accept="image/*"
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-950 shadow-sm outline-none transition file:mr-3 file:rounded-md file:border-0 file:bg-zinc-950 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-950 shadow-sm outline-none transition file:mr-3 file:rounded-xl file:border-0 file:bg-emerald-600 file:px-3 file:py-2 file:text-sm file:font-black file:text-white focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
               id="vehicle-photo-file"
               key={fileInputKey}
               onChange={handleFileChange}
@@ -182,11 +172,9 @@ function AddVehiclePhotoForm({
           </label>
 
           <label className="block" htmlFor="vehicle-photo-type">
-            <span className="text-sm font-medium text-zinc-700">
-              Photo Type
-            </span>
+            <span className={formControlClassNames.label}>Photo Type</span>
             <select
-              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              className={formControlClassNames.select}
               id="vehicle-photo-type"
               name="photo_type"
               onChange={handleChange}
@@ -201,9 +189,9 @@ function AddVehiclePhotoForm({
           </label>
 
           <label className="block" htmlFor="vehicle-photo-caption">
-            <span className="text-sm font-medium text-zinc-700">Caption</span>
+            <span className={formControlClassNames.label}>Caption</span>
             <textarea
-              className="mt-1 min-h-24 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              className={formControlClassNames.textarea}
               id="vehicle-photo-caption"
               name="caption"
               onChange={handleChange}
@@ -211,39 +199,18 @@ function AddVehiclePhotoForm({
             />
           </label>
 
-          {errorMessage && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {errorMessage}
-            </div>
-          )}
+          <FormMessage tone="error">{errorMessage}</FormMessage>
 
-          {successMessage && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              {successMessage}
-            </div>
-          )}
+          <FormMessage tone="success">{successMessage}</FormMessage>
 
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button
-              className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isSubmitting}
-              onClick={onClose}
-              type="button"
-            >
-              Cancel
-            </button>
-
-            <button
-              className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
-              disabled={isSubmitting}
-              type="submit"
-            >
-              {isSubmitting ? "Uploading..." : "Upload Photo"}
-            </button>
-          </div>
+          <FormActions
+            isSubmitting={isSubmitting}
+            onCancel={onClose}
+            submitLabel="Upload Photo"
+            submittingLabel="Uploading..."
+          />
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 

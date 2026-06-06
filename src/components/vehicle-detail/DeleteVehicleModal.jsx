@@ -1,5 +1,7 @@
 import { useState } from "react";
 import AppIcon from "../ui/AppIcon";
+import FormMessage from "../ui/FormMessage";
+import { buttonClassNames, formControlClassNames } from "../ui/uiStyles";
 import { deleteVehicleCascade } from "../../lib/deleteVehicle";
 
 function getStoragePaths(records, pathKey) {
@@ -77,7 +79,7 @@ function DeleteVehicleModal({
             Type {stockNumber} to confirm
           </span>
           <input
-            className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 font-mono text-slate-950 shadow-sm outline-none transition focus:border-red-300 focus:ring-2 focus:ring-red-100"
+            className={`${formControlClassNames.input} font-mono focus:border-red-300 focus:ring-red-100`}
             disabled={isDeleting || Boolean(successMessage)}
             id="delete-vehicle-confirmation"
             onChange={(event) => setConfirmationText(event.target.value)}
@@ -85,27 +87,19 @@ function DeleteVehicleModal({
           />
         </label>
 
-        {errorMessage && (
-          <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            {errorMessage}
-          </div>
-        )}
+        {(errorMessage || successMessage || storageWarning) && (
+          <div className="mt-4 space-y-3">
+            <FormMessage tone="error">{errorMessage}</FormMessage>
 
-        {successMessage && (
-          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-            {successMessage}
-          </div>
-        )}
+            <FormMessage tone="success">{successMessage}</FormMessage>
 
-        {storageWarning && (
-          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            {storageWarning}
+            <FormMessage tone="warning">{storageWarning}</FormMessage>
           </div>
         )}
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
           <button
-            className="min-h-11 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className={buttonClassNames.secondary}
             disabled={isDeleting || Boolean(successMessage)}
             onClick={onClose}
             type="button"
@@ -113,7 +107,7 @@ function DeleteVehicleModal({
             Cancel
           </button>
           <button
-            className="min-h-11 rounded-2xl bg-red-600 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className={buttonClassNames.danger}
             disabled={!canConfirm || isDeleting || Boolean(successMessage)}
             onClick={handleDelete}
             type="button"

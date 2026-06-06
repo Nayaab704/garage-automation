@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { APP_NAME } from "../config/appConfig";
+import BrandLogo from "../components/branding/BrandLogo";
 import AppBackground from "../components/ui/AppBackground";
 import {
   buttonClassNames,
@@ -92,9 +92,7 @@ function LoginPage() {
       <main className="flex min-h-screen items-center justify-center px-4 py-8">
         <section className={`w-full max-w-md p-6 ${cardClassNames.elevated}`}>
           <div className="mb-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-              {APP_NAME}
-            </p>
+            <BrandLogo showTagline size="large" />
             <h1 className="mt-2 text-2xl font-bold text-zinc-950">
               Sign in to continue
             </h1>

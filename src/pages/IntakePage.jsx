@@ -1,11 +1,8 @@
 import { useState } from "react";
 import AddVehicleForm from "../components/AddVehicleForm";
-import AppIcon from "../components/ui/AppIcon";
-import {
-  buttonClassNames,
-  cardClassNames,
-  formControlClassNames,
-} from "../components/ui/uiStyles";
+import IntakeSceneryBackground from "../components/intake/IntakeSceneryBackground";
+import IntakeVinStep from "../components/intake/IntakeVinStep";
+import { buttonClassNames, cardClassNames } from "../components/ui/uiStyles";
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 
@@ -89,94 +86,56 @@ function IntakePage({ currentProfile, onViewVehicles }) {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
-      {!showVehicleForm && !createdVehicle && (
-        <section className={`p-5 sm:p-6 ${cardClassNames.elevated}`}>
-          <div className="mb-5 flex items-center gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-              <AppIcon name="car" size={26} />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-xl font-black text-slate-950">Enter VIN</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Enter the vehicle VIN to start a new record.
-              </p>
-            </div>
-          </div>
+    <div className="relative min-h-[calc(100vh-13rem)] overflow-hidden rounded-[2rem] px-1 py-7 sm:px-3 sm:py-10 lg:px-6">
+      <IntakeSceneryBackground />
 
-          <form
-            className="space-y-4"
+      <div className="relative z-10 mx-auto w-full max-w-4xl">
+        {!showVehicleForm && !createdVehicle && (
+          <IntakeVinStep
+            canCreateVehicle={canCreateVehicle}
+            errorMessage={errorMessage}
+            isCheckingVin={isCheckingVin}
             onSubmit={handleContinue}
-          >
-            <label className="block" htmlFor="intake-vin">
-              <span className={formControlClassNames.label}>VIN</span>
-              <input
-                className={`${formControlClassNames.input} font-mono text-base uppercase tracking-wide placeholder:font-sans placeholder:normal-case placeholder:tracking-normal`}
-                id="intake-vin"
-                maxLength={17}
-                onChange={handleVinChange}
-                placeholder="17-character VIN"
-                type="text"
-                value={vin}
-              />
-              <span className="mt-2 block text-xs text-slate-400">
-                VIN is editable on the vehicle details step.
-              </span>
-            </label>
+            onVinChange={handleVinChange}
+            vin={vin}
+          />
+        )}
 
-            {errorMessage && (
-              <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                {errorMessage}
-              </div>
-            )}
+        {showVehicleForm && canCreateVehicle && (
+          <div className="mx-auto max-w-3xl">
+            <AddVehicleForm
+              initialValues={{ vin }}
+              key={vin}
+              onVehicleAdded={handleVehicleAdded}
+            />
+          </div>
+        )}
 
-            {!canCreateVehicle && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                Your role can view intake, but cannot create vehicles.
-              </div>
-            )}
-
-            <button
-              className={`w-full ${buttonClassNames.primary}`}
-              disabled={isCheckingVin || !canCreateVehicle}
-              type="submit"
-            >
-              {isCheckingVin ? "Checking VIN..." : "Continue"}
-            </button>
-          </form>
-        </section>
-      )}
-
-      {showVehicleForm && canCreateVehicle && (
-        <AddVehicleForm
-          initialValues={{ vin }}
-          key={vin}
-          onVehicleAdded={handleVehicleAdded}
-        />
-      )}
-
-      {createdVehicle && (
-        <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
-          <h2 className="text-lg font-black text-emerald-950">
-            Vehicle intake created
-          </h2>
-          <p className="mt-2 text-sm text-emerald-800">
-            VIN {createdVehicle.vin ?? vin} was added to inventory.
-          </p>
-          {createdVehicle.stock_number && (
-            <p className="mt-1 text-sm font-semibold text-emerald-900">
-              Stock number: {createdVehicle.stock_number}
-            </p>
-          )}
-          <button
-            className={`mt-4 ${buttonClassNames.primary}`}
-            onClick={onViewVehicles}
-            type="button"
-          >
-            View Vehicles
-          </button>
-        </section>
-      )}
+        {createdVehicle && (
+          <section className={`mx-auto max-w-2xl p-6 ${cardClassNames.elevated}`}>
+            <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5">
+              <h2 className="text-lg font-black text-emerald-950">
+                Vehicle intake created
+              </h2>
+              <p className="mt-2 text-sm text-emerald-800">
+                VIN {createdVehicle.vin ?? vin} was added to inventory.
+              </p>
+              {createdVehicle.stock_number && (
+                <p className="mt-1 text-sm font-semibold text-emerald-900">
+                  Stock number: {createdVehicle.stock_number}
+                </p>
+              )}
+              <button
+                className={`mt-4 ${buttonClassNames.primary}`}
+                onClick={onViewVehicles}
+                type="button"
+              >
+                View Vehicles
+              </button>
+            </div>
+          </section>
+        )}
+      </div>
     </div>
   );
 }

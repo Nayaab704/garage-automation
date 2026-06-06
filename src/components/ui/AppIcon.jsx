@@ -146,6 +146,18 @@ const iconPaths = {
       <path d="m16 16 4 4" />
     </>
   ),
+  scan: (
+    <>
+      <path d="M7 4H5.5A1.5 1.5 0 0 0 4 5.5V7" />
+      <path d="M17 4h1.5A1.5 1.5 0 0 1 20 5.5V7" />
+      <path d="M20 17v1.5a1.5 1.5 0 0 1-1.5 1.5H17" />
+      <path d="M7 20H5.5A1.5 1.5 0 0 1 4 18.5V17" />
+      <path d="M8 9v6" />
+      <path d="M11 9v6" />
+      <path d="M14 9v6" />
+      <path d="M17 9v6" />
+    </>
+  ),
   seat: (
     <>
       <path d="M8 4.5h5.5A2.5 2.5 0 0 1 16 7v5.5H9a3 3 0 0 1-3-3v-3A2 2 0 0 1 8 4.5Z" />
@@ -224,6 +236,8 @@ const aliases = {
   parts: "box",
   "paint-spray": "paint-spray",
   photo: "camera",
+  barcode: "scan",
+  scan: "scan",
   search: "search",
   spray: "paint-spray",
   status: "refresh",

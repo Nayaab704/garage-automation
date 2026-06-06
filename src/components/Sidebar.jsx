@@ -1,4 +1,4 @@
-import { APP_NAME, APP_SHORT_NAME } from "../config/appConfig";
+import BrandLogo from "./branding/BrandLogo";
 import { hasPermission } from "../lib/permissions";
 
 const sidebarItems = [
@@ -33,15 +33,7 @@ function Sidebar({ activePage = "Vehicles", currentProfile, onPageChange }) {
   return (
     <aside className="hidden border-r border-zinc-200 bg-white lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col">
       <div className="flex h-16 items-center border-b border-zinc-200 px-6">
-        <div className="flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-md bg-emerald-600 text-sm font-bold text-white">
-            {APP_SHORT_NAME}
-          </div>
-          <div>
-            <p className="text-sm font-bold text-zinc-950">{APP_NAME}</p>
-            <p className="text-xs text-zinc-500">Garage Operations</p>
-          </div>
-        </div>
+        <BrandLogo showTagline size="compact" />
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-5">

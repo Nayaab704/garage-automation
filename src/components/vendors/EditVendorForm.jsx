@@ -1,4 +1,8 @@
 import { useState } from "react";
+import FormActions from "../ui/FormActions";
+import FormMessage from "../ui/FormMessage";
+import ModalShell from "../ui/ModalShell";
+import { formControlClassNames } from "../ui/uiStyles";
 import { supabase } from "../../lib/supabaseClient";
 
 const vendorTypeOptions = [
@@ -94,34 +98,19 @@ function EditVendorForm({ onClose, onVendorUpdated, vendor }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 px-4 py-6">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-zinc-200 bg-white p-6 shadow-xl">
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-bold text-zinc-950">Edit Vendor</h3>
-            <p className="mt-1 text-sm text-zinc-500">
-              Update vendor contact details and classification.
-            </p>
-          </div>
-
-          <button
-            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isSubmitting}
-            onClick={onClose}
-            type="button"
-          >
-            Close
-          </button>
-        </div>
-
-        <form className="space-y-5" onSubmit={handleSubmit}>
+    <ModalShell
+      description="Update vendor contact details and classification."
+      isCloseDisabled={isSubmitting}
+      onClose={onClose}
+      size="lg"
+      title="Edit Vendor"
+    >
+      <form className="space-y-5" onSubmit={handleSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block" htmlFor="edit-vendor-name">
-              <span className="text-sm font-medium text-zinc-700">
-                Vendor Name
-              </span>
+              <span className={formControlClassNames.label}>Vendor Name</span>
               <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.input}
                 id="edit-vendor-name"
                 name="name"
                 onChange={handleChange}
@@ -132,11 +121,9 @@ function EditVendorForm({ onClose, onVendorUpdated, vendor }) {
             </label>
 
             <label className="block" htmlFor="edit-vendor-type">
-              <span className="text-sm font-medium text-zinc-700">
-                Vendor Type
-              </span>
+              <span className={formControlClassNames.label}>Vendor Type</span>
               <select
-                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.select}
                 id="edit-vendor-type"
                 name="vendor_type"
                 onChange={handleChange}
@@ -151,9 +138,9 @@ function EditVendorForm({ onClose, onVendorUpdated, vendor }) {
             </label>
 
             <label className="block" htmlFor="edit-vendor-phone">
-              <span className="text-sm font-medium text-zinc-700">Phone</span>
+              <span className={formControlClassNames.label}>Phone</span>
               <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.input}
                 id="edit-vendor-phone"
                 name="phone"
                 onChange={handleChange}
@@ -163,9 +150,9 @@ function EditVendorForm({ onClose, onVendorUpdated, vendor }) {
             </label>
 
             <label className="block" htmlFor="edit-vendor-email">
-              <span className="text-sm font-medium text-zinc-700">Email</span>
+              <span className={formControlClassNames.label}>Email</span>
               <input
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+                className={formControlClassNames.input}
                 id="edit-vendor-email"
                 name="email"
                 onChange={handleChange}
@@ -176,9 +163,9 @@ function EditVendorForm({ onClose, onVendorUpdated, vendor }) {
           </div>
 
           <label className="block" htmlFor="edit-vendor-address">
-            <span className="text-sm font-medium text-zinc-700">Address</span>
+            <span className={formControlClassNames.label}>Address</span>
             <input
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              className={formControlClassNames.input}
               id="edit-vendor-address"
               name="address"
               onChange={handleChange}
@@ -188,9 +175,9 @@ function EditVendorForm({ onClose, onVendorUpdated, vendor }) {
           </label>
 
           <label className="block" htmlFor="edit-vendor-notes">
-            <span className="text-sm font-medium text-zinc-700">Notes</span>
+            <span className={formControlClassNames.label}>Notes</span>
             <textarea
-              className="mt-1 min-h-24 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              className={formControlClassNames.textarea}
               id="edit-vendor-notes"
               name="notes"
               onChange={handleChange}
@@ -198,32 +185,16 @@ function EditVendorForm({ onClose, onVendorUpdated, vendor }) {
             />
           </label>
 
-          {errorMessage && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {errorMessage}
-            </div>
-          )}
+          <FormMessage tone="error">{errorMessage}</FormMessage>
 
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button
-              className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isSubmitting}
-              onClick={onClose}
-              type="button"
-            >
-              Cancel
-            </button>
-            <button
-              className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
-              disabled={isSubmitting}
-              type="submit"
-            >
-              {isSubmitting ? "Saving..." : "Save Vendor"}
-            </button>
-          </div>
+          <FormActions
+            isSubmitting={isSubmitting}
+            onCancel={onClose}
+            submitLabel="Save Vendor"
+            submittingLabel="Saving..."
+          />
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 
