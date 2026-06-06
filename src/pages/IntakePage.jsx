@@ -85,12 +85,24 @@ function IntakePage({ currentProfile, onViewVehicles }) {
     setShowVehicleForm(false);
   }
 
-  return (
-    <div className="relative min-h-[calc(100vh-13rem)] overflow-hidden rounded-[2rem] px-1 py-7 sm:px-3 sm:py-10 lg:px-6">
-      <IntakeSceneryBackground />
+  const isVinStep = !showVehicleForm && !createdVehicle;
 
-      <div className="relative z-10 mx-auto w-full max-w-4xl">
-        {!showVehicleForm && !createdVehicle && (
+  return (
+    <div
+      className={`relative ${
+        isVinStep
+          ? "-mx-4 -my-5 h-[calc(100svh-8rem)] overflow-hidden px-4 pt-2 sm:-mx-6 sm:px-6 sm:pt-4 lg:-mx-8 lg:h-[calc(100svh-4rem)] lg:px-8"
+          : "px-1 py-5 sm:px-3 lg:px-6"
+      }`}
+    >
+      {isVinStep && <IntakeSceneryBackground />}
+
+      <div
+        className={`relative z-10 mx-auto w-full max-w-4xl ${
+          isVinStep ? "flex h-full min-h-0 flex-col" : ""
+        }`}
+      >
+        {isVinStep && (
           <IntakeVinStep
             canCreateVehicle={canCreateVehicle}
             errorMessage={errorMessage}
