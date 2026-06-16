@@ -85,6 +85,11 @@ function IntakePage({ currentProfile, onViewVehicles }) {
     setShowVehicleForm(false);
   }
 
+  function handleBackToVin() {
+    setErrorMessage("");
+    setShowVehicleForm(false);
+  }
+
   const isVinStep = !showVehicleForm && !createdVehicle;
 
   return (
@@ -114,10 +119,11 @@ function IntakePage({ currentProfile, onViewVehicles }) {
         )}
 
         {showVehicleForm && canCreateVehicle && (
-          <div className="mx-auto max-w-3xl">
+          <div className="mx-auto max-w-4xl">
             <AddVehicleForm
               initialValues={{ vin }}
               key={vin}
+              onBack={handleBackToVin}
               onVehicleAdded={handleVehicleAdded}
             />
           </div>
