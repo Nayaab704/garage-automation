@@ -108,6 +108,7 @@ function ServiceCategoryCard({
   purchaseOrderItems = [],
   purchaseOrders = [],
   thirdPartyRepairs = [],
+  vehicle,
   vehicleId,
   vehiclePhotos = [],
   vendors = [],
@@ -220,6 +221,7 @@ function ServiceCategoryCard({
                 purchaseOrderItems={purchaseOrderItems}
                 purchaseOrders={purchaseOrders}
                 thirdPartyRepairs={workOrderThirdPartyRepairs}
+                vehicle={vehicle}
                 vehicleId={vehicleId}
                 vendors={vendors}
                 workOrder={workOrder}

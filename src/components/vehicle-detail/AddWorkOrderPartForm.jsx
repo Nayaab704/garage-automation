@@ -5,6 +5,8 @@ import ModalShell from "../ui/ModalShell";
 import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
+import { linkVendorPartQuoteToPartRequest } from "../../lib/vendorPriceMemory";
+import VendorPriceSuggestions from "./VendorPriceSuggestions";
 
 const emptyForm = {
   part_name: "",
@@ -53,10 +55,13 @@ function AddWorkOrderPartForm({
   onActivityLogged,
   onClose,
   onPartAdded,
+  vehicle,
   vehicleId,
+  vendors = [],
   workOrder,
 }) {
   const [formData, setFormData] = useState(emptyForm);
+  const [selectedQuote, setSelectedQuote] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -64,10 +69,29 @@ function AddWorkOrderPartForm({
   function handleChange(event) {
     const { name, value } = event.target;
 
+    if (name === "part_name" || name === "unit_cost") {
+      setSelectedQuote(null);
+    }
+
     setFormData((currentFormData) => ({
       ...currentFormData,
       [name]: value,
     }));
+  }
+
+  function handleUseVendorQuote(quote) {
+    setSelectedQuote(quote);
+    setFormData((currentFormData) => ({
+      ...currentFormData,
+      unit_cost:
+        quote?.unit_price === null || quote?.unit_price === undefined
+          ? currentFormData.unit_cost
+          : String(quote.unit_price),
+    }));
+  }
+
+  function handleQuoteSaved(quote) {
+    handleUseVendorQuote(quote);
   }
 
   async function handleSubmit(event) {
@@ -127,7 +151,24 @@ function AddWorkOrderPartForm({
         return;
       }
 
+      if (selectedQuote?.id && data?.id) {
+        const linkResult = await linkVendorPartQuoteToPartRequest({
+          partRequestId: data.id,
+          quoteId: selectedQuote.id,
+          repairJobId: workOrder.id,
+          vehicleId,
+        });
+
+        if (linkResult.error) {
+          console.warn(
+            "Part was added, but vendor quote history could not be linked:",
+            linkResult.error
+          );
+        }
+      }
+
       setFormData(emptyForm);
+      setSelectedQuote(null);
       setSuccessMessage("Part added successfully.");
       await logVehicleActivity({
         vehicleId,
@@ -169,6 +210,18 @@ function AddWorkOrderPartForm({
               value={formData.part_name}
             />
           </label>
+
+          <VendorPriceSuggestions
+            currentProfile={currentProfile}
+            onQuoteSaved={handleQuoteSaved}
+            onUseQuote={handleUseVendorQuote}
+            partName={formData.part_name}
+            quantity={formData.quantity}
+            selectedQuote={selectedQuote}
+            vehicle={vehicle}
+            vendors={vendors}
+            workOrder={workOrder}
+          />
 
           <div className="grid gap-4 sm:grid-cols-3">
             <label className="block" htmlFor="work-order-part-quantity">

@@ -128,6 +128,7 @@ function ServiceWorkSection({
   repairJobs = [],
   serviceCategories = [],
   thirdPartyRepairs = [],
+  vehicle,
   vehicleId,
   vehiclePhotos = [],
   vendors = [],
@@ -250,6 +251,7 @@ function ServiceWorkSection({
               purchaseOrders={purchaseOrders}
               selectedCategory={selectedCategory}
               thirdPartyRepairs={thirdPartyRepairs}
+              vehicle={vehicle}
               vehicleId={vehicleId}
               vehiclePhotos={vehiclePhotos}
               vendors={vendors}

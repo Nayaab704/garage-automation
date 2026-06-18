@@ -757,6 +757,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
               repairJobs={repairJobs}
               serviceCategories={serviceCategories}
               thirdPartyRepairs={thirdPartyRepairs}
+              vehicle={vehicle}
               vehicleId={vehicleId}
               vehiclePhotos={vehiclePhotos}
               vendors={vendors}

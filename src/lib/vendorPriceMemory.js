@@ -236,7 +236,10 @@ export async function createVendorPartQuote(payload = {}) {
       console.error("Vendor price memory save failed:", error);
       return {
         data: null,
-        error: getFriendlyError(error, "Unable to save vendor price history."),
+        error: getFriendlyError(
+          error,
+          "Could not save vendor quote. Please try again."
+        ),
       };
     }
 
@@ -245,7 +248,7 @@ export async function createVendorPartQuote(payload = {}) {
     console.error("Vendor price memory save failed:", error);
     return {
       data: null,
-      error: new Error("Unable to save vendor price history."),
+      error: new Error("Could not save vendor quote. Please try again."),
     };
   }
 }
@@ -285,6 +288,54 @@ export async function markQuotePurchased({
     return {
       data: null,
       error: new Error("Unable to update vendor price history."),
+    };
+  }
+}
+
+export async function linkVendorPartQuoteToPartRequest({
+  partRequestId,
+  quoteId,
+  repairJobId = null,
+  vehicleId = null,
+} = {}) {
+  if (!quoteId || !partRequestId) {
+    return { data: null, error: null };
+  }
+
+  try {
+    const updatePayload = {
+      part_request_id: partRequestId,
+    };
+
+    if (repairJobId) {
+      updatePayload.repair_job_id = repairJobId;
+    }
+
+    if (vehicleId) {
+      updatePayload.vehicle_id = vehicleId;
+    }
+
+    const { data, error } = await supabase
+      .from("vendor_part_quotes")
+      .update(updatePayload)
+      .eq("id", quoteId)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("Vendor price memory link failed:", error);
+      return {
+        data: null,
+        error: getFriendlyError(error, "Unable to link vendor price history."),
+      };
+    }
+
+    return { data, error: null };
+  } catch (error) {
+    console.error("Vendor price memory link failed:", error);
+    return {
+      data: null,
+      error: new Error("Unable to link vendor price history."),
     };
   }
 }

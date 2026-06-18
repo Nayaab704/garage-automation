@@ -285,6 +285,7 @@ function WorkOrderCard({
   purchaseOrderItems = [],
   purchaseOrders = [],
   thirdPartyRepairs,
+  vehicle,
   vehicleId,
   vendors,
   workOrder,
@@ -580,7 +581,9 @@ function WorkOrderCard({
           onActivityLogged={onActivityLogged}
           onClose={() => setIsPartFormOpen(false)}
           onPartAdded={onPartAdded}
+          vehicle={vehicle}
           vehicleId={vehicleId}
+          vendors={vendors}
           workOrder={workOrder}
         />
       )}
