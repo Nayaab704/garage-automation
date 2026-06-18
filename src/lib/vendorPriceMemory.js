@@ -57,6 +57,30 @@ function getVendorName(vendor) {
   return firstValue(vendor, ["name", "vendor_name", "company_name"]);
 }
 
+export function getVendorQuoteDisplayName(quote) {
+  return (
+    firstValue(quote, [
+      "vendor_name_snapshot",
+      "vendor_name",
+      "display_vendor_name",
+    ]) ?? "Unknown vendor"
+  );
+}
+
+function mapVendorQuoteForDisplay(quote) {
+  if (!quote) {
+    return quote;
+  }
+
+  const displayVendorName = getVendorQuoteDisplayName(quote);
+
+  return {
+    ...quote,
+    display_vendor_name: displayVendorName,
+    vendor_name_snapshot: quote.vendor_name_snapshot ?? quote.vendor_name ?? null,
+  };
+}
+
 function getPartName({ partName, partRequest, purchaseOrderItem }) {
   return (
     emptyToNull(partName) ??
@@ -190,7 +214,7 @@ export async function searchVendorPartQuotes({
       };
     }
 
-    return { data: data ?? [], error: null };
+    return { data: (data ?? []).map(mapVendorQuoteForDisplay), error: null };
   } catch (error) {
     console.error("Vendor price memory search failed:", error);
     return {
@@ -243,7 +267,7 @@ export async function createVendorPartQuote(payload = {}) {
       };
     }
 
-    return { data, error: null };
+    return { data: mapVendorQuoteForDisplay(data), error: null };
   } catch (error) {
     console.error("Vendor price memory save failed:", error);
     return {
@@ -282,7 +306,7 @@ export async function markQuotePurchased({
       };
     }
 
-    return { data, error: null };
+    return { data: mapVendorQuoteForDisplay(data), error: null };
   } catch (error) {
     console.error("Vendor price memory update failed:", error);
     return {
@@ -330,7 +354,7 @@ export async function linkVendorPartQuoteToPartRequest({
       };
     }
 
-    return { data, error: null };
+    return { data: mapVendorQuoteForDisplay(data), error: null };
   } catch (error) {
     console.error("Vendor price memory link failed:", error);
     return {

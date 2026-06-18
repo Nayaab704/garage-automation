@@ -66,9 +66,12 @@ function canCreatePurchaseOrderForPart(partRequest) {
   );
 }
 
-function getInitialFormData(initialPartRequest) {
+function getInitialFormData(initialPartRequest, initialVendorId = "") {
   if (!initialPartRequest?.id) {
-    return emptyForm;
+    return {
+      ...emptyForm,
+      vendor_id: initialVendorId,
+    };
   }
 
   return {
@@ -77,6 +80,7 @@ function getInitialFormData(initialPartRequest) {
     part_request_id: initialPartRequest.id,
     quantity: valueToString(initialPartRequest.quantity || 1),
     unit_cost: valueToString(initialPartRequest.unit_cost ?? ""),
+    vendor_id: initialVendorId,
   };
 }
 
@@ -93,6 +97,7 @@ function parseNumberWithDefault(value, defaultValue, label) {
 function CreatePurchaseOrderForm({
   currentProfile,
   initialPartRequest = null,
+  initialVendorId = "",
   lockPartRequest = false,
   onClose,
   onActivityLogged,
@@ -102,7 +107,7 @@ function CreatePurchaseOrderForm({
   vendors = [],
 }) {
   const [formData, setFormData] = useState(() =>
-    getInitialFormData(initialPartRequest)
+    getInitialFormData(initialPartRequest, initialVendorId)
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -256,7 +261,9 @@ function CreatePurchaseOrderForm({
 
       const itemResponse = await supabase
         .from("purchase_order_items")
-        .insert([purchaseOrderItem]);
+        .insert([purchaseOrderItem])
+        .select("id")
+        .single();
 
       if (itemResponse.error) {
         const cleanupResponse = await supabase
@@ -292,7 +299,7 @@ function CreatePurchaseOrderForm({
       }
       const partRequestStatusUpdated = !partRequestResponse.error;
 
-      setFormData(getInitialFormData(initialPartRequest));
+      setFormData(getInitialFormData(initialPartRequest, initialVendorId));
       setSuccessMessage("Purchase order created successfully.");
       setWarningMessage(statusWarning);
       await logVehicleActivity({
@@ -328,6 +335,7 @@ function CreatePurchaseOrderForm({
       await onPurchaseOrderCreated?.({
         partRequestId: formData.part_request_id,
         partRequestStatusUpdated,
+        purchaseOrderItemId: itemResponse.data?.id ?? null,
         purchaseOrderId,
         status: "ordered",
         warningMessage: statusWarning,

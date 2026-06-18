@@ -1,0 +1,53 @@
+import AppIcon from "../ui/AppIcon";
+
+const emptyMessages = {
+  all: {
+    body: "Parts added inside work orders will appear here.",
+    title: "No parts found.",
+  },
+  issues: {
+    body: "Rejected, cancelled, or unavailable parts will appear here.",
+    title: "No part issues right now.",
+  },
+  needs_po: {
+    body: "Parts added as Needs to Buy will appear here until a purchase order is created.",
+    title: "No parts need purchase orders right now.",
+  },
+  ordered: {
+    body: "Parts with linked purchase orders will appear here.",
+    title: "No ordered parts found.",
+  },
+  pending_review: {
+    body: "Needs-to-buy parts waiting for review will appear here.",
+    title: "No parts are pending review.",
+  },
+  received: {
+    body: "Received or installed parts will appear here.",
+    title: "No received parts found.",
+  },
+};
+
+function PartsQueueEmptyState({ activeTab, hasSearch }) {
+  const message = hasSearch
+    ? {
+        body: "Try a different part name, stock number, vehicle, vendor, or work order.",
+        title: "No matching parts found.",
+      }
+    : emptyMessages[activeTab] ?? emptyMessages.all;
+
+  return (
+    <section className="rounded-3xl border border-dashed border-slate-300 bg-white/90 p-8 text-center shadow-sm">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+        <AppIcon name="box" size={24} />
+      </div>
+      <h3 className="mt-4 text-lg font-black text-slate-950">
+        {message.title}
+      </h3>
+      <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
+        {message.body}
+      </p>
+    </section>
+  );
+}
+
+export default PartsQueueEmptyState;

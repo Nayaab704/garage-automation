@@ -292,7 +292,13 @@ function App() {
     }
 
     if (effectiveActivePage === "Parts") {
-      return <PartsPage currentProfile={currentProfile} />;
+      return (
+        <PartsPage
+          currentProfile={currentProfile}
+          onSelectVehicle={handleSelectVehicle}
+          onViewPurchaseOrders={() => handlePageChange("Purchase Orders")}
+        />
+      );
     }
 
     if (effectiveActivePage === "Purchase Orders") {
