@@ -95,6 +95,11 @@ const titleStatusOptions = [
 const allowedTitleStatuses = titleStatusOptions.map((option) => option.value);
 const allowedVehicleOrigins = vehicleOriginOptions.map((option) => option.value);
 
+const intakeInputClassName =
+  "mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100";
+const intakeTextareaClassName =
+  "mt-2 min-h-24 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100";
+
 function emptyToNull(value) {
   const trimmedValue = String(value ?? "").trim();
   return trimmedValue === "" ? null : trimmedValue;
@@ -165,11 +170,11 @@ function buildVehiclePayload(formData) {
 
 function IntakeFormSection({ children, description, icon, title }) {
   return (
-    <fieldset className="rounded-3xl border border-slate-200 bg-slate-50/60 p-4 shadow-sm sm:p-5">
+    <fieldset className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <legend className="sr-only">{title}</legend>
-      <div className="mb-4 flex items-start gap-3">
-        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100">
-          <AppIcon name={icon} size={20} />
+      <div className="mb-4 flex items-start gap-3 border-b border-slate-100 pb-4">
+        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100">
+          <AppIcon name={icon} size={19} />
         </span>
         <div>
           <h3 className="text-base font-black text-slate-950">{title}</h3>
@@ -183,6 +188,10 @@ function IntakeFormSection({ children, description, icon, title }) {
       {children}
     </fieldset>
   );
+}
+
+function IntakeFieldGrid({ children }) {
+  return <div className="grid gap-4 md:grid-cols-2">{children}</div>;
 }
 
 function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
@@ -219,7 +228,10 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
         .single();
 
       if (error) {
-        setErrorMessage(error.message);
+        console.error("Failed to create vehicle", error);
+        setErrorMessage(
+          "Could not create vehicle. Please check the details and try again."
+        );
       } else {
         setFormData(buildInitialFormData(initialValues));
         setSuccessMessage(
@@ -230,34 +242,20 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
         await onVehicleAdded?.(data);
       }
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Failed to create vehicle", error);
+      setErrorMessage(
+        "Could not create vehicle. Please check the details and try again."
+      );
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <section className="mx-auto w-full max-w-4xl">
+    <section className="mx-auto w-full max-w-5xl pb-6">
       <div className={`overflow-hidden bg-white/95 ${cardClassNames.elevated}`}>
-        <div className="border-b border-slate-100 bg-gradient-to-br from-white via-emerald-50/40 to-white p-5 sm:p-7">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex items-start gap-4">
-              <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100">
-                <AppIcon name="vehicle" size={24} />
-              </span>
-              <div>
-                <h2 className="text-2xl font-black tracking-tight text-slate-950">
-                  Vehicle Details
-                </h2>
-                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-                  Complete the vehicle information before creating the record.
-                </p>
-                <p className="mt-2 text-xs font-semibold text-slate-500">
-                  Stock number will be generated after creation.
-                </p>
-              </div>
-            </div>
-
+        <div className="border-b border-slate-100 bg-gradient-to-br from-white via-emerald-50/35 to-white p-4 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             {onBack && (
               <button
                 className={`shrink-0 ${buttonClassNames.secondary}`}
@@ -269,28 +267,46 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
                 Back to VIN
               </button>
             )}
+
+            {formData.vin && (
+              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-emerald-100 bg-white/90 px-3 py-1.5 text-xs font-black text-emerald-800 shadow-sm">
+                <AppIcon name="scan" size={14} />
+                <span className="text-slate-500">VIN</span>
+                <span className="truncate font-mono tracking-wide">
+                  {formData.vin}
+                </span>
+              </div>
+            )}
           </div>
 
-          {formData.vin && (
-            <div className="mt-4 inline-flex max-w-full items-center gap-2 rounded-full border border-emerald-100 bg-white/80 px-3 py-1.5 text-xs font-black text-emerald-800 shadow-sm">
-              <AppIcon name="scan" size={14} />
-              <span className="truncate font-mono tracking-wide">
-                {formData.vin}
-              </span>
+          <div className="mt-5 flex items-start gap-4">
+            <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100">
+              <AppIcon name="vehicle" size={24} />
+            </span>
+            <div>
+              <h2 className="text-2xl font-black tracking-tight text-slate-950">
+                Vehicle Details
+              </h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+                Complete the vehicle information before creating the record.
+              </p>
+              <p className="mt-2 inline-flex rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-500 ring-1 ring-inset ring-slate-200">
+                Stock number will be generated automatically.
+              </p>
             </div>
-          )}
+          </div>
         </div>
 
         <form
-          className="space-y-4 p-4 sm:space-y-5 sm:p-6"
+          className="space-y-4 bg-slate-50/70 p-4 sm:space-y-5 sm:p-6"
           onSubmit={handleSubmit}
         >
           <IntakeFormSection
-            description="VIN stays editable. Add the visible inventory details customers and technicians will use."
+            description="VIN stays editable. Add the core inventory details used across the app."
             icon="car"
             title="Basic Details"
           >
-            <div className="grid gap-4 md:grid-cols-2">
+            <IntakeFieldGrid>
               {basicFields.map((field) => (
                 <label
                   className={`block ${field.layoutClassName ?? ""}`}
@@ -301,7 +317,7 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
                     {field.label}
                   </span>
                   <input
-                    className={`${formControlClassNames.input} ${
+                    className={`${intakeInputClassName} ${
                       field.inputClassName ?? ""
                     }`}
                     id={field.name}
@@ -317,22 +333,22 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
                   />
                 </label>
               ))}
-            </div>
+            </IntakeFieldGrid>
           </IntakeFormSection>
 
           <IntakeFormSection
-            description="Add purchase context and title information for manager review."
+            description="Add purchase context, title information, and any notes needed later."
             icon="dollar"
-            title="Purchase Details"
+            title="Purchase / Admin Details"
           >
-            <div className="grid gap-4 md:grid-cols-2">
+            <IntakeFieldGrid>
               {purchaseNumberFields.map((field) => (
                 <label className="block" htmlFor={field.name} key={field.name}>
                   <span className={formControlClassNames.label}>
                     {field.label}
                   </span>
                   <input
-                    className={formControlClassNames.input}
+                    className={intakeInputClassName}
                     id={field.name}
                     min={field.min}
                     name={field.name}
@@ -348,7 +364,7 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
               <label className="block" htmlFor="title_status">
                 <span className={formControlClassNames.label}>Title Status</span>
                 <select
-                  className={formControlClassNames.select}
+                  className={intakeInputClassName}
                   id="title_status"
                   name="title_status"
                   onChange={handleChange}
@@ -367,7 +383,7 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
                   Vehicle Origin
                 </span>
                 <select
-                  className={formControlClassNames.select}
+                  className={intakeInputClassName}
                   id="vehicle_origin"
                   name="vehicle_origin"
                   onChange={handleChange}
@@ -384,7 +400,7 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
               <label className="block md:col-span-2" htmlFor="notes">
                 <span className={formControlClassNames.label}>Notes</span>
                 <textarea
-                  className={formControlClassNames.textarea}
+                  className={intakeTextareaClassName}
                   id="notes"
                   name="notes"
                   onChange={handleChange}
@@ -392,7 +408,7 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
                   value={formData.notes}
                 />
               </label>
-            </div>
+            </IntakeFieldGrid>
           </IntakeFormSection>
 
           {errorMessage && (
@@ -407,25 +423,30 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
             </div>
           )}
 
-          <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
-            {onBack && (
-              <button
-                className={`w-full sm:w-auto ${buttonClassNames.secondary}`}
-                disabled={isSubmitting}
-                onClick={onBack}
-                type="button"
-              >
-                Back
-              </button>
-            )}
+          <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:flex sm:items-center sm:justify-between sm:gap-4">
+            <p className="mb-3 text-xs font-semibold text-slate-500 sm:mb-0">
+              Create Vehicle will add this record to inventory.
+            </p>
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              {onBack && (
+                <button
+                  className={`w-full sm:w-auto ${buttonClassNames.secondary}`}
+                  disabled={isSubmitting}
+                  onClick={onBack}
+                  type="button"
+                >
+                  Back
+                </button>
+              )}
 
-            <button
-              className={`w-full sm:w-auto ${buttonClassNames.primary}`}
-              disabled={isSubmitting}
-              type="submit"
-            >
-              {isSubmitting ? "Creating..." : "Create Vehicle"}
-            </button>
+              <button
+                className={`w-full sm:w-auto ${buttonClassNames.primary}`}
+                disabled={isSubmitting}
+                type="submit"
+              >
+                {isSubmitting ? "Creating..." : "Create Vehicle"}
+              </button>
+            </div>
           </div>
         </form>
       </div>
