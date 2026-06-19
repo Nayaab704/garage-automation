@@ -10,7 +10,7 @@ const emptyMessages = {
     title: "No part issues right now.",
   },
   needs_po: {
-    body: "Parts added as Needs to Buy will appear here until a purchase order is created.",
+    body: 'Parts marked "Needs to Buy" will appear here until a purchase order is created.',
     title: "No parts need purchase orders right now.",
   },
   ordered: {

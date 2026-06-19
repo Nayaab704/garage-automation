@@ -49,15 +49,6 @@ function Badge({ children, className }) {
   );
 }
 
-function DetailPill({ icon, children }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-xl bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600 ring-1 ring-inset ring-slate-100">
-      <AppIcon className="text-slate-400" name={icon} size={14} />
-      {children}
-    </span>
-  );
-}
-
 function PartsQueueCard({
   canApproveParts,
   canCreatePurchaseOrders,
@@ -84,19 +75,24 @@ function PartsQueueCard({
     canApproveParts &&
     part.part_source === "needs_to_buy" &&
     part.approval_status === "pending";
+  const quantityLabel = formatNumber(part.quantity || 1);
+  const unitPriceLabel = formatCurrency(getSelectedUnitCost(part));
+  const totalLabel = formatCurrency(getPartEstimatedTotal(part));
 
   return (
     <article className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="min-w-0 text-lg font-black text-slate-950">
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="min-w-0 text-lg font-black leading-snug text-slate-950">
               {part.part_name || "Unnamed part"}
             </h3>
-            <Badge className={queueBadge.className}>{queueBadge.label}</Badge>
+            <Badge className={`${queueBadge.className} shrink-0`}>
+              {queueBadge.label}
+            </Badge>
           </div>
 
-          <div className="mt-3 space-y-2 text-sm text-slate-600">
+          <div className="mt-2 space-y-1 text-sm text-slate-600">
             <p className="font-black text-slate-900">
               {formatPartQueueVehicleLabel(part)}
             </p>
@@ -104,41 +100,40 @@ function PartsQueueCard({
               <span className="font-semibold text-slate-800">
                 {serviceCategory}
               </span>
-              {workOrder?.title ? ` · ${workOrder.title}` : ""}
+              {workOrder?.title ? ` - ${workOrder.title}` : ""}
             </p>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            <DetailPill icon="box">
-              Qty {formatNumber(part.quantity || 1)}
-            </DetailPill>
-            <DetailPill icon="money">
-              {formatCurrency(getSelectedUnitCost(part))} each
-            </DetailPill>
-            <DetailPill icon="chart-up">
-              Total {formatCurrency(getPartEstimatedTotal(part))}
-            </DetailPill>
-          </div>
-
-          <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50/80 p-3">
+          <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3">
             {vendorLabel ? (
-              <p className="text-sm font-bold text-slate-800">
-                Vendor: <span className="text-slate-950">{vendorLabel}</span>
-              </p>
+              <>
+                <p className="text-sm font-black text-slate-950">
+                  {vendorLabel}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  {unitPriceLabel} each - Qty {quantityLabel} - Total {totalLabel}
+                </p>
+              </>
             ) : (
-              <p className="text-sm font-bold text-amber-800">
-                No vendor selected
+              <>
+                <p className="text-sm font-black text-amber-800">
+                  No vendor selected
+                </p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  Use View Prices to select a saved vendor price, or create a PO manually.
+                </p>
+              </>
+            )}
+            {purchaseOrderStatus && (
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                PO status: {formatPartLabel(purchaseOrderStatus, {})}
               </p>
             )}
-            <p className="mt-1 text-xs font-semibold text-slate-500">
-              {purchaseOrderStatus
-                ? `PO status: ${formatPartLabel(purchaseOrderStatus, {})}`
-                : selectedQuote
-                  ? `Selected price: ${formatCurrency(getSelectedUnitCost(part))} each`
-                  : part.latestQuote
-                    ? "Price history available. Choose a vendor price when ready."
-                    : "Use price history or create a PO when ready."}
-            </p>
+            {!purchaseOrderStatus && selectedQuote && (
+              <p className="mt-1 text-xs font-semibold text-emerald-700">
+                Selected vendor price is ready for PO.
+              </p>
+            )}
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
@@ -165,16 +160,16 @@ function PartsQueueCard({
           )}
 
           {isPartPendingReview(part) && canCreatePoForPart && (
-            <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              Pending review, but your current workflow still allows PO creation.
+            <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+              Pending admin review. PO creation is still allowed.
             </p>
           )}
         </div>
 
-        <div className="flex shrink-0 flex-wrap gap-2 lg:max-w-52 lg:flex-col lg:items-stretch">
+        <div className="flex shrink-0 flex-wrap gap-2 lg:w-48 lg:flex-col lg:items-stretch">
           {canCreatePoForPart ? (
             <button
-              className={buttonClassNames.primary}
+              className={`${buttonClassNames.primary} flex-1 lg:w-full`}
               onClick={() => onCreatePurchaseOrder(part)}
               type="button"
             >
@@ -183,7 +178,7 @@ function PartsQueueCard({
             </button>
           ) : purchaseOrderStatus ? (
             <button
-              className={buttonClassNames.secondary}
+              className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
               onClick={onOpenPurchaseOrders}
               type="button"
             >
@@ -192,7 +187,15 @@ function PartsQueueCard({
           ) : null}
 
           <button
-            className={buttonClassNames.secondary}
+            className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
+            onClick={() => onViewPrices(part)}
+            type="button"
+          >
+            View Prices
+          </button>
+
+          <button
+            className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
             disabled={!part.vehicle_id}
             onClick={() => onOpenVehicle?.(part.vehicle_id)}
             type="button"
@@ -200,32 +203,29 @@ function PartsQueueCard({
             Open Vehicle
           </button>
 
-          <button
-            className={buttonClassNames.secondary}
-            onClick={() => onViewPrices(part)}
-            type="button"
-          >
-            View Prices
-          </button>
-
           {canApprovePart && (
-            <div className="flex gap-2 lg:flex-col">
-              <button
-                className="inline-flex min-h-10 flex-1 items-center justify-center rounded-2xl bg-emerald-600 px-3 py-2 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                disabled={isUpdating}
-                onClick={() => onApprove(part)}
-                type="button"
-              >
-                {isUpdating ? "Saving..." : "Approve"}
-              </button>
-              <button
-                className="inline-flex min-h-10 flex-1 items-center justify-center rounded-2xl border border-red-200 bg-white px-3 py-2 text-sm font-black text-red-700 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isUpdating}
-                onClick={() => onReject(part)}
-                type="button"
-              >
-                Reject
-              </button>
+            <div className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-2">
+              <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">
+                Review actions
+              </p>
+              <div className="flex gap-2 lg:flex-col">
+                <button
+                  className="inline-flex min-h-10 flex-1 items-center justify-center rounded-2xl bg-emerald-600 px-3 py-2 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  disabled={isUpdating}
+                  onClick={() => onApprove(part)}
+                  type="button"
+                >
+                  {isUpdating ? "Saving..." : "Approve"}
+                </button>
+                <button
+                  className="inline-flex min-h-10 flex-1 items-center justify-center rounded-2xl border border-red-200 bg-white px-3 py-2 text-sm font-black text-red-700 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isUpdating}
+                  onClick={() => onReject(part)}
+                  type="button"
+                >
+                  Reject
+                </button>
+              </div>
             </div>
           )}
         </div>

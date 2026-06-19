@@ -236,12 +236,6 @@ function PartsPage({
   }
 
   function handleCreatePurchaseOrder(part) {
-    console.log("Create PO initial part", {
-      partRequestId: part?.id,
-      quotedUnitCost: part?.quoted_unit_cost,
-      selectedQuoteId: part?.selected_quote_id,
-      selectedVendorId: part?.selected_vendor_id,
-    });
     setSuccessMessage("");
     setErrorMessage("");
     setSelectedPartForPurchaseOrder(part);

@@ -71,7 +71,7 @@ export function formatPartQueueVehicleLabel(part) {
   const stockNumber = vehicle.stock_number || "No stock number";
   const vehicleName = getVehicleName(vehicle);
 
-  return vehicleName ? `${stockNumber} · ${vehicleName}` : stockNumber;
+  return vehicleName ? `${stockNumber} - ${vehicleName}` : stockNumber;
 }
 
 export function hasActivePurchaseOrderItem(part) {
@@ -121,7 +121,7 @@ export function getSelectedVendorName(part) {
     (selectedQuote?.display_vendor_name === "Unknown vendor"
       ? ""
       : selectedQuote?.display_vendor_name) ||
-    ""
+    (part?.selected_vendor_id ? "Selected vendor" : "")
   );
 }
 

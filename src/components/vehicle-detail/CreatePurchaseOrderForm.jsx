@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import FormActions from "../ui/FormActions";
 import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
@@ -212,19 +212,13 @@ function CreatePurchaseOrderForm({
     () => mergeVendorOptions(vendors, selectedVendorOption),
     [selectedVendorOption, vendors]
   );
-
-  useEffect(() => {
-    console.log("Create PO initial part", {
-      id: initialPartRequest?.id,
-      quotedUnitCost: initialPartRequest?.quoted_unit_cost,
-      selectedQuoteId: initialPartRequest?.selected_quote_id,
-      selectedVendorId: initialPartRequest?.selected_vendor_id,
-    });
-  }, [initialPartRequest]);
-
-  useEffect(() => {
-    console.log("Create PO vendor state", formData.vendor_id);
-  }, [formData.vendor_id]);
+  const selectedPriceSourcePart = selectedPartRequest ?? initialPartRequest;
+  const hasSelectedVendorPrice = Boolean(
+    selectedPriceSourcePart?.selected_vendor_id &&
+      (selectedPriceSourcePart?.selected_quote_id ||
+        selectedPriceSourcePart?.selectedQuote?.id)
+  );
+  const selectedPriceVendorName = getPartRequestVendorName(selectedPriceSourcePart);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -528,11 +522,21 @@ function CreatePurchaseOrderForm({
               </select>
             </label>
           </div>
+
+          {hasSelectedVendorPrice ? (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+              Using selected price from {selectedPriceVendorName}.
+            </div>
+          ) : !formData.vendor_id ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-600">
+              No vendor selected yet. Choose a vendor or use View Prices first.
+            </div>
+          ) : null}
           </fieldset>
 
           {selectedPartRequest?.approval_status === "pending" && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              Pending admin review, but PO can still be created.
+              Pending admin review. PO creation is still allowed.
             </div>
           )}
 

@@ -154,12 +154,6 @@ function AddWorkOrderPartForm({
     const vendorId = getQuoteVendorId(normalizedQuote);
     const unitPrice = getQuoteUnitPrice(normalizedQuote);
 
-    console.log("Add Part selected quote", {
-      quoteId: normalizedQuote?.id,
-      unitPrice,
-      vendorId,
-    });
-
     if (!normalizedQuote?.id) {
       return;
     }
@@ -223,13 +217,6 @@ function AddWorkOrderPartForm({
       );
       return;
     }
-
-    console.log("Saving part with selected quote", {
-      quotedTotalCost: selectedQuoteFields.quoted_total_cost,
-      quotedUnitCost: selectedQuoteFields.quoted_unit_cost,
-      selectedQuoteId: selectedQuoteFields.selected_quote_id,
-      selectedVendorId: selectedQuoteFields.selected_vendor_id,
-    });
 
     setIsSubmitting(true);
     setErrorMessage("");

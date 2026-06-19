@@ -123,13 +123,6 @@ function PartPriceHistoryModal({
     try {
       const normalizedQuote = normalizeQuoteForSelection(quote);
 
-      console.log("USE THIS clicked", {
-        partRequestId: part?.id,
-        quoteId: normalizedQuote?.id,
-        unitPrice: normalizedQuote?.unit_price,
-        vendorId: normalizedQuote?.vendor_id,
-      });
-
       if (!normalizedQuote.vendor_id) {
         throw new Error("This quote has no linked vendor, so it cannot be used for PO.");
       }
@@ -139,8 +132,6 @@ function PartPriceHistoryModal({
         quantity: part?.quantity,
         quote: normalizedQuote,
       });
-
-      console.log("USE THIS update result", updatedPart);
 
       await onUseQuote(normalizedQuote, updatedPart);
     } catch (error) {
@@ -186,6 +177,8 @@ function PartPriceHistoryModal({
       {!isLoading && !errorMessage && quotes.length > 0 && (
         <div className="space-y-3">
           {quotes.map((quote) => {
+            const normalizedQuote = normalizeQuoteForSelection(quote);
+            const hasLinkedVendor = Boolean(normalizedQuote.vendor_id);
             const isSelected = selectedQuoteId === quote.id;
             const isSelecting = selectingQuoteId === quote.id;
 
@@ -199,17 +192,24 @@ function PartPriceHistoryModal({
                 key={quote.id}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h4 className="text-sm font-black text-slate-950">
+                  <div className="min-w-0">
+                    <h4 className="truncate text-sm font-black text-slate-950">
                       {getVendorQuoteDisplayName(quote)}
                     </h4>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className="mt-1 truncate text-sm text-slate-500">
                       {quote.raw_part_name || "Unnamed part"}
                     </p>
                   </div>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 ring-1 ring-inset ring-slate-200">
-                    {formatStatus(quote.quote_status)}
-                  </span>
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    {isSelected && (
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                        Selected
+                      </span>
+                    )}
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 ring-1 ring-inset ring-slate-200">
+                      {formatStatus(quote.quote_status)}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-sm text-slate-600">
@@ -237,17 +237,25 @@ function PartPriceHistoryModal({
                     formatDate(quote.quoted_at),
                   ]
                     .filter(Boolean)
-                    .join(" · ")}
+                    .join(" - ")}
                 </p>
+
+                {!hasLinkedVendor && (
+                  <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">
+                    This quote has no linked vendor.
+                  </p>
+                )}
 
                 <div className="mt-4 flex justify-end">
                   <button
                     className={
-                      isSelected
+                      isSelected || !hasLinkedVendor
                         ? buttonClassNames.secondary
                         : buttonClassNames.primary
                     }
-                    disabled={isSelected || Boolean(selectingQuoteId)}
+                    disabled={
+                      isSelected || !hasLinkedVendor || Boolean(selectingQuoteId)
+                    }
                     onClick={() => handleUseQuote(quote)}
                     type="button"
                   >
