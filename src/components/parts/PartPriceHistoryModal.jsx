@@ -3,8 +3,11 @@ import {
   getVendorQuoteDisplayName,
   searchVendorPartQuotes,
 } from "../../lib/vendorPriceMemory";
+import { selectQuoteForPartRequest } from "../../lib/partsQueue";
 import AppIcon from "../ui/AppIcon";
+import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
+import { buttonClassNames } from "../ui/uiStyles";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -48,10 +51,32 @@ function formatStatus(value) {
     .join(" ");
 }
 
-function PartPriceHistoryModal({ onClose, part }) {
+function normalizeQuoteForSelection(quote) {
+  return {
+    ...quote,
+    id: quote?.id,
+    availability: quote?.availability,
+    display_vendor_name: quote?.display_vendor_name,
+    quote_status: quote?.quote_status,
+    raw_part_name: quote?.raw_part_name,
+    total_price: quote?.total_price ?? quote?.totalPrice,
+    unit_price: quote?.unit_price ?? quote?.unitPrice,
+    vendor_id: quote?.vendor_id || quote?.vendorId,
+    vendor_name_snapshot:
+      quote?.vendor_name_snapshot || quote?.vendorNameSnapshot,
+  };
+}
+
+function PartPriceHistoryModal({
+  onClose,
+  onUseQuote,
+  part,
+  selectedQuoteId = "",
+}) {
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [quotes, setQuotes] = useState([]);
+  const [selectingQuoteId, setSelectingQuoteId] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -87,6 +112,46 @@ function PartPriceHistoryModal({ onClose, part }) {
     };
   }, [part]);
 
+  async function handleUseQuote(quote) {
+    if (!onUseQuote) {
+      return;
+    }
+
+    setSelectingQuoteId(quote.id);
+    setErrorMessage("");
+
+    try {
+      const normalizedQuote = normalizeQuoteForSelection(quote);
+
+      console.log("USE THIS clicked", {
+        partRequestId: part?.id,
+        quoteId: normalizedQuote?.id,
+        unitPrice: normalizedQuote?.unit_price,
+        vendorId: normalizedQuote?.vendor_id,
+      });
+
+      if (!normalizedQuote.vendor_id) {
+        throw new Error("This quote has no linked vendor, so it cannot be used for PO.");
+      }
+
+      const updatedPart = await selectQuoteForPartRequest({
+        partRequestId: part?.id,
+        quantity: part?.quantity,
+        quote: normalizedQuote,
+      });
+
+      console.log("USE THIS update result", updatedPart);
+
+      await onUseQuote(normalizedQuote, updatedPart);
+    } catch (error) {
+      setErrorMessage(
+        error.message ?? "Could not select this vendor price. Please try again."
+      );
+    } finally {
+      setSelectingQuoteId("");
+    }
+  }
+
   return (
     <ModalShell
       description="Previous quotes and purchases for similar part names."
@@ -101,9 +166,7 @@ function PartPriceHistoryModal({ onClose, part }) {
       )}
 
       {!isLoading && errorMessage && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
-          {errorMessage}
-        </div>
+        <FormMessage tone="error">{errorMessage}</FormMessage>
       )}
 
       {!isLoading && !errorMessage && quotes.length === 0 && (
@@ -122,47 +185,82 @@ function PartPriceHistoryModal({ onClose, part }) {
 
       {!isLoading && !errorMessage && quotes.length > 0 && (
         <div className="space-y-3">
-          {quotes.map((quote) => (
-            <article
-              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-              key={quote.id}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h4 className="text-sm font-black text-slate-950">
-                    {getVendorQuoteDisplayName(quote)}
-                  </h4>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {quote.raw_part_name || "Unnamed part"}
-                  </p>
+          {quotes.map((quote) => {
+            const isSelected = selectedQuoteId === quote.id;
+            const isSelecting = selectingQuoteId === quote.id;
+
+            return (
+              <article
+                className={`rounded-2xl border bg-white p-4 shadow-sm ${
+                  isSelected
+                    ? "border-emerald-300 ring-2 ring-emerald-100"
+                    : "border-slate-200"
+                }`}
+                key={quote.id}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-black text-slate-950">
+                      {getVendorQuoteDisplayName(quote)}
+                    </h4>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {quote.raw_part_name || "Unnamed part"}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 ring-1 ring-inset ring-slate-200">
+                    {formatStatus(quote.quote_status)}
+                  </span>
                 </div>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 ring-1 ring-inset ring-slate-200">
-                  {formatStatus(quote.quote_status)}
-                </span>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-sm text-slate-600">
-                <span className="font-black text-slate-950">
-                  {formatCurrency(quote.unit_price)} each
-                </span>
-                <span>Qty {Number(quote.quantity ?? 1)}</span>
-                {quote.total_price !== null && quote.total_price !== undefined && (
-                  <span>Total {formatCurrency(quote.total_price)}</span>
-                )}
-                <span>{formatStatus(quote.availability)}</span>
-              </div>
-              <p className="mt-2 text-xs font-semibold text-slate-400">
-                {[
-                  quote.stock_number_snapshot,
-                  [quote.vehicle_year_snapshot, quote.vehicle_make_snapshot, quote.vehicle_model_snapshot]
+
+                <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-sm text-slate-600">
+                  <span className="font-black text-slate-950">
+                    {formatCurrency(quote.unit_price)} each
+                  </span>
+                  <span>Qty {Number(quote.quantity ?? 1)}</span>
+                  {quote.total_price !== null &&
+                    quote.total_price !== undefined && (
+                      <span>Total {formatCurrency(quote.total_price)}</span>
+                    )}
+                  <span>{formatStatus(quote.availability)}</span>
+                </div>
+
+                <p className="mt-2 text-xs font-semibold text-slate-400">
+                  {[
+                    quote.stock_number_snapshot,
+                    [
+                      quote.vehicle_year_snapshot,
+                      quote.vehicle_make_snapshot,
+                      quote.vehicle_model_snapshot,
+                    ]
+                      .filter(Boolean)
+                      .join(" "),
+                    formatDate(quote.quoted_at),
+                  ]
                     .filter(Boolean)
-                    .join(" "),
-                  formatDate(quote.quoted_at),
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            </article>
-          ))}
+                    .join(" · ")}
+                </p>
+
+                <div className="mt-4 flex justify-end">
+                  <button
+                    className={
+                      isSelected
+                        ? buttonClassNames.secondary
+                        : buttonClassNames.primary
+                    }
+                    disabled={isSelected || Boolean(selectingQuoteId)}
+                    onClick={() => handleUseQuote(quote)}
+                    type="button"
+                  >
+                    {isSelected
+                      ? "Selected"
+                      : isSelecting
+                        ? "Selecting..."
+                        : "Use This"}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </ModalShell>

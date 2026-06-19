@@ -2,9 +2,12 @@ import {
   approvalLabels,
   formatPartLabel,
   formatPartQueueVehicleLabel,
+  getPartEstimatedTotal,
   getPartQueueBadge,
   getPartQueueStatus,
   getPrimaryPurchaseOrderItem,
+  getSelectedUnitCost,
+  getSelectedVendorName,
   isPartNeedsPo,
   isPartPendingReview,
   partSourceLabels,
@@ -29,31 +32,6 @@ function formatCurrency(value) {
 function formatNumber(value) {
   const numberValue = Number(value ?? 0);
   return numberFormatter.format(Number.isFinite(numberValue) ? numberValue : 0);
-}
-
-function getPartTotal(part) {
-  const quantity = Number(part.quantity || 0);
-  const unitCost = Number(part.unit_cost || 0);
-
-  if (!Number.isFinite(quantity) || !Number.isFinite(unitCost)) {
-    return 0;
-  }
-
-  return quantity * unitCost;
-}
-
-function getVendorLabel(part) {
-  const primaryPurchaseOrderItem = getPrimaryPurchaseOrderItem(part);
-
-  if (primaryPurchaseOrderItem?.purchaseOrder?.vendor?.name) {
-    return primaryPurchaseOrderItem.purchaseOrder.vendor.name;
-  }
-
-  if (part.latestQuote?.vendor_name_snapshot) {
-    return part.latestQuote.vendor_name_snapshot;
-  }
-
-  return "";
 }
 
 function getPurchaseOrderStatus(part) {
@@ -94,8 +72,9 @@ function PartsQueueCard({
 }) {
   const queueStatus = getPartQueueStatus(part);
   const queueBadge = getPartQueueBadge(queueStatus);
-  const vendorLabel = getVendorLabel(part);
+  const vendorLabel = getSelectedVendorName(part);
   const purchaseOrderStatus = getPurchaseOrderStatus(part);
+  const selectedQuote = part.selectedQuote;
   const workOrder = part.repairJob;
   const serviceCategory =
     workOrder?.serviceCategory?.name ||
@@ -134,10 +113,10 @@ function PartsQueueCard({
               Qty {formatNumber(part.quantity || 1)}
             </DetailPill>
             <DetailPill icon="money">
-              {formatCurrency(part.unit_cost)} each
+              {formatCurrency(getSelectedUnitCost(part))} each
             </DetailPill>
             <DetailPill icon="chart-up">
-              Total {formatCurrency(getPartTotal(part))}
+              Total {formatCurrency(getPartEstimatedTotal(part))}
             </DetailPill>
           </div>
 
@@ -154,9 +133,11 @@ function PartsQueueCard({
             <p className="mt-1 text-xs font-semibold text-slate-500">
               {purchaseOrderStatus
                 ? `PO status: ${formatPartLabel(purchaseOrderStatus, {})}`
-                : part.latestQuote
-                  ? `Last quote: ${formatCurrency(part.latestQuote.unit_price)} each`
-                  : "Use price history or create a PO when ready."}
+                : selectedQuote
+                  ? `Selected price: ${formatCurrency(getSelectedUnitCost(part))} each`
+                  : part.latestQuote
+                    ? "Price history available. Choose a vendor price when ready."
+                    : "Use price history or create a PO when ready."}
             </p>
           </div>
 

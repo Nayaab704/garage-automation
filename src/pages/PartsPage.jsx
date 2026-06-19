@@ -6,14 +6,23 @@ import PartsQueueTabs from "../components/parts/PartsQueueTabs";
 import AppIcon from "../components/ui/AppIcon";
 import CreatePurchaseOrderForm from "../components/vehicle-detail/CreatePurchaseOrderForm";
 import { logVehicleActivity } from "../lib/activityLogger";
-import { getPartQueueCounts } from "../lib/partWorkflowUtils";
-import { fetchPartsQueue, filterPartsQueueResults } from "../lib/partsQueue";
+import {
+  getPartQueueCounts,
+  getSelectedVendorId,
+} from "../lib/partWorkflowUtils";
+import {
+  fetchPartsQueue,
+  filterPartsQueueResults,
+} from "../lib/partsQueue";
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
-import { markQuotePurchased } from "../lib/vendorPriceMemory";
+import {
+  getVendorQuoteDisplayName,
+  markQuotePurchased,
+} from "../lib/vendorPriceMemory";
 
 const partRequestColumns =
-  "id, vehicle_id, repair_job_id, part_name, quantity, status, notes, part_source, approval_status, unit_cost, created_by, created_at";
+  "id, vehicle_id, repair_job_id, part_name, quantity, status, notes, part_source, approval_status, unit_cost, selected_vendor_id, selected_quote_id, quoted_unit_cost, quoted_total_cost, created_by, created_at";
 
 function canApprovePartsForProfile(profile) {
   return profile?.role === "admin" || profile?.role === "owner";
@@ -185,12 +194,13 @@ function PartsPage({
   async function handlePurchaseOrderCreated(result) {
     const selectedPart = selectedPartForPurchaseOrder;
     const partRequestId = result?.partRequestId ?? selectedPart?.id;
+    const selectedQuote = selectedPart?.selectedQuote;
 
-    if (selectedPart?.latestQuote?.id && result?.purchaseOrderId) {
+    if (selectedQuote?.id && result?.purchaseOrderId) {
       const quoteResult = await markQuotePurchased({
         purchaseOrderId: result.purchaseOrderId,
         purchaseOrderItemId: result.purchaseOrderItemId ?? null,
-        quoteId: selectedPart.latestQuote.id,
+        quoteId: selectedQuote.id,
       });
 
       if (quoteResult.error) {
@@ -226,9 +236,49 @@ function PartsPage({
   }
 
   function handleCreatePurchaseOrder(part) {
+    console.log("Create PO initial part", {
+      partRequestId: part?.id,
+      quotedUnitCost: part?.quoted_unit_cost,
+      selectedQuoteId: part?.selected_quote_id,
+      selectedVendorId: part?.selected_vendor_id,
+    });
     setSuccessMessage("");
     setErrorMessage("");
     setSelectedPartForPurchaseOrder(part);
+  }
+
+  async function handleUseQuoteForPart(quote, data) {
+    const selectedQuote = {
+      ...quote,
+      id: data.selected_quote_id,
+      unit_price: data.quoted_unit_cost,
+      vendor_id: data.selected_vendor_id,
+    };
+    const selectedVendor =
+      vendors.find((vendor) => vendor.id === data.selected_vendor_id) ??
+      (data.selected_vendor_id
+        ? {
+            id: data.selected_vendor_id,
+            name: getVendorQuoteDisplayName(selectedQuote),
+          }
+        : null);
+
+    setPartQueue((currentParts) =>
+      currentParts.map((part) =>
+        part.id === data.id
+          ? {
+              ...part,
+              ...data,
+              selectedQuote,
+              selectedVendor,
+            }
+          : part
+      )
+    );
+    setErrorMessage("");
+    setSuccessMessage("Vendor price selected for this part.");
+    setPriceHistoryPart(null);
+    await loadPartsQueue({ showLoading: false });
   }
 
   function clearSearch() {
@@ -347,7 +397,8 @@ function PartsPage({
         <CreatePurchaseOrderForm
           currentProfile={currentProfile}
           initialPartRequest={selectedPartForPurchaseOrder}
-          initialVendorId={selectedPartForPurchaseOrder.latestQuote?.vendor_id ?? ""}
+          initialVendorId={getSelectedVendorId(selectedPartForPurchaseOrder)}
+          key={selectedPartForPurchaseOrder.id}
           lockPartRequest
           onClose={() => setSelectedPartForPurchaseOrder(null)}
           onPurchaseOrderCreated={handlePurchaseOrderCreated}
@@ -360,7 +411,9 @@ function PartsPage({
       {priceHistoryPart && (
         <PartPriceHistoryModal
           onClose={() => setPriceHistoryPart(null)}
+          onUseQuote={handleUseQuoteForPart}
           part={priceHistoryPart}
+          selectedQuoteId={priceHistoryPart.selected_quote_id}
         />
       )}
     </div>

@@ -238,7 +238,7 @@ function AddVendorQuoteInline({
       }
 
       setFormData(initialQuoteForm);
-      setSuccessMessage("Vendor quote saved.");
+      setSuccessMessage("Quote saved and selected for this part.");
       onQuoteSaved?.({
         ...data,
         display_vendor_name:

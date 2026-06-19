@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import FormActions from "../ui/FormActions";
 import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
@@ -59,6 +59,47 @@ function valueToString(value) {
   return value === null || value === undefined ? "" : String(value);
 }
 
+function getPartRequestVendorId(partRequest) {
+  return valueToString(
+    partRequest?.selected_vendor_id ??
+      partRequest?.selectedVendor?.id ??
+      partRequest?.selectedQuote?.vendor_id ??
+      ""
+  );
+}
+
+function getPartRequestVendorName(partRequest) {
+  return (
+    getFirstValue(partRequest?.selectedVendor ?? {}, [
+      "name",
+      "vendor_name",
+      "company_name",
+    ]) ??
+    getFirstValue(partRequest?.selectedQuote ?? {}, [
+      "vendor_name_snapshot",
+      "vendor_name",
+      "display_vendor_name",
+    ]) ??
+    "Selected vendor"
+  );
+}
+
+function mergeVendorOptions(vendors, selectedVendorOption) {
+  const vendorOptionsById = new Map();
+
+  for (const vendor of vendors) {
+    if (vendor?.id) {
+      vendorOptionsById.set(vendor.id, vendor);
+    }
+  }
+
+  if (selectedVendorOption?.id && !vendorOptionsById.has(selectedVendorOption.id)) {
+    vendorOptionsById.set(selectedVendorOption.id, selectedVendorOption);
+  }
+
+  return [...vendorOptionsById.values()];
+}
+
 function canCreatePurchaseOrderForPart(partRequest) {
   return (
     partRequest?.part_source === "needs_to_buy" &&
@@ -67,10 +108,19 @@ function canCreatePurchaseOrderForPart(partRequest) {
 }
 
 function getInitialFormData(initialPartRequest, initialVendorId = "") {
+  const unitCost =
+    initialPartRequest?.quoted_unit_cost ??
+    initialPartRequest?.selectedQuote?.unit_price ??
+    initialPartRequest?.unit_cost ??
+    "";
+  const vendorId = valueToString(
+    initialVendorId || getPartRequestVendorId(initialPartRequest)
+  );
+
   if (!initialPartRequest?.id) {
     return {
       ...emptyForm,
-      vendor_id: initialVendorId,
+      vendor_id: vendorId,
     };
   }
 
@@ -79,8 +129,8 @@ function getInitialFormData(initialPartRequest, initialVendorId = "") {
     description: getPartRequestName(initialPartRequest),
     part_request_id: initialPartRequest.id,
     quantity: valueToString(initialPartRequest.quantity || 1),
-    unit_cost: valueToString(initialPartRequest.unit_cost ?? ""),
-    vendor_id: initialVendorId,
+    unit_cost: valueToString(unitCost),
+    vendor_id: vendorId,
   };
 }
 
@@ -92,6 +142,28 @@ function parseNumberWithDefault(value, defaultValue, label) {
   }
 
   return { error: "", value: numberValue };
+}
+
+async function hasActivePurchaseOrderItem(partRequestId) {
+  if (!partRequestId) {
+    return { exists: false, error: null };
+  }
+
+  const { data, error } = await supabase
+    .from("purchase_order_items")
+    .select("id, status")
+    .eq("part_request_id", partRequestId);
+
+  if (error) {
+    return { exists: false, error };
+  }
+
+  return {
+    error: null,
+    exists: (data ?? []).some(
+      (item) => !["cancelled", "returned"].includes(item.status)
+    ),
+  };
 }
 
 function CreatePurchaseOrderForm({
@@ -106,8 +178,12 @@ function CreatePurchaseOrderForm({
   vehicleId,
   vendors = [],
 }) {
+  const initialFormData = useMemo(
+    () => getInitialFormData(initialPartRequest, initialVendorId),
+    [initialPartRequest, initialVendorId]
+  );
   const [formData, setFormData] = useState(() =>
-    getInitialFormData(initialPartRequest, initialVendorId)
+    initialFormData
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -118,6 +194,37 @@ function CreatePurchaseOrderForm({
     partRequests.find(
       (partRequest) => partRequest.id === formData.part_request_id
     ) ?? initialPartRequest;
+  const selectedVendorOption = useMemo(() => {
+    const vendorSourcePart = selectedPartRequest ?? initialPartRequest;
+    const selectedVendorId =
+      formData.vendor_id ||
+      initialVendorId ||
+      getPartRequestVendorId(vendorSourcePart);
+
+    return selectedVendorId
+      ? {
+          id: selectedVendorId,
+          name: getPartRequestVendorName(vendorSourcePart),
+        }
+      : null;
+  }, [formData.vendor_id, initialPartRequest, initialVendorId, selectedPartRequest]);
+  const vendorOptions = useMemo(
+    () => mergeVendorOptions(vendors, selectedVendorOption),
+    [selectedVendorOption, vendors]
+  );
+
+  useEffect(() => {
+    console.log("Create PO initial part", {
+      id: initialPartRequest?.id,
+      quotedUnitCost: initialPartRequest?.quoted_unit_cost,
+      selectedQuoteId: initialPartRequest?.selected_quote_id,
+      selectedVendorId: initialPartRequest?.selected_vendor_id,
+    });
+  }, [initialPartRequest]);
+
+  useEffect(() => {
+    console.log("Create PO vendor state", formData.vendor_id);
+  }, [formData.vendor_id]);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -145,7 +252,14 @@ function CreatePurchaseOrderForm({
         valueToString(selectedPartRequest?.quantity || 1),
       unit_cost:
         currentFormData.unit_cost ||
-        valueToString(selectedPartRequest?.unit_cost ?? ""),
+        valueToString(
+          selectedPartRequest?.quoted_unit_cost ??
+            selectedPartRequest?.selectedQuote?.unit_price ??
+            selectedPartRequest?.unit_cost ??
+            ""
+        ),
+      vendor_id:
+        currentFormData.vendor_id || getPartRequestVendorId(selectedPartRequest),
     }));
   }
 
@@ -227,6 +341,20 @@ function CreatePurchaseOrderForm({
         return;
       }
 
+      const duplicateCheck = await hasActivePurchaseOrderItem(
+        formData.part_request_id
+      );
+
+      if (duplicateCheck.error) {
+        setErrorMessage(duplicateCheck.error.message);
+        return;
+      }
+
+      if (duplicateCheck.exists) {
+        setErrorMessage("A purchase order already exists for this part.");
+        return;
+      }
+
       const purchaseOrder = {
         ordered_by: currentProfile?.id ?? null,
         vehicle_id: vehicleId,
@@ -299,7 +427,7 @@ function CreatePurchaseOrderForm({
       }
       const partRequestStatusUpdated = !partRequestResponse.error;
 
-      setFormData(getInitialFormData(initialPartRequest, initialVendorId));
+      setFormData(initialFormData);
       setSuccessMessage("Purchase order created successfully.");
       setWarningMessage(statusWarning);
       await logVehicleActivity({
@@ -310,7 +438,7 @@ function CreatePurchaseOrderForm({
           quantity: validation.values.quantity,
           unit_cost: validation.values.unitCost,
           vendor: getVendorName(
-            vendors.find((vendor) => vendor.id === formData.vendor_id) ?? {}
+            vendorOptions.find((vendor) => vendor.id === formData.vendor_id) ?? {}
           ),
           part_name: getPartRequestName(
             partRequests.find(
@@ -372,7 +500,7 @@ function CreatePurchaseOrderForm({
                 value={formData.vendor_id}
               >
                 <option value="">Select a vendor</option>
-                {vendors.map((vendor) => (
+                {vendorOptions.map((vendor) => (
                   <option key={vendor.id} value={vendor.id}>
                     {getVendorName(vendor)}
                   </option>

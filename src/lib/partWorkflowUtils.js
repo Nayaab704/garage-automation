@@ -101,6 +101,68 @@ export function getPrimaryPurchaseOrderItem(part) {
   );
 }
 
+function numberOrNull(value) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+export function getSelectedQuote(part) {
+  return part?.selectedQuote ?? null;
+}
+
+export function getSelectedVendorName(part) {
+  const selectedQuote = getSelectedQuote(part);
+  const primaryPurchaseOrderItem = getPrimaryPurchaseOrderItem(part);
+
+  return (
+    selectedQuote?.vendor_name_snapshot ||
+    part?.selectedVendor?.name ||
+    primaryPurchaseOrderItem?.purchaseOrder?.vendor?.name ||
+    (selectedQuote?.display_vendor_name === "Unknown vendor"
+      ? ""
+      : selectedQuote?.display_vendor_name) ||
+    ""
+  );
+}
+
+export function getSelectedVendorId(part) {
+  const selectedQuote = getSelectedQuote(part);
+
+  return (
+    part?.selected_vendor_id ||
+    selectedQuote?.vendor_id ||
+    getPrimaryPurchaseOrderItem(part)?.purchaseOrder?.vendor_id ||
+    ""
+  );
+}
+
+export function getSelectedUnitCost(part) {
+  return (
+    numberOrNull(part?.quoted_unit_cost) ??
+    numberOrNull(part?.selectedQuote?.unit_price) ??
+    numberOrNull(part?.unit_cost) ??
+    0
+  );
+}
+
+export function getPartEstimatedTotal(part) {
+  const savedTotal = numberOrNull(part?.quoted_total_cost);
+
+  if (savedTotal !== null) {
+    return savedTotal;
+  }
+
+  const selectedQuoteTotal = numberOrNull(part?.selectedQuote?.total_price);
+
+  if (selectedQuoteTotal !== null && selectedQuoteTotal > 0) {
+    return selectedQuoteTotal;
+  }
+
+  const quantity = numberOrNull(part?.quantity) ?? 1;
+
+  return quantity * getSelectedUnitCost(part);
+}
+
 export function isPartNeedsPo(part) {
   return (
     part?.part_source === "needs_to_buy" &&
@@ -253,6 +315,7 @@ export function getPartQueueSearchText(part) {
   const workOrder = part?.repairJob;
   const vehicle = part?.vehicle;
   const latestQuote = part?.latestQuote;
+  const selectedQuote = part?.selectedQuote;
   const purchaseOrderItem = getPrimaryPurchaseOrderItem(part);
   const purchaseOrderVendor = purchaseOrderItem?.purchaseOrder?.vendor;
 
@@ -270,6 +333,10 @@ export function getPartQueueSearchText(part) {
     workOrder?.serviceCategory?.name,
     latestQuote?.vendor_name_snapshot,
     latestQuote?.raw_part_name,
+    selectedQuote?.vendor_name_snapshot,
+    selectedQuote?.display_vendor_name,
+    selectedQuote?.raw_part_name,
+    part?.selectedVendor?.name,
     purchaseOrderVendor?.name,
   ]
     .filter(Boolean)
