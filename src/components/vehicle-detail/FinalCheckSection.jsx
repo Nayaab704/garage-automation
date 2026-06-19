@@ -4,7 +4,7 @@ import {
   areFinalChecksComplete,
   finalCheckTemplates,
 } from "../../lib/finalChecks";
-import AppIcon from "../ui/AppIcon";
+import VehicleDetailSection from "./VehicleDetailSection";
 import { supabase } from "../../lib/supabaseClient";
 
 function formatDateTime(value) {
@@ -49,7 +49,9 @@ function getReadinessLabel({
 }
 
 function getProfileName(profiles, profileId) {
-  const profile = profiles.find((profileRecord) => profileRecord.id === profileId);
+  const profile = profiles.find(
+    (profileRecord) => profileRecord.id === profileId
+  );
   return profile?.full_name || profile?.email || "Unknown User";
 }
 
@@ -86,20 +88,19 @@ function CheckRow({
 }) {
   const isAllowed = canUpdateCheck(currentProfile, finalCheck);
   const isUpdating = updatingCheckId === finalCheck.id;
-  const checkedMeta =
-    finalCheck.is_checked && finalCheck.checked_by
-      ? `Checked by ${getProfileName(profiles, finalCheck.checked_by)}${
-          finalCheck.checked_at
-            ? ` | ${formatDateTime(finalCheck.checked_at)}`
-            : ""
-        }`
-      : "";
+  const checkedBy = finalCheck.checked_by
+    ? getProfileName(profiles, finalCheck.checked_by)
+    : "";
+  const checkedAt = formatDateTime(finalCheck.checked_at);
+  const checkedMeta = finalCheck.is_checked
+    ? ["Checked", checkedBy, checkedAt].filter(Boolean).join(" - ")
+    : "";
 
   return (
     <label
-      className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 transition ${
+      className={`grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-xl border px-3 py-2.5 transition ${
         finalCheck.is_checked
-          ? "border-emerald-200 bg-emerald-50/40"
+          ? "border-emerald-200 bg-emerald-50/30"
           : "border-slate-200 bg-white"
       } ${
         isAllowed && finalCheck.id
@@ -137,7 +138,7 @@ function CheckRow({
             : "bg-slate-100 text-slate-700 ring-slate-200"
         }`}
       >
-        {finalCheck.is_checked ? "Checked" : "Needed"}
+        {finalCheck.is_checked ? "Checked" : "Pending"}
       </span>
     </label>
   );
@@ -161,8 +162,8 @@ function FinalCheckGroup({
   ).length;
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
-      <div className="mb-3 flex items-center justify-between gap-3">
+    <section className="space-y-2">
+      <div className="flex items-center justify-between gap-3 px-1">
         <h3 className="text-sm font-black text-slate-950">{title}</h3>
         <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-200">
           {completedCount}/{templates.length}
@@ -192,7 +193,6 @@ function FinalCheckSection({
   profiles = [],
   vehicleId,
 }) {
-  const [isOpen, setIsOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [updatingCheckId, setUpdatingCheckId] = useState(null);
   const checksByKey = new Map(
@@ -224,6 +224,7 @@ function FinalCheckSection({
     technicianCompletedCount,
     technicianTotal: technicianTemplates.length,
   });
+  const progressLabel = `${completedCount}/${finalCheckTemplates.length} checked`;
 
   async function handleToggle(finalCheck, isChecked) {
     if (!canUpdateCheck(currentProfile, finalCheck)) {
@@ -232,7 +233,9 @@ function FinalCheckSection({
     }
 
     if (!finalCheck.id) {
-      setErrorMessage("This final check is still being prepared. Refresh and try again.");
+      setErrorMessage(
+        "This final check is still being prepared. Refresh and try again."
+      );
       return;
     }
 
@@ -293,95 +296,65 @@ function FinalCheckSection({
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <button
-        className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
-        onClick={() => setIsOpen((currentValue) => !currentValue)}
-        type="button"
-      >
-        <span className="flex min-w-0 items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-slate-600">
-            <AppIcon name="checklist" size={20} />
-          </span>
-          <span className="min-w-0">
-            <span className="block text-base font-black text-slate-950">
-              Final Checklist
-            </span>
-            <span className="block text-sm text-slate-500">
-              Technician: {technicianCompletedCount}/{technicianTemplates.length}{" "}
-              | Admin: {adminCompletedCount}/{adminTemplates.length}
-            </span>
-          </span>
-        </span>
-
-        <span className="flex shrink-0 items-center gap-3">
-          <span
-            className={`w-fit rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset ${
-              allChecksComplete
-                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                : "bg-amber-50 text-amber-800 ring-amber-200"
-            }`}
-          >
-            {readinessLabel}
-          </span>
-          <AppIcon
-            className={`text-slate-500 transition ${
-              isOpen ? "rotate-90" : ""
-            }`}
-            name="chevron-right"
-            size={20}
-          />
-        </span>
-      </button>
-
-      {isOpen && (
-        <div className="border-t border-slate-100 p-4">
-          <div className="mb-5">
-            <div className="h-2 overflow-hidden rounded-full bg-zinc-200">
-              <div
-                className={`h-full rounded-full transition-all ${
-                  allChecksComplete ? "bg-emerald-600" : "bg-amber-500"
-                }`}
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
+    <VehicleDetailSection
+      badge={readinessLabel}
+      icon="checklist"
+      summary={progressLabel}
+      title="Final Checklist"
+      tone={allChecksComplete ? "emerald" : "amber"}
+    >
+      <div className="space-y-4">
+        <div>
+          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+            <div
+              className={`h-full rounded-full transition-all ${
+                allChecksComplete ? "bg-emerald-600" : "bg-amber-500"
+              }`}
+              style={{ width: `${progressPercent}%` }}
+            />
           </div>
-
-          {allChecksComplete && (
-            <div className="mb-5 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800">
-              Vehicle is cleared to be marked Ready For Sale.
-            </div>
-          )}
-
-          {errorMessage && (
-            <div className="mb-5 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {errorMessage}
-            </div>
-          )}
-
-          <div className="grid gap-3 xl:grid-cols-2">
-            <FinalCheckGroup
-              currentProfile={currentProfile}
-              finalChecks={finalChecks}
-              onToggle={handleToggle}
-              profiles={profiles}
-              requiredRole="technician"
-              title="Technician Checklist"
-              updatingCheckId={updatingCheckId}
-            />
-            <FinalCheckGroup
-              currentProfile={currentProfile}
-              finalChecks={finalChecks}
-              onToggle={handleToggle}
-              profiles={profiles}
-              requiredRole="admin"
-              title="Admin Checklist"
-              updatingCheckId={updatingCheckId}
-            />
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-slate-500">
+            <span>
+              Technician {technicianCompletedCount}/{technicianTemplates.length}
+            </span>
+            <span>Admin {adminCompletedCount}/{adminTemplates.length}</span>
           </div>
         </div>
-      )}
-    </section>
+
+        {allChecksComplete && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+            Vehicle is cleared to be marked Ready For Sale.
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            {errorMessage}
+          </div>
+        )}
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <FinalCheckGroup
+            currentProfile={currentProfile}
+            finalChecks={finalChecks}
+            onToggle={handleToggle}
+            profiles={profiles}
+            requiredRole="technician"
+            title="Technician Checklist"
+            updatingCheckId={updatingCheckId}
+          />
+          <FinalCheckGroup
+            currentProfile={currentProfile}
+            finalChecks={finalChecks}
+            onToggle={handleToggle}
+            profiles={profiles}
+            requiredRole="admin"
+            title="Admin Checklist"
+            updatingCheckId={updatingCheckId}
+          />
+        </div>
+      </div>
+    </VehicleDetailSection>
   );
 }
 

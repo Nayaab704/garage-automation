@@ -1,6 +1,7 @@
 import { useState } from "react";
 import AddExtraCostForm from "./AddExtraCostForm";
 import AppIcon from "../ui/AppIcon";
+import VehicleDetailSection from "./VehicleDetailSection";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 
@@ -36,6 +37,24 @@ function formatCurrency(value) {
   }
 
   return currencyFormatter.format(numberValue);
+}
+
+function formatDate(value) {
+  if (!value) {
+    return "No date";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "No date";
+  }
+
+  return date.toLocaleDateString("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function formatCostType(costType) {
@@ -74,24 +93,39 @@ function getExtraCostTotal(costEntries) {
 function ExtraCostCard({ canManage, costEntry, isDeleting, onDelete }) {
   const costType = getFirstValue(costEntry, ["cost_type", "type"]);
   const amount = getFirstValue(costEntry, ["amount", "cost"]);
-  const description = getFirstValue(costEntry, ["description", "notes"]);
+  const description = getFirstValue(costEntry, ["description"]);
+  const notes = getFirstValue(costEntry, ["notes"]);
+  const date = getFirstValue(costEntry, [
+    "cost_date",
+    "expense_date",
+    "date",
+    "created_at",
+  ]);
 
   return (
-    <article className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 className="text-base font-bold text-zinc-950">
+    <article className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-bold text-slate-950">
             {formatCostType(costType)}
           </h3>
           {description && (
-            <p className="mt-1 text-sm text-zinc-500">
+            <p className="mt-1 text-sm leading-5 text-slate-600">
               {displayValue(description)}
             </p>
           )}
+          {notes && notes !== description && (
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              {displayValue(notes)}
+            </p>
+          )}
+          <p className="mt-1 text-xs font-medium text-slate-400">
+            {formatDate(date)}
+          </p>
         </div>
 
-        <div className="flex items-start gap-2 sm:flex-col sm:items-end">
-          <div className="rounded-md bg-zinc-100 px-3 py-2 text-right text-sm font-bold text-zinc-800 ring-1 ring-inset ring-zinc-200">
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <div className="rounded-lg bg-slate-50 px-3 py-1.5 text-right text-sm font-bold text-slate-800 ring-1 ring-inset ring-slate-200">
             {formatCurrency(amount)}
           </div>
           {canManage && (
@@ -118,10 +152,12 @@ function ExtraCostsSection({
   vehicleId,
 }) {
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [deletingCostEntryId, setDeletingCostEntryId] = useState(null);
   const extraCostTotal = getExtraCostTotal(costEntries);
+  const costCountLabel = `${costEntries.length} ${
+    costEntries.length === 1 ? "record" : "records"
+  }`;
 
   async function handleDelete(costEntryId) {
     if (!canManage) {
@@ -179,75 +215,47 @@ function ExtraCostsSection({
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <button
-        className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
-        onClick={() => setIsOpen((currentValue) => !currentValue)}
-        type="button"
-      >
-        <span className="flex min-w-0 items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-slate-600">
-            <AppIcon name="dollar" size={20} />
-          </span>
-          <span className="min-w-0">
-            <span className="block text-base font-black text-slate-950">
-              Extra Costs
-            </span>
-            <span className="block text-sm text-slate-500">
-              {costEntries.length}{" "}
-              {costEntries.length === 1 ? "record" : "records"}
-            </span>
-          </span>
-        </span>
-
-        <span className="flex shrink-0 items-center gap-3">
-          <span className="rounded-full bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200">
-            {formatCurrency(extraCostTotal)}
-          </span>
-          <AppIcon
-            className={`text-slate-500 transition ${
-              isOpen ? "rotate-90" : ""
-            }`}
-            name="chevron-right"
-            size={20}
-          />
-        </span>
-      </button>
-
-      {isOpen && (
-        <div className="border-t border-slate-100 p-4">
-          {canManage && (
+    <VehicleDetailSection
+      badge={formatCurrency(extraCostTotal)}
+      icon="dollar"
+      summary={costCountLabel}
+      title="Extra Costs"
+    >
+      <div className="space-y-4">
+        {canManage && (
+          <div className="flex justify-end">
             <button
-              className="mb-4 min-h-11 rounded-xl bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
               onClick={() => setIsFormOpen(true)}
               type="button"
             >
+              <AppIcon name="plus" size={17} />
               Add Extra Cost
             </button>
-          )}
+          </div>
+        )}
 
-          {costEntries.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-6 text-sm text-zinc-500">
-              No extra costs found for this vehicle.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {costEntries.map((costEntry, index) => (
-                <ExtraCostCard
-                  canManage={canManage}
-                  costEntry={costEntry}
-                  isDeleting={deletingCostEntryId === costEntry.id}
-                  key={costEntry.id ?? index}
-                  onDelete={handleDelete}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+        {costEntries.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 p-5 text-sm text-slate-500">
+            No extra costs found for this vehicle.
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {costEntries.map((costEntry, index) => (
+              <ExtraCostCard
+                canManage={canManage}
+                costEntry={costEntry}
+                isDeleting={deletingCostEntryId === costEntry.id}
+                key={costEntry.id ?? index}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       {deleteError && (
-        <div className="m-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
           {deleteError}
         </div>
       )}
@@ -260,7 +268,7 @@ function ExtraCostsSection({
           vehicleId={vehicleId}
         />
       )}
-    </section>
+    </VehicleDetailSection>
   );
 }
 
