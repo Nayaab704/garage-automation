@@ -12,14 +12,29 @@ export const BRAND_COLORS = {
 
 export const BRAND_TAGLINE = "Garage Operations";
 
-export const MAIN_NAV_PAGES = [
-  "Dashboard",
-  "Intake",
-  "Vehicles",
-  "Repairs",
-  "Parts",
-  "Purchase Orders",
-  "Vendors",
-  "Analytics",
-  "Settings",
+export const MAIN_NAV_ITEMS = [
+  {
+    icon: "chart-up",
+    label: "Dashboard",
+    page: "Dashboard",
+    permission: "dashboard:view",
+  },
+  {
+    icon: "car",
+    label: "Intake",
+    page: "Intake",
+    permission: "vehicle:create",
+  },
+  { icon: "vehicle", label: "Vehicles", page: "Vehicles" },
+  { icon: "wrench", label: "Repairs", page: "Repairs" },
+  { icon: "parts", label: "Parts", page: "Parts" },
+  {
+    icon: "file",
+    label: "Purchase Orders",
+    page: "Purchase Orders",
+    permission: "purchase_order:manage",
+  },
+  { icon: "users", label: "Vendors", page: "Vendors" },
 ];
+
+export const MAIN_NAV_PAGES = MAIN_NAV_ITEMS.map((item) => item.page);

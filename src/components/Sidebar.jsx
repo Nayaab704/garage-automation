@@ -1,76 +1,44 @@
 import BrandLogo from "./branding/BrandLogo";
-import { hasPermission } from "../lib/permissions";
-
-const sidebarItems = [
-  "Dashboard",
-  "Intake",
-  "Vehicles",
-  "Repairs",
-  "Parts",
-  "Purchase Orders",
-  "Vendors",
-  "Analytics",
-  "Settings",
-];
-
-function getVisibleSidebarItems(role) {
-  return sidebarItems.filter((item) => {
-    if (item === "Dashboard") {
-      return hasPermission(role, "dashboard:view");
-    }
-
-    if (item === "Purchase Orders") {
-      return hasPermission(role, "purchase_order:manage");
-    }
-
-    return true;
-  });
-}
+import AppIcon from "./ui/AppIcon";
+import { getVisibleMainNavItems } from "../lib/navigation";
 
 function Sidebar({ activePage = "Vehicles", currentProfile, onPageChange }) {
-  const visibleSidebarItems = getVisibleSidebarItems(currentProfile?.role);
+  const visibleSidebarItems = getVisibleMainNavItems(currentProfile?.role);
 
   return (
-    <aside className="hidden border-r border-zinc-200 bg-white lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col">
-      <div className="flex h-16 items-center border-b border-zinc-200 px-6">
-        <BrandLogo showTagline size="compact" />
+    <aside className="hidden border-r border-slate-200 bg-white/95 backdrop-blur lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col">
+      <div className="flex h-16 items-center border-b border-slate-200 px-5">
+        <BrandLogo size="compact" />
       </div>
 
-      <nav className="flex-1 space-y-1 px-3 py-5">
+      <nav className="flex-1 space-y-1.5 px-3 py-4">
         {visibleSidebarItems.map((item) => {
-          const isActive = item === activePage;
+          const isActive = item.page === activePage;
 
           return (
             <button
               aria-current={isActive ? "page" : undefined}
-              className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm font-medium transition ${
+              className={`flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm font-bold transition ${
                 isActive
-                  ? "bg-zinc-950 text-white shadow-sm"
-                  : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
               }`}
-              key={item}
-              onClick={() => onPageChange(item)}
+              key={item.page}
+              onClick={() => onPageChange(item.page)}
               type="button"
             >
-              <span>{item}</span>
-              {isActive && (
-                <span className="size-1.5 rounded-full bg-white" />
-              )}
+              <span
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                  isActive ? "bg-white/15" : "bg-white"
+                }`}
+              >
+                <AppIcon name={item.icon} size={18} />
+              </span>
+              <span className="min-w-0 truncate">{item.label}</span>
             </button>
           );
         })}
       </nav>
-
-      <div className="border-t border-zinc-200 p-4">
-        <div className="rounded-md border border-emerald-100 bg-emerald-50 p-3">
-          <p className="text-sm font-semibold text-zinc-950">
-            Inventory Workspace
-          </p>
-          <p className="mt-1 text-xs leading-5 text-emerald-800">
-            Manage vehicle records, repairs, parts, and profitability.
-          </p>
-        </div>
-      </div>
     </aside>
   );
 }
