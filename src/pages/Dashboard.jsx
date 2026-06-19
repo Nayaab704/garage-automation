@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import AppIcon from "../components/ui/AppIcon";
+import {
+  getPartQueueCounts,
+  isPartIssue,
+  isPartNeedsPo,
+  isPartPendingReview,
+} from "../lib/partWorkflowUtils";
 import { hasPermission } from "../lib/permissions";
+import {
+  getRepairQueueCounts,
+  isRepairJobUrgent,
+  isRepairJobWaitingParts,
+} from "../lib/repairWorkflowUtils";
 import { supabase } from "../lib/supabaseClient";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -48,7 +59,6 @@ const thirdPartyStatusLabels = {
 
 const openPurchaseOrderStatuses = ["ordered", "partial_received"];
 const thirdPartyOutStatuses = ["sent_out", "in_progress"];
-const closedWorkOrderStatuses = ["completed", "cancelled"];
 
 function numberOrZero(value) {
   const numberValue = Number(value);
@@ -61,6 +71,19 @@ function formatCurrency(value) {
 
 function formatNumber(value) {
   return numberFormatter.format(numberOrZero(value));
+}
+
+function groupBy(records, key) {
+  return records.reduce((groupedRecords, record) => {
+    const groupKey = record?.[key];
+
+    if (!groupKey) {
+      return groupedRecords;
+    }
+
+    groupedRecords[groupKey] = [...(groupedRecords[groupKey] ?? []), record];
+    return groupedRecords;
+  }, {});
 }
 
 function formatDate(value) {
@@ -147,6 +170,33 @@ function getSalesTotal(sales) {
   return sales.reduce((total, sale) => total + numberOrZero(sale.sale_price), 0);
 }
 
+function enrichDashboardParts({
+  partRequests,
+  purchaseOrderItems,
+  purchaseOrdersById,
+}) {
+  const itemsByPartRequestId = groupBy(purchaseOrderItems, "part_request_id");
+
+  return partRequests.map((partRequest) => ({
+    ...partRequest,
+    purchaseOrderItems: (itemsByPartRequestId[partRequest.id] ?? []).map(
+      (item) => ({
+        ...item,
+        purchaseOrder: purchaseOrdersById[item.purchase_order_id] ?? null,
+      })
+    ),
+  }));
+}
+
+function enrichDashboardRepairJobs({ partRequests, repairJobs }) {
+  const partsByRepairJobId = groupBy(partRequests, "repair_job_id");
+
+  return repairJobs.map((repairJob) => ({
+    ...repairJob,
+    parts: partsByRepairJobId[repairJob.id] ?? [],
+  }));
+}
+
 function isUuidLike(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     String(value)
@@ -220,7 +270,7 @@ function summarizeActivityDetails(details) {
     .slice(0, 3);
 
   return summaryParts.length > 0
-    ? summaryParts.join(" · ")
+    ? summaryParts.join(" - ")
     : "No details recorded.";
 }
 
@@ -234,6 +284,7 @@ function genericBadgeClassName(status) {
   }
 
   if (
+    status === "needs_po" ||
     status === "pending" ||
     status === "waiting_parts" ||
     status === "partial_received" ||
@@ -261,61 +312,39 @@ function genericBadgeClassName(status) {
   return "bg-zinc-100 text-zinc-700 ring-zinc-200";
 }
 
+function getAttentionHelperText(metricKey) {
+  const helperText = {
+    blocked_repairs: "Open repair blockers before they stall delivery.",
+    open_purchase_orders: "Track ordered parts that still need receiving.",
+    parts_need_po: "Create purchase orders for pending parts.",
+    pending_review: "Review requested parts before ordering.",
+    ready_for_sale: "Vehicles marked ready after final checks.",
+    rejected_parts: "Resolve rejected or unavailable part requests.",
+    third_party_out: "Follow up on outside repair work.",
+    urgent_repairs: "Open high-priority work orders.",
+    waiting_parts: "Work orders blocked by parts activity.",
+  };
+
+  return helperText[metricKey] ?? "";
+}
+
 function getAttentionMetrics({
+  partQueueCounts,
   partRequests,
   purchaseOrders,
   repairJobs,
+  repairQueueCounts,
   thirdPartyRepairs,
   vehicles,
 }) {
-  const activeUrgentWorkOrders = repairJobs.filter(
-    (repairJob) =>
-      repairJob.priority === "urgent" &&
-      !closedWorkOrderStatuses.includes(repairJob.status)
-  );
-
-  return [
+  const metrics = [
     {
       actionPage: "Parts",
-      count: partRequests.filter(
-        (partRequest) => partRequest.approval_status === "pending"
-      ).length,
+      count: partQueueCounts.needs_po ?? 0,
       icon: "parts",
-      label: "Pending Part Reviews",
+      key: "parts_need_po",
+      label: "Parts Need PO",
       tone: "amber",
-    },
-    {
-      actionPage: "Parts",
-      count: partRequests.filter(
-        (partRequest) => partRequest.approval_status === "rejected"
-      ).length,
-      icon: "warning",
-      label: "Rejected / Issue Parts",
-      tone: "red",
-    },
-    {
-      actionPage: "Repairs",
-      count: repairJobs.filter(
-        (repairJob) => repairJob.status === "waiting_parts"
-      ).length,
-      icon: "clock",
-      label: "Waiting Parts Work Orders",
-      tone: "amber",
-    },
-    {
-      actionPage: "Repairs",
-      count: repairJobs.filter((repairJob) => repairJob.status === "blocked")
-        .length,
-      icon: "warning",
-      label: "Blocked Work Orders",
-      tone: "red",
-    },
-    {
-      actionPage: "Repairs",
-      count: activeUrgentWorkOrders.length,
-      icon: "warning",
-      label: "Urgent Work Orders",
-      tone: "red",
     },
     {
       actionPage: "Purchase Orders",
@@ -323,8 +352,54 @@ function getAttentionMetrics({
         openPurchaseOrderStatuses.includes(purchaseOrder.status)
       ).length,
       icon: "file",
+      key: "open_purchase_orders",
       label: "Open Purchase Orders",
       tone: "blue",
+    },
+    {
+      actionPage: "Repairs",
+      count: repairQueueCounts.waiting_parts ?? 0,
+      icon: "clock",
+      key: "waiting_parts",
+      label: "Waiting Parts Work Orders",
+      tone: "amber",
+    },
+    {
+      actionPage: "Repairs",
+      count: repairJobs.filter((repairJob) => isRepairJobUrgent(repairJob))
+        .length,
+      icon: "warning",
+      key: "urgent_repairs",
+      label: "Urgent Work Orders",
+      tone: "red",
+    },
+    {
+      actionPage: "Parts",
+      count: partRequests.filter((partRequest) =>
+        isPartPendingReview(partRequest)
+      ).length,
+      icon: "parts",
+      key: "pending_review",
+      label: "Pending Part Reviews",
+      tone: "amber",
+    },
+    {
+      actionPage: "Parts",
+      count: partRequests.filter((partRequest) => isPartIssue(partRequest))
+        .length,
+      icon: "warning",
+      key: "rejected_parts",
+      label: "Rejected / Issue Parts",
+      tone: "red",
+    },
+    {
+      actionPage: "Repairs",
+      count: repairJobs.filter((repairJob) => repairJob.status === "blocked")
+        .length,
+      icon: "warning",
+      key: "blocked_repairs",
+      label: "Blocked Work Orders",
+      tone: "red",
     },
     {
       actionPage: "Repairs",
@@ -332,6 +407,7 @@ function getAttentionMetrics({
         thirdPartyOutStatuses.includes(thirdPartyRepair.status)
       ).length,
       icon: "third-party",
+      key: "third_party_out",
       label: "Third-Party Repairs Out",
       tone: "blue",
     },
@@ -340,10 +416,16 @@ function getAttentionMetrics({
       count: vehicles.filter((vehicle) => vehicle.status === "ready_for_sale")
         .length,
       icon: "check",
+      key: "ready_for_sale",
       label: "Ready For Sale Vehicles",
       tone: "green",
     },
   ];
+
+  return metrics.map((metric) => ({
+    ...metric,
+    helperText: getAttentionHelperText(metric.key),
+  }));
 }
 
 function buildAttentionQueue({
@@ -356,10 +438,7 @@ function buildAttentionQueue({
   const queueItems = [];
 
   repairJobs.forEach((repairJob) => {
-    if (
-      repairJob.priority === "urgent" &&
-      !closedWorkOrderStatuses.includes(repairJob.status)
-    ) {
+    if (isRepairJobUrgent(repairJob)) {
       queueItems.push({
         actionPage: "Repairs",
         actionText: "View Repairs",
@@ -391,7 +470,7 @@ function buildAttentionQueue({
       });
     }
 
-    if (repairJob.status === "waiting_parts") {
+    if (isRepairJobWaitingParts(repairJob)) {
       queueItems.push({
         actionPage: "Repairs",
         actionText: "View Repairs",
@@ -409,6 +488,22 @@ function buildAttentionQueue({
   });
 
   partRequests.forEach((partRequest) => {
+    if (isPartNeedsPo(partRequest)) {
+      queueItems.push({
+        actionPage: "Parts",
+        actionText: "View Parts",
+        createdAt: partRequest.created_at,
+        priority: 85,
+        reason: "Part is ready for purchase order",
+        status: "needs_po",
+        statusLabels: { needs_po: "Needs PO" },
+        title: partRequest.part_name || "Unnamed part",
+        type: "Part Needs PO",
+        vehicle: vehiclesById[partRequest.vehicle_id],
+        vehicleId: partRequest.vehicle_id,
+      });
+    }
+
     if (partRequest.approval_status === "pending") {
       queueItems.push({
         actionPage: "Parts",
@@ -506,6 +601,7 @@ async function fetchDashboardData() {
     partRequestsResponse,
     repairJobsResponse,
     purchaseOrdersResponse,
+    purchaseOrderItemsResponse,
     thirdPartyRepairsResponse,
     activityLogsResponse,
   ] = await Promise.all([
@@ -536,6 +632,9 @@ async function fetchDashboardData() {
       .select("id, vehicle_id, status, ordered_at, created_at")
       .order("created_at", { ascending: false }),
     supabase
+      .from("purchase_order_items")
+      .select("id, purchase_order_id, part_request_id, status"),
+    supabase
       .from("third_party_repairs")
       .select(
         "id, vehicle_id, repair_job_id, service_rendered, status, outbound_date, created_at"
@@ -555,11 +654,26 @@ async function fetchDashboardData() {
     partRequestsResponse.error ??
     repairJobsResponse.error ??
     purchaseOrdersResponse.error ??
+    purchaseOrderItemsResponse.error ??
     thirdPartyRepairsResponse.error;
 
   if (firstRequiredError) {
     return { data: null, error: firstRequiredError };
   }
+
+  const purchaseOrders = purchaseOrdersResponse.data ?? [];
+  const purchaseOrdersById = Object.fromEntries(
+    purchaseOrders.map((purchaseOrder) => [purchaseOrder.id, purchaseOrder])
+  );
+  const partRequests = enrichDashboardParts({
+    partRequests: partRequestsResponse.data ?? [],
+    purchaseOrderItems: purchaseOrderItemsResponse.data ?? [],
+    purchaseOrdersById,
+  });
+  const repairJobs = enrichDashboardRepairJobs({
+    partRequests,
+    repairJobs: repairJobsResponse.data ?? [],
+  });
 
   return {
     data: {
@@ -567,9 +681,9 @@ async function fetchDashboardData() {
         ? []
         : activityLogsResponse.data ?? [],
       investmentSummaries: summariesResponse.data ?? [],
-      partRequests: partRequestsResponse.data ?? [],
-      purchaseOrders: purchaseOrdersResponse.data ?? [],
-      repairJobs: repairJobsResponse.data ?? [],
+      partRequests,
+      purchaseOrders,
+      repairJobs,
       sales: salesResponse.data ?? [],
       thirdPartyRepairs: thirdPartyRepairsResponse.data ?? [],
       vehicles: vehiclesResponse.data ?? [],
@@ -626,15 +740,15 @@ function SummaryCard({
   valueClassName = "text-slate-950",
 }) {
   return (
-    <article className="flex min-h-24 items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-        <AppIcon name={icon} size={21} />
+    <article className="flex min-h-20 items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100">
+        <AppIcon name={icon} size={19} />
       </div>
       <div className="min-w-0">
-        <p className="truncate text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <p className="truncate text-[0.68rem] font-black uppercase tracking-wide text-slate-500">
           {label}
         </p>
-        <p className={`mt-1 truncate text-xl font-black ${valueClassName}`}>
+        <p className={`mt-1 truncate text-lg font-black sm:text-xl ${valueClassName}`}>
           {value}
         </p>
         {helperText && (
@@ -655,7 +769,7 @@ function DashboardQuickActions({ canStartIntake, onNavigate }) {
   return (
     <section>
       <button
-        className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-base font-black text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+        className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-base font-black text-white shadow-[0_14px_28px_rgba(5,150,105,0.22)] transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200"
         onClick={() => onNavigate?.("Intake")}
         type="button"
       >
@@ -679,13 +793,13 @@ function Badge({ children, className }) {
 function DashboardAttentionList({ metrics, onNavigate }) {
   return (
     <DashboardSection title="Needs Attention">
-      <div className="divide-y divide-slate-100">
+      <div className="grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
         {metrics.map((metric) => {
           const toneClasses = getToneClasses(metric.tone);
 
           return (
             <button
-              className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 sm:px-5"
+              className="flex min-h-24 w-full items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-3 text-left transition hover:border-emerald-200 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
               key={metric.label}
               onClick={() => onNavigate?.(metric.actionPage)}
               type="button"
@@ -699,22 +813,51 @@ function DashboardAttentionList({ metrics, onNavigate }) {
                 <span className="block truncate text-sm font-bold text-slate-900">
                   {metric.label}
                 </span>
+                {metric.helperText && (
+                  <span className="mt-1 block line-clamp-2 text-xs leading-5 text-slate-500">
+                    {metric.helperText}
+                  </span>
+                )}
               </span>
-              <span
-                className={`inline-flex min-w-9 items-center justify-center rounded-full border px-2.5 py-1 text-sm font-black ${toneClasses.badge}`}
-              >
-                {formatNumber(metric.count)}
+              <span className="flex shrink-0 flex-col items-end gap-1">
+                <span
+                  className={`inline-flex min-w-9 items-center justify-center rounded-full border px-2.5 py-1 text-sm font-black ${toneClasses.badge}`}
+                >
+                  {formatNumber(metric.count)}
+                </span>
+                <span className="text-xs font-bold text-slate-400">Open</span>
               </span>
-              <AppIcon
-                className="shrink-0 text-slate-400"
-                name="chevron-right"
-                size={18}
-              />
             </button>
           );
         })}
       </div>
     </DashboardSection>
+  );
+}
+
+function DashboardLoadingState() {
+  return (
+    <div className="space-y-4">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div
+            className="h-20 animate-pulse rounded-2xl border border-slate-200 bg-white shadow-sm"
+            key={index}
+          />
+        ))}
+      </section>
+      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="h-4 w-36 rounded-full bg-slate-200" />
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div
+              className="h-20 animate-pulse rounded-2xl bg-slate-100"
+              key={index}
+            />
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -821,15 +964,17 @@ function AttentionQueue({ items, onNavigate, onSelectVehicle }) {
 }
 
 function RecentActivity({ activityLogs, vehiclesById }) {
+  const visibleActivityLogs = activityLogs.slice(0, 5);
+
   return (
     <DashboardSection title="Recent Activity">
-      {activityLogs.length === 0 ? (
+      {visibleActivityLogs.length === 0 ? (
         <div className="m-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500 sm:m-5">
           No recent activity found yet.
         </div>
       ) : (
         <div className="divide-y divide-slate-100">
-          {activityLogs.map((activityLog) => (
+          {visibleActivityLogs.map((activityLog) => (
             <div
               className="flex items-start gap-3 px-4 py-3 sm:px-5"
               key={activityLog.id}
@@ -896,7 +1041,8 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
         }
 
         if (error) {
-          setErrorMessage(error.message);
+          console.error("Failed to load dashboard data", error);
+          setErrorMessage("Could not load dashboard data right now.");
           setActivityLogs([]);
           setInvestmentSummaries([]);
           setPartRequests([]);
@@ -918,7 +1064,8 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
         setVehicles(data.vehicles);
       } catch (error) {
         if (isMounted) {
-          setErrorMessage(error.message ?? "Something went wrong.");
+          console.error("Failed to load dashboard data", error);
+          setErrorMessage("Could not load dashboard data right now.");
           setActivityLogs([]);
           setInvestmentSummaries([]);
           setPartRequests([]);
@@ -963,10 +1110,14 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
     0
   );
   const soldRevenue = getSalesTotal(sales);
+  const partQueueCounts = getPartQueueCounts(partRequests);
+  const repairQueueCounts = getRepairQueueCounts(repairJobs);
   const attentionMetrics = getAttentionMetrics({
+    partQueueCounts,
     partRequests,
     purchaseOrders,
     repairJobs,
+    repairQueueCounts,
     thirdPartyRepairs,
     vehicles,
   });
@@ -988,12 +1139,13 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
 
   return (
     <div className="space-y-4">
+      <DashboardQuickActions
+        canStartIntake={canStartIntake}
+        onNavigate={onNavigate}
+      />
+
       {isLoading && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <p className="font-medium text-slate-700">
-            Loading dashboard analytics...
-          </p>
-        </section>
+        <DashboardLoadingState />
       )}
 
       {!isLoading && errorMessage && (
@@ -1005,11 +1157,6 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
 
       {!isLoading && !errorMessage && (
         <>
-          <DashboardQuickActions
-            canStartIntake={canStartIntake}
-            onNavigate={onNavigate}
-          />
-
           <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             <SummaryCard
               helperText="All records"
@@ -1026,13 +1173,13 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
             <SummaryCard
               helperText="Active vehicles"
               icon="dollar"
-              label="Active Inventory Investment"
+              label="Active Investment"
               value={formatCurrency(activeInventoryInvestment)}
             />
             <SummaryCard
               helperText="Active vehicles"
               icon="chart-up"
-              label="Estimated Active Profit"
+              label="Estimated Profit"
               value={formatCurrency(estimatedActiveProfit)}
               valueClassName={
                 estimatedActiveProfit < 0 ? "text-red-700" : "text-emerald-700"
@@ -1058,25 +1205,26 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
             onNavigate={onNavigate}
           />
 
-          <AttentionQueue
-            items={attentionQueue}
-            onNavigate={onNavigate}
-            onSelectVehicle={onSelectVehicle}
-          />
+          <div className="grid gap-4 xl:grid-cols-[1.35fr_0.9fr]">
+            <AttentionQueue
+              items={attentionQueue}
+              onNavigate={onNavigate}
+              onSelectVehicle={onSelectVehicle}
+            />
 
-          <RecentActivity
-            activityLogs={activityLogs}
-            vehiclesById={vehiclesById}
-          />
+            <RecentActivity
+              activityLogs={activityLogs}
+              vehiclesById={vehiclesById}
+            />
+          </div>
 
           {vehicles.length === 0 && investmentSummaries.length === 0 && (
             <section className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
               <h2 className="text-lg font-semibold text-slate-900">
-                No vehicles found
+                No vehicles yet.
               </h2>
               <p className="mt-2 text-slate-600">
-                Add vehicles through Intake and the dashboard will start filling
-                in.
+                Start by creating a new vehicle.
               </p>
             </section>
           )}
