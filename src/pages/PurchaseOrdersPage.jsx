@@ -1,8 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
+import AppIcon from "../components/ui/AppIcon";
+import ModalShell from "../components/ui/ModalShell";
+import { buttonClassNames } from "../components/ui/uiStyles";
 import DocumentsList from "../components/vehicle-detail/DocumentsList";
 import StatusDropdown from "../components/vehicle-detail/StatusDropdown";
 import { logVehicleActivity } from "../lib/activityLogger";
 import { hasPermission } from "../lib/permissions";
+import {
+  canCancelPurchaseOrder,
+  canMarkPurchaseOrderReceived,
+  filterPurchaseOrders,
+  formatPurchaseOrderLabel,
+  getPurchaseOrderBadge,
+  getPurchaseOrderCounts,
+  PURCHASE_ORDER_TABS,
+} from "../lib/purchaseOrderUtils";
 import { supabase } from "../lib/supabaseClient";
 
 const purchaseOrderColumns =
@@ -10,6 +22,9 @@ const purchaseOrderColumns =
 
 const purchaseOrderItemColumns =
   "id, purchase_order_id, part_request_id, description, quantity, unit_cost, shipping_cost, tax, status, notes, created_at";
+
+const partRequestColumns =
+  "id, vehicle_id, repair_job_id, part_name, quantity, status, part_source, approval_status, selected_vendor_id, selected_quote_id, quoted_unit_cost, quoted_total_cost";
 
 const vehicleDocumentColumns =
   "id, vehicle_id, repair_job_id, third_party_repair_id, purchase_order_id, document_type, file_url, file_path, file_name, file_mime_type, file_size_bytes, notes, uploaded_by, created_at";
@@ -28,15 +43,6 @@ const purchaseOrderItemStatuses = [
   "returned",
   "cancelled",
 ];
-
-const statusLabels = {
-  cancelled: "Cancelled",
-  draft: "Draft",
-  ordered: "Ordered",
-  partial_received: "Partial Received",
-  received: "Received",
-  returned: "Returned",
-};
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -75,10 +81,8 @@ function formatDate(value) {
     return "Not available";
   }
 
-  return date.toLocaleString("en-US", {
+  return date.toLocaleDateString("en-US", {
     day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
     month: "short",
     year: "numeric",
   });
@@ -90,28 +94,14 @@ function displayValue(value) {
     : value;
 }
 
-function formatLabel(value) {
-  if (statusLabels[value]) {
-    return statusLabels[value];
-  }
-
-  if (!value) {
-    return "Not available";
-  }
-
-  return String(value)
-    .split("_")
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
 function getVehicleName(vehicle) {
   if (!vehicle) {
-    return "Vehicle not found";
+    return "";
   }
 
-  return [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ");
+  return [vehicle.year, vehicle.make, vehicle.model, vehicle.trim]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function getVehicleLabel(vehicle) {
@@ -129,8 +119,13 @@ function getProfileName(profile) {
   return profile?.full_name || profile?.email || "Not available";
 }
 
-function getVendorName(vendor) {
-  return vendor?.name || "Not available";
+function getVendorName(purchaseOrder) {
+  return (
+    purchaseOrder?.vendor?.name ||
+    purchaseOrder?.items?.find((item) => item.partRequest?.selectedQuote)
+      ?.partRequest?.selectedQuote?.vendor_name_snapshot ||
+    "Unknown vendor"
+  );
 }
 
 function getItemTotal(item) {
@@ -141,28 +136,25 @@ function getItemTotal(item) {
   );
 }
 
-function getPurchaseOrderTotal(items) {
+function getPurchaseOrderTotal(items = []) {
   return items.reduce((total, item) => total + getItemTotal(item), 0);
 }
 
-function statusClassName(status) {
-  if (status === "received") {
-    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-  }
+function getPurchaseOrderLabel(purchaseOrder) {
+  return `PO ${String(purchaseOrder?.id ?? "").slice(0, 8).toUpperCase()}`;
+}
 
-  if (status === "cancelled" || status === "returned") {
-    return "bg-red-50 text-red-700 ring-red-200";
-  }
+function getPrimaryItem(purchaseOrder) {
+  return purchaseOrder?.items?.[0] ?? null;
+}
 
-  if (status === "partial_received") {
-    return "bg-amber-50 text-amber-700 ring-amber-200";
-  }
+function getWorkOrderLabel(item) {
+  const repairJob = item?.partRequest?.repairJob;
+  const serviceCategory =
+    repairJob?.serviceCategory?.name ||
+    (repairJob?.category ? formatPurchaseOrderLabel(repairJob.category, {}) : "");
 
-  if (status === "ordered") {
-    return "bg-blue-50 text-blue-700 ring-blue-200";
-  }
-
-  return "bg-zinc-100 text-zinc-700 ring-zinc-200";
+  return [serviceCategory, repairJob?.title].filter(Boolean).join(" - ");
 }
 
 function canUploadDocumentsForProfile(profile) {
@@ -174,36 +166,21 @@ function canUploadDocumentsForProfile(profile) {
   );
 }
 
-function purchaseOrderMatchesFilters({
-  items,
-  purchaseOrder,
-  searchTerm,
-  statusFilter,
-  vehicle,
-  vendor,
-}) {
-  if (statusFilter !== "all" && purchaseOrder.status !== statusFilter) {
-    return false;
-  }
+function statusClassName(status) {
+  return getPurchaseOrderBadge(status).className;
+}
 
-  const normalizedSearch = searchTerm.trim().toLowerCase();
+function groupBy(records, key) {
+  return records.reduce((groupedRecords, record) => {
+    const groupKey = record?.[key];
 
-  if (!normalizedSearch) {
-    return true;
-  }
+    if (!groupKey) {
+      return groupedRecords;
+    }
 
-  const searchableText = [
-    vehicle?.stock_number,
-    vehicle?.make,
-    vehicle?.model,
-    vendor?.name,
-    ...items.map((item) => item.description),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  return searchableText.includes(normalizedSearch);
+    groupedRecords[groupKey] = [...(groupedRecords[groupKey] ?? []), record];
+    return groupedRecords;
+  }, {});
 }
 
 async function fetchPurchaseOrdersData() {
@@ -223,9 +200,6 @@ async function fetchPurchaseOrdersData() {
   const vehicleIds = uniqueValues(
     purchaseOrders.map((purchaseOrder) => purchaseOrder.vehicle_id)
   );
-  const vendorIds = uniqueValues(
-    purchaseOrders.map((purchaseOrder) => purchaseOrder.vendor_id)
-  );
   const orderedByIds = uniqueValues(
     purchaseOrders.map((purchaseOrder) => purchaseOrder.ordered_by)
   );
@@ -234,57 +208,133 @@ async function fetchPurchaseOrdersData() {
     itemsResponse,
     vehicleDocumentsResponse,
     vehiclesResponse,
-    vendorsResponse,
     profilesResponse,
   ] = await Promise.all([
-      purchaseOrderIds.length > 0
-        ? supabase
-            .from("purchase_order_items")
-            .select(purchaseOrderItemColumns)
-            .in("purchase_order_id", purchaseOrderIds)
-        : { data: [], error: null },
-      purchaseOrderIds.length > 0
-        ? supabase
-            .from("vehicle_documents")
-            .select(vehicleDocumentColumns)
-            .in("purchase_order_id", purchaseOrderIds)
-            .order("created_at", { ascending: false })
-        : { data: [], error: null },
-      vehicleIds.length > 0
-        ? supabase
-            .from("vehicles")
-            .select("id, stock_number, year, make, model")
-            .in("id", vehicleIds)
-        : { data: [], error: null },
-      vendorIds.length > 0
-        ? supabase.from("vendors").select("id, name").in("id", vendorIds)
-        : { data: [], error: null },
-      orderedByIds.length > 0
-        ? supabase
-            .from("profiles")
-            .select("id, full_name, email")
-            .in("id", orderedByIds)
-        : { data: [], error: null },
-    ]);
+    purchaseOrderIds.length > 0
+      ? supabase
+          .from("purchase_order_items")
+          .select(purchaseOrderItemColumns)
+          .in("purchase_order_id", purchaseOrderIds)
+      : { data: [], error: null },
+    purchaseOrderIds.length > 0
+      ? supabase
+          .from("vehicle_documents")
+          .select(vehicleDocumentColumns)
+          .in("purchase_order_id", purchaseOrderIds)
+          .order("created_at", { ascending: false })
+      : { data: [], error: null },
+    vehicleIds.length > 0
+      ? supabase
+          .from("vehicles")
+          .select("id, stock_number, year, make, model, trim")
+          .in("id", vehicleIds)
+      : { data: [], error: null },
+    orderedByIds.length > 0
+      ? supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", orderedByIds)
+      : { data: [], error: null },
+  ]);
 
-  const firstRelatedError =
+  const firstRequiredError =
     itemsResponse.error ??
     vehicleDocumentsResponse.error ??
     vehiclesResponse.error ??
-    vendorsResponse.error ??
     profilesResponse.error;
 
-  if (firstRelatedError) {
-    return { error: firstRelatedError };
+  if (firstRequiredError) {
+    return { error: firstRequiredError };
+  }
+
+  const purchaseOrderItems = itemsResponse.data ?? [];
+  const partRequestIds = uniqueValues(
+    purchaseOrderItems.map((item) => item.part_request_id)
+  );
+
+  const partRequestsResponse =
+    partRequestIds.length > 0
+      ? await supabase
+          .from("part_requests")
+          .select(partRequestColumns)
+          .in("id", partRequestIds)
+      : { data: [], error: null };
+
+  if (partRequestsResponse.error) {
+    return { error: partRequestsResponse.error };
+  }
+
+  const partRequests = partRequestsResponse.data ?? [];
+  const repairJobIds = uniqueValues(
+    partRequests.map((partRequest) => partRequest.repair_job_id)
+  );
+  const selectedQuoteIds = uniqueValues(
+    partRequests.map((partRequest) => partRequest.selected_quote_id)
+  );
+  const vendorIds = uniqueValues([
+    ...purchaseOrders.map((purchaseOrder) => purchaseOrder.vendor_id),
+    ...partRequests.map((partRequest) => partRequest.selected_vendor_id),
+  ]);
+
+  const [
+    repairJobsResponse,
+    serviceCategoriesResponse,
+    selectedQuotesResponse,
+    vendorsResponse,
+  ] = await Promise.all([
+    repairJobIds.length > 0
+      ? supabase
+          .from("repair_jobs")
+          .select("id, vehicle_id, service_category_id, title, category, status")
+          .in("id", repairJobIds)
+      : { data: [], error: null },
+    supabase
+      .from("service_categories")
+      .select("id, slug, name, description, sort_order, is_active"),
+    selectedQuoteIds.length > 0
+      ? supabase
+          .from("vendor_part_quotes")
+          .select("id, vendor_id, vendor_name_snapshot, unit_price, total_price")
+          .in("id", selectedQuoteIds)
+      : { data: [], error: null },
+    vendorIds.length > 0
+      ? supabase.from("vendors").select("id, name").in("id", vendorIds)
+      : { data: [], error: null },
+  ]);
+
+  const secondRequiredError =
+    repairJobsResponse.error ??
+    serviceCategoriesResponse.error ??
+    selectedQuotesResponse.error ??
+    vendorsResponse.error;
+
+  if (secondRequiredError) {
+    return { error: secondRequiredError };
   }
 
   return {
     data: {
+      partRequests,
       profilesById: Object.fromEntries(
         (profilesResponse.data ?? []).map((profile) => [profile.id, profile])
       ),
-      purchaseOrderItems: itemsResponse.data ?? [],
+      purchaseOrderItems,
       purchaseOrders,
+      repairJobsById: Object.fromEntries(
+        (repairJobsResponse.data ?? []).map((repairJob) => [
+          repairJob.id,
+          repairJob,
+        ])
+      ),
+      selectedQuotesById: Object.fromEntries(
+        (selectedQuotesResponse.data ?? []).map((quote) => [quote.id, quote])
+      ),
+      serviceCategoriesById: Object.fromEntries(
+        (serviceCategoriesResponse.data ?? []).map((category) => [
+          category.id,
+          category,
+        ])
+      ),
       vehicleDocuments: vehicleDocumentsResponse.data ?? [],
       vehiclesById: Object.fromEntries(
         (vehiclesResponse.data ?? []).map((vehicle) => [vehicle.id, vehicle])
@@ -300,33 +350,403 @@ async function fetchPurchaseOrdersData() {
 function Badge({ children, className }) {
   return (
     <span
-      className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${className}`}
+      className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-black ring-1 ring-inset ${className}`}
     >
       {children}
     </span>
   );
 }
 
-function SummaryCard({ label, value }) {
+function PurchaseOrderTabs({ activeTab, counts, onChange }) {
   return (
-    <article className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-        {label}
+    <div className="flex gap-2 overflow-x-auto pb-1">
+      {PURCHASE_ORDER_TABS.map((tab) => {
+        const isActive = activeTab === tab.key;
+
+        return (
+          <button
+            className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-2xl px-3.5 py-2 text-sm font-black transition ${
+              isActive
+                ? "bg-emerald-600 text-white shadow-sm"
+                : "border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
+            }`}
+            key={tab.key}
+            onClick={() => onChange(tab.key)}
+            type="button"
+          >
+            <span>{tab.label}</span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs ${
+                isActive ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"
+              }`}
+            >
+              {counts[tab.key] ?? 0}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function PurchaseOrderEmptyState({ activeTab, hasSearch }) {
+  const message = hasSearch
+    ? {
+        body: "Try a different PO, vendor, part, stock number, vehicle, or work order.",
+        title: "No matching purchase orders found.",
+      }
+    : activeTab === "open"
+      ? {
+          body: "Parts ordered from the Parts Queue will appear here.",
+          title: "No open purchase orders.",
+        }
+      : {
+          body: "Purchase orders matching this filter will appear here.",
+          title: "No purchase orders found.",
+        };
+
+  return (
+    <section className="rounded-3xl border border-dashed border-slate-300 bg-white/90 p-8 text-center shadow-sm">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+        <AppIcon name="box" size={24} />
+      </div>
+      <h3 className="mt-4 text-lg font-black text-slate-950">
+        {message.title}
+      </h3>
+      <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
+        {message.body}
       </p>
-      <p className="mt-2 text-2xl font-bold text-zinc-950">{value}</p>
+    </section>
+  );
+}
+
+function MarkReceivedModal({
+  isSubmitting,
+  onClose,
+  onConfirm,
+  purchaseOrder,
+}) {
+  return (
+    <ModalShell
+      description="This updates the purchase order, linked items, and linked part request status."
+      isCloseDisabled={isSubmitting}
+      onClose={onClose}
+      title="Mark this part as received?"
+    >
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-black text-slate-950">
+            {getPurchaseOrderLabel(purchaseOrder)}
+          </p>
+          <p className="mt-1 text-sm text-slate-600">
+            {getVendorName(purchaseOrder)}
+          </p>
+        </div>
+
+        <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+          <button
+            className={`w-full sm:w-auto ${buttonClassNames.secondary}`}
+            disabled={isSubmitting}
+            onClick={onClose}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className={`w-full sm:w-auto ${buttonClassNames.primary}`}
+            disabled={isSubmitting}
+            onClick={onConfirm}
+            type="button"
+          >
+            {isSubmitting ? "Receiving..." : "Mark Received"}
+          </button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function PurchaseOrderCard({
+  canDeleteDocuments,
+  canManagePurchaseOrders,
+  canUploadDocuments,
+  currentProfile,
+  documents,
+  isExpanded,
+  isUpdating,
+  onCancel,
+  onDocumentAdded,
+  onDocumentDeleted,
+  onItemStatusChange,
+  onMarkReceived,
+  onOpenVehicle,
+  onStatusChange,
+  onToggleDetails,
+  purchaseOrder,
+  updatingItemId,
+}) {
+  const badge = getPurchaseOrderBadge(purchaseOrder.status);
+  const primaryItem = getPrimaryItem(purchaseOrder);
+  const itemCount = purchaseOrder.items.length;
+  const totalCost = getPurchaseOrderTotal(purchaseOrder.items);
+  const canReceive =
+    canManagePurchaseOrders && canMarkPurchaseOrderReceived(purchaseOrder);
+  const canCancel =
+    canManagePurchaseOrders && canCancelPurchaseOrder(purchaseOrder);
+  const workOrderLabel = getWorkOrderLabel(primaryItem);
+
+  return (
+    <article className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-lg font-black leading-snug text-slate-950">
+                {getPurchaseOrderLabel(purchaseOrder)}
+              </h3>
+              <p className="mt-1 text-sm font-black text-slate-800">
+                {getVendorName(purchaseOrder)}
+              </p>
+            </div>
+            <Badge className={`${badge.className} shrink-0`}>{badge.label}</Badge>
+          </div>
+
+          <div className="mt-3 space-y-1 text-sm text-slate-600">
+            <p className="font-black text-slate-900">
+              {getVehicleLabel(purchaseOrder.vehicle)}
+            </p>
+            {workOrderLabel && <p>{workOrderLabel}</p>}
+          </div>
+
+          <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3">
+            <p className="text-sm font-black text-slate-950">
+              {displayValue(primaryItem?.description)}
+              {itemCount > 1 ? ` + ${itemCount - 1} more` : ""}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              Qty {formatNumber(primaryItem?.quantity || 0)} -{" "}
+              {formatCurrency(primaryItem?.unit_cost)} each - Total{" "}
+              {formatCurrency(totalCost)}
+            </p>
+            {(numberOrZero(primaryItem?.shipping_cost) > 0 ||
+              numberOrZero(primaryItem?.tax) > 0) && (
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                Shipping {formatCurrency(primaryItem?.shipping_cost)} - Tax{" "}
+                {formatCurrency(primaryItem?.tax)}
+              </p>
+            )}
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-500">
+            <span>Created {formatDate(purchaseOrder.created_at)}</span>
+            {purchaseOrder.received_at && (
+              <span>Received {formatDate(purchaseOrder.received_at)}</span>
+            )}
+            <span>Ordered by {getProfileName(purchaseOrder.orderedBy)}</span>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 flex-wrap gap-2 lg:w-48 lg:flex-col lg:items-stretch">
+          {canReceive && (
+            <button
+              className={`${buttonClassNames.primary} flex-1 lg:w-full`}
+              disabled={isUpdating}
+              onClick={() => onMarkReceived(purchaseOrder)}
+              type="button"
+            >
+              Mark Received
+            </button>
+          )}
+          <button
+            className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
+            disabled={!purchaseOrder.vehicle_id}
+            onClick={() => onOpenVehicle?.(purchaseOrder.vehicle_id)}
+            type="button"
+          >
+            Open Vehicle
+          </button>
+          <button
+            className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
+            onClick={() => onToggleDetails(purchaseOrder.id)}
+            type="button"
+          >
+            {isExpanded ? "Hide Details" : "View Details"}
+          </button>
+          {canCancel && (
+            <button
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-2.5 text-sm font-black text-red-700 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 lg:w-full"
+              disabled={isUpdating}
+              onClick={() => onCancel(purchaseOrder)}
+              type="button"
+            >
+              Cancel PO
+            </button>
+          )}
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="mt-5 space-y-4 border-t border-slate-100 pt-4">
+          <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                Ordered
+              </p>
+              <p className="mt-1 font-semibold text-slate-700">
+                {formatDate(purchaseOrder.ordered_at)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                Received
+              </p>
+              <p className="mt-1 font-semibold text-slate-700">
+                {formatDate(purchaseOrder.received_at)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                Items
+              </p>
+              <p className="mt-1 font-semibold text-slate-700">
+                {formatNumber(itemCount)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                Total
+              </p>
+              <p className="mt-1 font-semibold text-slate-700">
+                {formatCurrency(totalCost)}
+              </p>
+            </div>
+          </div>
+
+          {canManagePurchaseOrders && (
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+              <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">
+                Status controls
+              </p>
+              <StatusDropdown
+                currentStatus={purchaseOrder.status}
+                isUpdating={isUpdating}
+                onChange={(newStatus) => onStatusChange(purchaseOrder, newStatus)}
+                statuses={purchaseOrderStatuses}
+              />
+            </div>
+          )}
+
+          {purchaseOrder.notes && (
+            <p className="whitespace-pre-wrap rounded-2xl bg-slate-50 p-3 text-sm leading-6 text-slate-600">
+              {purchaseOrder.notes}
+            </p>
+          )}
+
+          <DocumentsList
+            canDelete={canDeleteDocuments}
+            canUpload={canUploadDocuments}
+            currentProfile={currentProfile}
+            description="Upload a PDF or image receipt or invoice for this purchase order."
+            documentType="purchase_receipt"
+            documents={documents}
+            emptyMessage="No receipts or invoices uploaded for this purchase order."
+            onDocumentAdded={onDocumentAdded}
+            onDocumentDeleted={onDocumentDeleted}
+            purchaseOrderId={purchaseOrder.id}
+            title="Documents"
+            uploadButtonLabel="Upload Receipt / Invoice"
+            uploadTitle="Upload Receipt / Invoice"
+            vehicleId={purchaseOrder.vehicle_id}
+          />
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h4 className="text-sm font-black text-slate-950">Items</h4>
+              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-200">
+                {itemCount} {itemCount === 1 ? "item" : "items"}
+              </span>
+            </div>
+
+            {purchaseOrder.items.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500">
+                No items found for this purchase order.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {purchaseOrder.items.map((item) => (
+                  <div
+                    className="rounded-2xl border border-slate-200 bg-white p-4"
+                    key={item.id}
+                  >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <h5 className="font-black text-slate-950">
+                          {displayValue(item.description)}
+                        </h5>
+                        {getWorkOrderLabel(item) && (
+                          <p className="mt-1 text-sm font-semibold text-slate-500">
+                            {getWorkOrderLabel(item)}
+                          </p>
+                        )}
+                        <p className="mt-2 text-sm text-slate-500">
+                          Qty {formatNumber(item.quantity)} -{" "}
+                          {formatCurrency(item.unit_cost)} each - Shipping{" "}
+                          {formatCurrency(item.shipping_cost)} - Tax{" "}
+                          {formatCurrency(item.tax)}
+                        </p>
+                        <p className="mt-1 text-sm font-black text-slate-700">
+                          Total {formatCurrency(getItemTotal(item))}
+                        </p>
+                      </div>
+
+                      {canManagePurchaseOrders ? (
+                        <StatusDropdown
+                          currentStatus={item.status ?? "ordered"}
+                          isUpdating={updatingItemId === item.id}
+                          onChange={(newStatus) =>
+                            onItemStatusChange(item, newStatus, purchaseOrder)
+                          }
+                          statuses={purchaseOrderItemStatuses}
+                        />
+                      ) : (
+                        <Badge className={statusClassName(item.status ?? "ordered")}>
+                          {formatPurchaseOrderLabel(item.status ?? "ordered")}
+                        </Badge>
+                      )}
+                    </div>
+
+                    {item.notes && (
+                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                        {item.notes}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </article>
   );
 }
 
 function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
+  const [activeTab, setActiveTab] = useState("open");
+  const [confirmReceivedOrder, setConfirmReceivedOrder] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [expandedPurchaseOrderIds, setExpandedPurchaseOrderIds] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [partRequestsById, setPartRequestsById] = useState({});
   const [profilesById, setProfilesById] = useState({});
   const [purchaseOrderItems, setPurchaseOrderItems] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [repairJobsById, setRepairJobsById] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedQuotesById, setSelectedQuotesById] = useState({});
+  const [serviceCategoriesById, setServiceCategoriesById] = useState({});
   const [statusErrorMessage, setStatusErrorMessage] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusSuccessMessage, setStatusSuccessMessage] = useState("");
   const [updatingItemId, setUpdatingItemId] = useState(null);
   const [updatingPurchaseOrderId, setUpdatingPurchaseOrderId] = useState(null);
   const [vehicleDocuments, setVehicleDocuments] = useState([]);
@@ -340,73 +760,87 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
   const canUploadDocuments = canUploadDocumentsForProfile(currentProfile);
   const canDeleteDocuments = hasPermission(currentProfile?.role, "photo:manage");
 
-  const itemsByPurchaseOrderId = useMemo(() => {
-    return purchaseOrderItems.reduce((groupedItems, item) => {
-      const currentItems = groupedItems[item.purchase_order_id] ?? [];
-      groupedItems[item.purchase_order_id] = [...currentItems, item];
-      return groupedItems;
-    }, {});
-  }, [purchaseOrderItems]);
+  const itemsByPurchaseOrderId = useMemo(
+    () => groupBy(purchaseOrderItems, "purchase_order_id"),
+    [purchaseOrderItems]
+  );
 
-  const documentsByPurchaseOrderId = useMemo(() => {
-    return vehicleDocuments.reduce((groupedDocuments, documentRecord) => {
-      const currentDocuments =
-        groupedDocuments[documentRecord.purchase_order_id] ?? [];
-      groupedDocuments[documentRecord.purchase_order_id] = [
-        ...currentDocuments,
-        documentRecord,
-      ];
-      return groupedDocuments;
-    }, {});
-  }, [vehicleDocuments]);
+  const documentsByPurchaseOrderId = useMemo(
+    () => groupBy(vehicleDocuments, "purchase_order_id"),
+    [vehicleDocuments]
+  );
 
-  const filteredPurchaseOrders = useMemo(() => {
-    return purchaseOrders.filter((purchaseOrder) =>
-      purchaseOrderMatchesFilters({
-        items: itemsByPurchaseOrderId[purchaseOrder.id] ?? [],
-        purchaseOrder,
-        searchTerm,
-        statusFilter,
-        vehicle: vehiclesById[purchaseOrder.vehicle_id],
-        vendor: vendorsById[purchaseOrder.vendor_id],
-      })
-    );
+  const enrichedPurchaseOrders = useMemo(() => {
+    return purchaseOrders.map((purchaseOrder) => {
+      const items = (itemsByPurchaseOrderId[purchaseOrder.id] ?? []).map(
+        (item) => {
+          const partRequest = partRequestsById[item.part_request_id] ?? null;
+          const repairJob = repairJobsById[partRequest?.repair_job_id] ?? null;
+          const selectedQuote = selectedQuotesById[partRequest?.selected_quote_id] ?? null;
+
+          return {
+            ...item,
+            partRequest: partRequest
+              ? {
+                  ...partRequest,
+                  repairJob: repairJob
+                    ? {
+                        ...repairJob,
+                        serviceCategory:
+                          serviceCategoriesById[repairJob.service_category_id] ??
+                          null,
+                      }
+                    : null,
+                  selectedQuote,
+                }
+              : null,
+          };
+        }
+      );
+
+      return {
+        ...purchaseOrder,
+        documents: documentsByPurchaseOrderId[purchaseOrder.id] ?? [],
+        items,
+        orderedBy: profilesById[purchaseOrder.ordered_by] ?? null,
+        vehicle: vehiclesById[purchaseOrder.vehicle_id] ?? null,
+        vendor: vendorsById[purchaseOrder.vendor_id] ?? null,
+      };
+    });
   }, [
+    documentsByPurchaseOrderId,
     itemsByPurchaseOrderId,
+    partRequestsById,
+    profilesById,
     purchaseOrders,
-    searchTerm,
-    statusFilter,
+    repairJobsById,
+    selectedQuotesById,
+    serviceCategoriesById,
     vehiclesById,
     vendorsById,
   ]);
 
-  const summary = useMemo(() => {
-    const totalCost = purchaseOrders.reduce(
-      (total, purchaseOrder) =>
-        total +
-        getPurchaseOrderTotal(itemsByPurchaseOrderId[purchaseOrder.id] ?? []),
-      0
-    );
+  const countsByTab = useMemo(
+    () => getPurchaseOrderCounts(enrichedPurchaseOrders),
+    [enrichedPurchaseOrders]
+  );
 
-    return {
-      cancelled: purchaseOrders.filter(
-        (purchaseOrder) => purchaseOrder.status === "cancelled"
-      ).length,
-      ordered: purchaseOrders.filter(
-        (purchaseOrder) => purchaseOrder.status === "ordered"
-      ).length,
-      received: purchaseOrders.filter(
-        (purchaseOrder) => purchaseOrder.status === "received"
-      ).length,
-      total: purchaseOrders.length,
-      totalCost,
-    };
-  }, [itemsByPurchaseOrderId, purchaseOrders]);
+  const filteredPurchaseOrders = useMemo(
+    () =>
+      filterPurchaseOrders(enrichedPurchaseOrders, {
+        search: searchTerm,
+        tab: activeTab,
+      }),
+    [activeTab, enrichedPurchaseOrders, searchTerm]
+  );
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadPurchaseOrders() {
+      setIsLoading(true);
+      setErrorMessage("");
+
       try {
         const { data, error } = await fetchPurchaseOrdersData();
 
@@ -419,12 +853,23 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
           return;
         }
 
+        setPartRequestsById(
+          Object.fromEntries(
+            (data.partRequests ?? []).map((partRequest) => [
+              partRequest.id,
+              partRequest,
+            ])
+          )
+        );
+        setProfilesById(data.profilesById);
         setPurchaseOrders(data.purchaseOrders);
         setPurchaseOrderItems(data.purchaseOrderItems);
+        setRepairJobsById(data.repairJobsById);
+        setSelectedQuotesById(data.selectedQuotesById);
+        setServiceCategoriesById(data.serviceCategoriesById);
         setVehicleDocuments(data.vehicleDocuments);
         setVehiclesById(data.vehiclesById);
         setVendorsById(data.vendorsById);
-        setProfilesById(data.profilesById);
       } catch (error) {
         if (isMounted) {
           setErrorMessage(error.message ?? "Unable to load purchase orders.");
@@ -443,15 +888,19 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     };
   }, []);
 
-  async function handlePurchaseOrderStatusChange(purchaseOrder, newStatus) {
+  async function handlePurchaseOrderStatusChange(
+    purchaseOrder,
+    newStatus,
+    { successMessage = "" } = {}
+  ) {
     if (!canManagePurchaseOrders) {
       setStatusErrorMessage("Your role cannot update purchase orders.");
-      return;
+      return false;
     }
 
     if (!purchaseOrderStatuses.includes(newStatus)) {
       setStatusErrorMessage("That purchase order status is not allowed.");
-      return;
+      return false;
     }
 
     const previousStatus = purchaseOrder.status;
@@ -463,6 +912,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
         : purchaseOrder.received_at;
 
     setStatusErrorMessage("");
+    setStatusSuccessMessage("");
     setUpdatingPurchaseOrderId(purchaseOrder.id);
     setPurchaseOrders((currentPurchaseOrders) =>
       currentPurchaseOrders.map((currentPurchaseOrder) =>
@@ -505,11 +955,11 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
 
           if (itemResponse.error) {
             setStatusErrorMessage(
-              `Purchase order marked ${formatLabel(
+              `Purchase order marked ${formatPurchaseOrderLabel(
                 newStatus
               ).toLowerCase()}, but item statuses could not be updated: ${itemResponse.error.message}`
             );
-            return;
+            return false;
           }
 
           setPurchaseOrderItems((currentItems) =>
@@ -531,8 +981,23 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
             setStatusErrorMessage(
               `Purchase order marked received, but linked part requests could not be updated: ${partRequestResponse.error.message}`
             );
-            return;
+            return false;
           }
+
+          setPartRequestsById((currentPartRequestsById) => {
+            const nextPartRequestsById = { ...currentPartRequestsById };
+
+            for (const partRequestId of partRequestIds) {
+              if (nextPartRequestsById[partRequestId]) {
+                nextPartRequestsById[partRequestId] = {
+                  ...nextPartRequestsById[partRequestId],
+                  status: "received",
+                };
+              }
+            }
+
+            return nextPartRequestsById;
+          });
         }
       }
 
@@ -544,6 +1009,10 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
           to: newStatus,
         },
       });
+      setStatusSuccessMessage(
+        successMessage || `Purchase order marked ${formatPurchaseOrderLabel(newStatus).toLowerCase()}.`
+      );
+      return true;
     } catch (error) {
       setPurchaseOrders((currentPurchaseOrders) =>
         currentPurchaseOrders.map((currentPurchaseOrder) =>
@@ -559,6 +1028,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
       setStatusErrorMessage(
         error.message ?? "Unable to update purchase order."
       );
+      return false;
     } finally {
       setUpdatingPurchaseOrderId(null);
     }
@@ -578,6 +1048,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     const previousStatus = item.status;
 
     setStatusErrorMessage("");
+    setStatusSuccessMessage("");
     setUpdatingItemId(item.id);
     setPurchaseOrderItems((currentItems) =>
       currentItems.map((currentItem) =>
@@ -607,6 +1078,14 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
           );
           return;
         }
+
+        setPartRequestsById((currentPartRequestsById) => ({
+          ...currentPartRequestsById,
+          [item.part_request_id]: {
+            ...currentPartRequestsById[item.part_request_id],
+            status: "received",
+          },
+        }));
       }
 
       await logVehicleActivity({
@@ -618,6 +1097,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
           to: newStatus,
         },
       });
+      setStatusSuccessMessage("Item status updated.");
     } catch (error) {
       setPurchaseOrderItems((currentItems) =>
         currentItems.map((currentItem) =>
@@ -632,9 +1112,42 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     }
   }
 
-  function clearFilters() {
+  function clearSearch() {
     setSearchTerm("");
-    setStatusFilter("all");
+  }
+
+  function toggleDetails(purchaseOrderId) {
+    setExpandedPurchaseOrderIds((currentIds) =>
+      currentIds.includes(purchaseOrderId)
+        ? currentIds.filter((currentId) => currentId !== purchaseOrderId)
+        : [...currentIds, purchaseOrderId]
+    );
+  }
+
+  async function handleConfirmMarkReceived() {
+    if (!confirmReceivedOrder) {
+      return;
+    }
+
+    const success = await handlePurchaseOrderStatusChange(
+      confirmReceivedOrder,
+      "received",
+      { successMessage: "Part marked as received." }
+    );
+
+    if (success) {
+      setConfirmReceivedOrder(null);
+    }
+  }
+
+  async function handleCancelPurchaseOrder(purchaseOrder) {
+    if (!window.confirm("Cancel this purchase order?")) {
+      return;
+    }
+
+    await handlePurchaseOrderStatusChange(purchaseOrder, "cancelled", {
+      successMessage: "Purchase order cancelled.",
+    });
   }
 
   function handleDocumentAdded(documentRecord) {
@@ -663,299 +1176,124 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
-            Purchase Orders
-          </p>
-          <h2 className="mt-2 text-2xl font-bold text-zinc-950">
-            Purchase Order Management
-          </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
-            Track ordered parts across vehicles, receive items, and keep part
-            request statuses in sync without leaving the queue.
-          </p>
+    <div className="space-y-5">
+      <section className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-slate-950">
+              Purchase Orders
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+              Track ordered parts, vendors, costs, and receiving status.
+            </p>
+          </div>
         </div>
-      </section>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <SummaryCard label="Total POs" value={formatNumber(summary.total)} />
-        <SummaryCard label="Ordered" value={formatNumber(summary.ordered)} />
-        <SummaryCard label="Received" value={formatNumber(summary.received)} />
-        <SummaryCard label="Cancelled" value={formatNumber(summary.cancelled)} />
-        <SummaryCard
-          label="Total PO Cost"
-          value={formatCurrency(summary.totalCost)}
-        />
-      </section>
-
-      <section className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-3 lg:grid-cols-[1fr_220px_auto] lg:items-end">
-          <label className="block" htmlFor="purchase-order-search">
-            <span className="text-sm font-medium text-zinc-700">Search</span>
+        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+          <label className="relative block" htmlFor="purchase-order-search">
+            <span className="sr-only">Search purchase orders</span>
+            <AppIcon
+              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+              name="search"
+              size={18}
+            />
             <input
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
+              className="h-12 w-full rounded-2xl border border-slate-200 bg-white py-2 pl-11 pr-4 text-sm font-semibold text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
               id="purchase-order-search"
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Stock, vehicle, vendor, or item"
+              placeholder="Search PO, vendor, part, stock, vehicle, or work order"
               type="search"
               value={searchTerm}
             />
           </label>
 
-          <label className="block" htmlFor="purchase-order-status-filter">
-            <span className="text-sm font-medium text-zinc-700">Status</span>
-            <select
-              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
-              id="purchase-order-status-filter"
-              onChange={(event) => setStatusFilter(event.target.value)}
-              value={statusFilter}
+          {searchTerm.trim() && (
+            <button
+              className={buttonClassNames.secondary}
+              onClick={clearSearch}
+              type="button"
             >
-              <option value="all">All Statuses</option>
-              {purchaseOrderStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {formatLabel(status)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <button
-            className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
-            onClick={clearFilters}
-            type="button"
-          >
-            Clear Filters
-          </button>
+              Clear
+            </button>
+          )}
         </div>
 
-        <p className="mt-4 text-sm text-zinc-500">
-          Showing {filteredPurchaseOrders.length} of {purchaseOrders.length}{" "}
-          purchase orders
-        </p>
+        <div className="mt-4">
+          <PurchaseOrderTabs
+            activeTab={activeTab}
+            counts={countsByTab}
+            onChange={setActiveTab}
+          />
+        </div>
       </section>
 
       {isLoading && (
-        <section className="rounded-lg border border-zinc-200 bg-white p-8 text-center shadow-sm">
-          <p className="font-medium text-zinc-700">
+        <section className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <p className="font-semibold text-slate-700">
             Loading purchase orders...
           </p>
         </section>
       )}
 
       {!isLoading && errorMessage && (
-        <section className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <section className="rounded-3xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800">
           {errorMessage}
         </section>
       )}
 
       {!isLoading && statusErrorMessage && (
-        <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800">
           {statusErrorMessage}
         </section>
       )}
 
-      {!isLoading && !errorMessage && filteredPurchaseOrders.length === 0 && (
-        <section className="rounded-lg border border-dashed border-zinc-300 bg-white p-8 text-center shadow-sm">
-          <h3 className="text-lg font-bold text-zinc-950">
-            No purchase orders found
-          </h3>
-          <p className="mt-2 text-sm text-zinc-500">
-            Create purchase orders from needs-to-buy parts, then track them here.
-          </p>
+      {!isLoading && statusSuccessMessage && (
+        <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+          {statusSuccessMessage}
         </section>
       )}
 
+      {!isLoading && !errorMessage && filteredPurchaseOrders.length === 0 && (
+        <PurchaseOrderEmptyState
+          activeTab={activeTab}
+          hasSearch={Boolean(searchTerm.trim())}
+        />
+      )}
+
       {!isLoading && !errorMessage && filteredPurchaseOrders.length > 0 && (
-        <section className="space-y-4">
-          {filteredPurchaseOrders.map((purchaseOrder) => {
-            const vehicle = vehiclesById[purchaseOrder.vehicle_id];
-            const vendor = vendorsById[purchaseOrder.vendor_id];
-            const orderedBy = profilesById[purchaseOrder.ordered_by];
-            const items = itemsByPurchaseOrderId[purchaseOrder.id] ?? [];
-            const totalCost = getPurchaseOrderTotal(items);
-
-            return (
-              <article
-                className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm"
-                key={purchaseOrder.id}
-              >
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-lg font-bold text-zinc-950">
-                        {getVehicleLabel(vehicle)}
-                      </h3>
-                      {!canManagePurchaseOrders && (
-                        <Badge className={statusClassName(purchaseOrder.status)}>
-                          {formatLabel(purchaseOrder.status)}
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="mt-2 text-sm text-zinc-500">
-                      Created {formatDate(purchaseOrder.created_at)}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-start gap-2 xl:justify-end">
-                    {canManagePurchaseOrders ? (
-                      <StatusDropdown
-                        currentStatus={purchaseOrder.status}
-                        isUpdating={
-                          updatingPurchaseOrderId === purchaseOrder.id
-                        }
-                        onChange={(newStatus) =>
-                          handlePurchaseOrderStatusChange(
-                            purchaseOrder,
-                            newStatus
-                          )
-                        }
-                        statuses={purchaseOrderStatuses}
-                      />
-                    ) : null}
-                    <button
-                      className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={!purchaseOrder.vehicle_id}
-                      onClick={() => onSelectVehicle?.(purchaseOrder.vehicle_id)}
-                      type="button"
-                    >
-                      View Vehicle
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-5">
-                  <div>
-                    <p className="text-zinc-500">Vendor</p>
-                    <p className="mt-1 font-medium text-zinc-800">
-                      {getVendorName(vendor)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500">Ordered By</p>
-                    <p className="mt-1 font-medium text-zinc-800">
-                      {getProfileName(orderedBy)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500">Ordered At</p>
-                    <p className="mt-1 font-medium text-zinc-800">
-                      {formatDate(purchaseOrder.ordered_at)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500">Received At</p>
-                    <p className="mt-1 font-medium text-zinc-800">
-                      {formatDate(purchaseOrder.received_at)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500">Total Cost</p>
-                    <p className="mt-1 font-medium text-zinc-800">
-                      {formatCurrency(totalCost)}
-                    </p>
-                  </div>
-                </div>
-
-                {purchaseOrder.notes && (
-                  <p className="mt-4 whitespace-pre-wrap rounded-md bg-zinc-50 p-3 text-sm leading-6 text-zinc-600">
-                    {purchaseOrder.notes}
-                  </p>
-                )}
-
-                <DocumentsList
-                  canDelete={canDeleteDocuments}
-                  canUpload={canUploadDocuments}
-                  currentProfile={currentProfile}
-                  description="Upload a PDF or image receipt or invoice for this purchase order."
-                  documentType="purchase_receipt"
-                  documents={documentsByPurchaseOrderId[purchaseOrder.id] ?? []}
-                  emptyMessage="No receipts or invoices uploaded for this purchase order."
-                  onDocumentAdded={handleDocumentAdded}
-                  onDocumentDeleted={handleDocumentDeleted}
-                  purchaseOrderId={purchaseOrder.id}
-                  title="Documents"
-                  uploadButtonLabel="Upload Receipt / Invoice"
-                  uploadTitle="Upload Receipt / Invoice"
-                  vehicleId={purchaseOrder.vehicle_id}
-                />
-
-                <div className="mt-5 rounded-md border border-zinc-200 bg-zinc-50 p-4">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <h4 className="text-sm font-bold text-zinc-950">Items</h4>
-                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-zinc-600 ring-1 ring-inset ring-zinc-200">
-                      {items.length} {items.length === 1 ? "item" : "items"}
-                    </span>
-                  </div>
-
-                  {items.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-500">
-                      No items found for this purchase order.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {items.map((item) => (
-                        <div
-                          className="rounded-md border border-zinc-200 bg-white p-4"
-                          key={item.id}
-                        >
-                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                            <div>
-                              <h5 className="font-semibold text-zinc-950">
-                                {displayValue(item.description)}
-                              </h5>
-                              <p className="mt-1 text-sm text-zinc-500">
-                                Qty {formatNumber(item.quantity)} x{" "}
-                                {formatCurrency(item.unit_cost)} + shipping{" "}
-                                {formatCurrency(item.shipping_cost)} + tax{" "}
-                                {formatCurrency(item.tax)}
-                              </p>
-                              <p className="mt-1 text-sm font-semibold text-zinc-700">
-                                Total {formatCurrency(getItemTotal(item))}
-                              </p>
-                            </div>
-
-                            <div className="flex flex-wrap items-start gap-2 lg:justify-end">
-                              {canManagePurchaseOrders ? (
-                                <StatusDropdown
-                                  currentStatus={item.status ?? "ordered"}
-                                  isUpdating={updatingItemId === item.id}
-                                  onChange={(newStatus) =>
-                                    handleItemStatusChange(
-                                      item,
-                                      newStatus,
-                                      purchaseOrder
-                                    )
-                                  }
-                                  statuses={purchaseOrderItemStatuses}
-                                />
-                              ) : (
-                                <Badge
-                                  className={statusClassName(
-                                    item.status ?? "ordered"
-                                  )}
-                                >
-                                  {formatLabel(item.status ?? "ordered")}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-
-                          {item.notes && (
-                            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-zinc-600">
-                              {item.notes}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </article>
-            );
-          })}
+        <section className="space-y-3">
+          {filteredPurchaseOrders.map((purchaseOrder) => (
+            <PurchaseOrderCard
+              canDeleteDocuments={canDeleteDocuments}
+              canManagePurchaseOrders={canManagePurchaseOrders}
+              canUploadDocuments={canUploadDocuments}
+              currentProfile={currentProfile}
+              documents={purchaseOrder.documents}
+              isExpanded={expandedPurchaseOrderIds.includes(purchaseOrder.id)}
+              isUpdating={updatingPurchaseOrderId === purchaseOrder.id}
+              key={purchaseOrder.id}
+              onCancel={handleCancelPurchaseOrder}
+              onDocumentAdded={handleDocumentAdded}
+              onDocumentDeleted={handleDocumentDeleted}
+              onItemStatusChange={handleItemStatusChange}
+              onMarkReceived={setConfirmReceivedOrder}
+              onOpenVehicle={onSelectVehicle}
+              onStatusChange={handlePurchaseOrderStatusChange}
+              onToggleDetails={toggleDetails}
+              purchaseOrder={purchaseOrder}
+              updatingItemId={updatingItemId}
+            />
+          ))}
         </section>
+      )}
+
+      {confirmReceivedOrder && (
+        <MarkReceivedModal
+          isSubmitting={updatingPurchaseOrderId === confirmReceivedOrder.id}
+          onClose={() => setConfirmReceivedOrder(null)}
+          onConfirm={handleConfirmMarkReceived}
+          purchaseOrder={confirmReceivedOrder}
+        />
       )}
     </div>
   );
