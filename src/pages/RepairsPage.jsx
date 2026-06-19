@@ -1,12 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
+import AppIcon from "../components/ui/AppIcon";
+import PriorityBadge from "../components/ui/PriorityBadge";
+import StatusBadge from "../components/ui/StatusBadge";
+import { buttonClassNames } from "../components/ui/uiStyles";
+import AddWorkOrderLaborForm from "../components/vehicle-detail/AddWorkOrderLaborForm";
+import AddWorkOrderPartForm from "../components/vehicle-detail/AddWorkOrderPartForm";
+import AddWorkOrderPhotoForm from "../components/vehicle-detail/AddWorkOrderPhotoForm";
 import StatusDropdown from "../components/vehicle-detail/StatusDropdown";
 import { logVehicleActivity } from "../lib/activityLogger";
 import { hasPermission } from "../lib/permissions";
-import { getPhaseOneServiceCategories } from "../lib/serviceCategoryVisuals";
+import {
+  fetchRepairsQueue,
+  filterRepairsQueueResults,
+} from "../lib/repairsQueue";
+import {
+  formatRepairJobVehicleLabel,
+  formatRepairLabel,
+  getRepairJobCounts,
+  getRepairQueueCounts,
+  REPAIR_QUEUE_TABS,
+} from "../lib/repairWorkflowUtils";
 import { supabase } from "../lib/supabaseClient";
-
-const repairJobColumns =
-  "id, vehicle_id, service_category_id, title, category, priority, status, assigned_to, created_by, notes, created_at, completed_at";
 
 const statusOptions = [
   "needed",
@@ -17,29 +31,6 @@ const statusOptions = [
   "completed",
   "cancelled",
 ];
-
-const priorityOptions = ["low", "medium", "high", "urgent"];
-
-const statusLabels = {
-  approved: "Approved",
-  blocked: "Blocked",
-  cancelled: "Cancelled",
-  completed: "Completed",
-  in_progress: "In Progress",
-  needed: "Needed",
-  waiting_parts: "Waiting Parts",
-};
-
-const priorityLabels = {
-  high: "High",
-  low: "Low",
-  medium: "Medium",
-  urgent: "Urgent",
-};
-
-function uniqueValues(values) {
-  return [...new Set(values.filter(Boolean))];
-}
 
 function formatDate(value) {
   if (!value) {
@@ -65,341 +56,379 @@ function displayValue(value) {
     : value;
 }
 
-function formatLabel(value, labels) {
-  if (labels[value]) {
-    return labels[value];
+function formatHours(value) {
+  const numberValue = Number(value ?? 0);
+
+  if (!Number.isFinite(numberValue) || numberValue <= 0) {
+    return "0h";
   }
 
-  if (!value) {
-    return "Not available";
-  }
-
-  return String(value)
-    .split("_")
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-function getVehicleName(vehicle) {
-  if (!vehicle) {
-    return "Vehicle not found";
-  }
-
-  return [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ");
-}
-
-function getVehicleSearchText(workOrder, vehicle) {
-  return [
-    workOrder.title,
-    vehicle?.stock_number,
-    vehicle?.make,
-    vehicle?.model,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
+  return `${Number(numberValue.toFixed(2))}h`;
 }
 
 function getProfileName(profile) {
   return profile?.full_name || profile?.email || "Not assigned";
 }
 
-function getServiceCategoryLabel(workOrder, serviceCategoriesById) {
-  const serviceCategory = serviceCategoriesById[workOrder.service_category_id];
-
-  if (serviceCategory?.name) {
-    return serviceCategory.name;
-  }
-
-  return formatLabel(workOrder.category, {});
+function getServiceCategoryLabel(job) {
+  return job?.serviceCategory?.name || formatRepairLabel(job?.category, {});
 }
 
-function priorityClassName(priority) {
-  if (priority === "urgent") {
-    return "bg-red-50 text-red-700 ring-red-200";
-  }
-
-  if (priority === "high") {
-    return "bg-orange-50 text-orange-700 ring-orange-200";
-  }
-
-  if (priority === "medium") {
-    return "bg-amber-50 text-amber-700 ring-amber-200";
-  }
-
-  return "bg-zinc-100 text-zinc-700 ring-zinc-200";
-}
-
-function statusClassName(status) {
-  if (status === "completed") {
-    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-  }
-
-  if (status === "blocked" || status === "cancelled") {
-    return "bg-red-50 text-red-700 ring-red-200";
-  }
-
-  if (status === "approved" || status === "in_progress") {
-    return "bg-blue-50 text-blue-700 ring-blue-200";
-  }
-
-  if (status === "waiting_parts") {
-    return "bg-amber-50 text-amber-700 ring-amber-200";
-  }
-
-  return "bg-zinc-100 text-zinc-700 ring-zinc-200";
-}
-
-function workOrderMatchesFilters({
-  activeMyWorkOnly,
-  currentProfile,
-  priorityFilter,
-  searchTerm,
-  selectedServiceCategoryId,
-  selectedTechnicianId,
-  serviceCategoriesById,
-  statusFilter,
-  vehicle,
-  workOrder,
-}) {
-  if (
-    activeMyWorkOnly &&
-    workOrder.assigned_to !== currentProfile?.id &&
-    workOrder.created_by !== currentProfile?.id
-  ) {
-    return false;
-  }
-
-  if (
-    selectedTechnicianId !== "all" &&
-    workOrder.assigned_to !== selectedTechnicianId &&
-    workOrder.created_by !== selectedTechnicianId
-  ) {
-    return false;
-  }
-
-  if (statusFilter !== "all" && workOrder.status !== statusFilter) {
-    return false;
-  }
-
-  if (priorityFilter !== "all" && workOrder.priority !== priorityFilter) {
-    return false;
-  }
-
-  if (
-    selectedServiceCategoryId !== "all" &&
-    workOrder.service_category_id !== selectedServiceCategoryId
-  ) {
-    return false;
-  }
-
-  const normalizedSearch = searchTerm.trim().toLowerCase();
-
-  if (!normalizedSearch) {
-    return true;
-  }
-
-  const categoryName = getServiceCategoryLabel(workOrder, serviceCategoriesById);
-  const searchableText = `${getVehicleSearchText(
-    workOrder,
-    vehicle
-  )} ${categoryName.toLowerCase()}`;
-
-  return searchableText.includes(normalizedSearch);
-}
-
-async function fetchRepairsQueueData() {
-  const repairJobsResponse = await supabase
-    .from("repair_jobs")
-    .select(repairJobColumns)
-    .order("created_at", { ascending: false });
-
-  if (repairJobsResponse.error) {
-    return { error: repairJobsResponse.error };
-  }
-
-  const workOrders = repairJobsResponse.data ?? [];
-  const vehicleIds = uniqueValues(workOrders.map((workOrder) => workOrder.vehicle_id));
-
-  const [vehiclesResponse, serviceCategoriesResponse, profilesResponse] =
-    await Promise.all([
-      vehicleIds.length > 0
-        ? supabase
-            .from("vehicles")
-            .select("id, stock_number, vin, year, make, model, status")
-            .in("id", vehicleIds)
-        : { data: [], error: null },
-      supabase
-        .from("service_categories")
-        .select("id, slug, name, is_active, sort_order")
-        .order("sort_order", { ascending: true }),
-      supabase.from("profiles").select("id, full_name, email, role"),
-    ]);
-
-  const firstRelatedError =
-    vehiclesResponse.error ??
-    serviceCategoriesResponse.error ??
-    profilesResponse.error;
-
-  if (firstRelatedError) {
-    return { error: firstRelatedError };
-  }
-
-  return {
-    data: {
-      profiles: profilesResponse.data ?? [],
-      serviceCategories: serviceCategoriesResponse.data ?? [],
-      vehiclesById: Object.fromEntries(
-        (vehiclesResponse.data ?? []).map((vehicle) => [vehicle.id, vehicle])
-      ),
-      workOrders,
-    },
-    error: null,
-  };
-}
-
-function Badge({ children, className }) {
+function RepairsQueueTabs({ activeTab, counts = {}, onChange }) {
   return (
-    <span
-      className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${className}`}
-    >
-      {children}
-    </span>
-  );
-}
+    <div className="flex gap-2 overflow-x-auto pb-1">
+      {REPAIR_QUEUE_TABS.map((tab) => {
+        const isActive = activeTab === tab.key;
 
-function SummaryCard({ label, value }) {
-  return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-        {label}
-      </p>
-      <p className="mt-2 text-2xl font-bold text-zinc-950">{value}</p>
+        return (
+          <button
+            className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-2xl px-3.5 py-2 text-sm font-black transition ${
+              isActive
+                ? "bg-emerald-600 text-white shadow-sm"
+                : "border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
+            }`}
+            key={tab.key}
+            onClick={() => onChange(tab.key)}
+            type="button"
+          >
+            <span>{tab.label}</span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs ${
+                isActive ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"
+              }`}
+            >
+              {counts[tab.key] ?? 0}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function RepairsPage({ currentProfile, onSelectVehicle }) {
-  const [errorMessage, setErrorMessage] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [myWorkOnly, setMyWorkOnly] = useState(
-    () => currentProfile?.role === "technician"
+function RepairJobEmptyState({ activeTab, hasSearch }) {
+  const message = hasSearch
+    ? {
+        body: "Try a different stock number, vehicle, work order, service category, part, or vendor.",
+        title: "No matching work orders found.",
+      }
+    : activeTab === "waiting_parts"
+      ? {
+          body: "Work orders with needed, ordered, or unreceived parts will appear here.",
+          title: "No work orders are waiting for parts.",
+        }
+      : activeTab === "urgent"
+        ? {
+            body: "High and urgent work orders will appear here.",
+            title: "No urgent work orders right now.",
+          }
+        : activeTab === "open"
+          ? {
+              body: "Work orders created from Vehicle Detail will appear here.",
+              title: "No open work orders.",
+            }
+          : {
+              body: "Work orders matching this queue tab will appear here.",
+              title: "No work orders found.",
+            };
+
+  return (
+    <section className="rounded-3xl border border-dashed border-slate-300 bg-white/90 p-8 text-center shadow-sm">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+        <AppIcon name="wrench" size={24} />
+      </div>
+      <h3 className="mt-4 text-lg font-black text-slate-950">
+        {message.title}
+      </h3>
+      <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
+        {message.body}
+      </p>
+    </section>
   );
-  const [priorityFilter, setPriorityFilter] = useState("all");
+}
+
+function CountPill({ icon, label, value }) {
+  return (
+    <span
+      aria-label={`${label}: ${value}`}
+      className="inline-flex items-center gap-1.5 rounded-xl bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600 ring-1 ring-inset ring-slate-100"
+    >
+      <AppIcon className="text-slate-400" name={icon} size={14} />
+      <span className="text-slate-950">{value}</span>
+    </span>
+  );
+}
+
+function RepairJobCard({
+  canManageLabor,
+  canManageParts,
+  canManagePhotos,
+  canManageRepairJobs,
+  isExpanded,
+  isUpdating,
+  onAddLabor,
+  onAddPart,
+  onAddPhoto,
+  onOpenVehicle,
+  onStatusChange,
+  onToggleDetails,
+  job,
+}) {
+  const counts = getRepairJobCounts(job);
+  const vehicleLabel = formatRepairJobVehicleLabel(job);
+  const serviceCategory = getServiceCategoryLabel(job);
+
+  return (
+    <article className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-lg font-black leading-snug text-slate-950">
+                {displayValue(job.title)}
+              </h3>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <PriorityBadge priority={job.priority} />
+                <StatusBadge status={job.status} />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 space-y-1 text-sm text-slate-600">
+            <p className="font-black text-slate-900">{vehicleLabel}</p>
+            <p>
+              <span className="font-semibold text-slate-800">
+                {serviceCategory}
+              </span>
+              <span className="text-slate-500">
+                {" "}
+                - Created {formatDate(job.created_at)}
+              </span>
+            </p>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <CountPill
+              icon="camera"
+              label="Photos"
+              value={job.photos.length}
+            />
+            <CountPill
+              icon="clock"
+              label="Labor"
+              value={formatHours(counts.laborHours)}
+            />
+            <CountPill icon="box" label="Parts" value={counts.partsCount} />
+            <CountPill
+              icon="users"
+              label="Third-party repairs"
+              value={counts.thirdPartyCount}
+            />
+          </div>
+
+          {isExpanded && (
+            <div className="mt-4 space-y-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3">
+              <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                    Assigned
+                  </p>
+                  <p className="mt-1 font-semibold text-slate-700">
+                    {getProfileName(job.assignedProfile)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                    Created By
+                  </p>
+                  <p className="mt-1 font-semibold text-slate-700">
+                    {getProfileName(job.createdByProfile)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                    Vehicle Status
+                  </p>
+                  <p className="mt-1 font-semibold text-slate-700">
+                    {formatRepairLabel(job.vehicle?.status, {})}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                    Parts Waiting
+                  </p>
+                  <p className="mt-1 font-semibold text-slate-700">
+                    {
+                      job.parts.filter(
+                        (part) =>
+                          part.part_source === "needs_to_buy" &&
+                          !["received", "installed", "cancelled"].includes(
+                            part.status
+                          )
+                      ).length
+                    }
+                  </p>
+                </div>
+              </div>
+
+              {job.notes && (
+                <p className="whitespace-pre-wrap rounded-2xl bg-white p-3 text-sm leading-6 text-slate-600">
+                  {job.notes}
+                </p>
+              )}
+
+              {canManageRepairJobs && (
+                <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+                  <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                    Status
+                  </span>
+                  <StatusDropdown
+                    currentStatus={job.status}
+                    isUpdating={isUpdating}
+                    onChange={(newStatus) => onStatusChange(job, newStatus)}
+                    statuses={statusOptions}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex shrink-0 flex-wrap gap-2 lg:w-48 lg:flex-col lg:items-stretch">
+          <button
+            className={`${buttonClassNames.primary} flex-1 lg:w-full`}
+            disabled={!job.vehicle_id}
+            onClick={() => onOpenVehicle?.(job.vehicle_id)}
+            type="button"
+          >
+            Open Vehicle
+          </button>
+
+          {canManageParts && (
+            <button
+              className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
+              onClick={() => onAddPart(job)}
+              type="button"
+            >
+              Add Part
+            </button>
+          )}
+
+          {canManageLabor && (
+            <button
+              className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
+              onClick={() => onAddLabor(job)}
+              type="button"
+            >
+              Add Labor
+            </button>
+          )}
+
+          {canManagePhotos && (
+            <button
+              className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
+              onClick={() => onAddPhoto(job)}
+              type="button"
+            >
+              Add Photo
+            </button>
+          )}
+
+          <button
+            className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
+            onClick={() => onToggleDetails(job.id)}
+            type="button"
+          >
+            {isExpanded ? "Hide Details" : "View Details"}
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function RepairsPage({ currentProfile, onSelectVehicle }) {
+  const [activeTab, setActiveTab] = useState("open");
+  const [activeLaborJob, setActiveLaborJob] = useState(null);
+  const [activePartJob, setActivePartJob] = useState(null);
+  const [activePhotoJob, setActivePhotoJob] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [expandedJobIds, setExpandedJobIds] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [jobs, setJobs] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedServiceCategoryId, setSelectedServiceCategoryId] =
-    useState("all");
-  const [selectedTechnicianId, setSelectedTechnicianId] = useState("all");
-  const [serviceCategories, setServiceCategories] = useState([]);
   const [statusErrorMessage, setStatusErrorMessage] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusSuccessMessage, setStatusSuccessMessage] = useState("");
   const [updatingStatusId, setUpdatingStatusId] = useState(null);
-  const [vehiclesById, setVehiclesById] = useState({});
-  const [workOrders, setWorkOrders] = useState([]);
+  const [vendors, setVendors] = useState([]);
 
   const role = currentProfile?.role;
   const canManageRepairJobs = hasPermission(role, "repair:manage");
-  const canUseTechnicianFilter = role === "admin" || role === "owner";
+  const canManagePartRequests = hasPermission(role, "part_request:manage");
+  const canManageLabor = hasPermission(role, "labor:manage");
+  const canManagePhotos = hasPermission(role, "photo:manage");
+  const canManageWorkOrderParts = canManageRepairJobs || canManagePartRequests;
 
-  const profilesById = useMemo(
-    () => Object.fromEntries(profiles.map((profile) => [profile.id, profile])),
-    [profiles]
-  );
-  const serviceCategoriesById = useMemo(
+  const countsByTab = useMemo(() => getRepairQueueCounts(jobs), [jobs]);
+  const filteredJobs = useMemo(
     () =>
-      Object.fromEntries(
-        serviceCategories.map((serviceCategory) => [
-          serviceCategory.id,
-          serviceCategory,
-        ])
-      ),
-    [serviceCategories]
-  );
-  const technicians = useMemo(
-    () =>
-      profiles.filter((profile) =>
-        ["technician", "admin", "owner"].includes(profile.role)
-      ),
-    [profiles]
-  );
-  const activeServiceCategories = useMemo(
-    () =>
-      getPhaseOneServiceCategories(
-        serviceCategories.filter((serviceCategory) => serviceCategory.is_active)
-      ),
-    [serviceCategories]
+      filterRepairsQueueResults(jobs, {
+        search: searchTerm,
+        tab: activeTab,
+      }),
+    [activeTab, jobs, searchTerm]
   );
 
-  const filteredWorkOrders = useMemo(() => {
-    return workOrders.filter((workOrder) =>
-      workOrderMatchesFilters({
-        activeMyWorkOnly: myWorkOnly,
-        currentProfile,
-        priorityFilter,
-        searchTerm,
-        selectedServiceCategoryId,
-        selectedTechnicianId: canUseTechnicianFilter
-          ? selectedTechnicianId
-          : "all",
-        serviceCategoriesById,
-        statusFilter,
-        vehicle: vehiclesById[workOrder.vehicle_id],
-        workOrder,
-      })
-    );
-  }, [
-    canUseTechnicianFilter,
-    currentProfile,
-    myWorkOnly,
-    priorityFilter,
-    searchTerm,
-    selectedServiceCategoryId,
-    selectedTechnicianId,
-    serviceCategoriesById,
-    statusFilter,
-    vehiclesById,
-    workOrders,
-  ]);
+  async function loadRepairsQueue({ showLoading = true } = {}) {
+    if (showLoading) {
+      setIsLoading(true);
+    }
 
-  const summary = useMemo(() => {
-    return {
-      blocked: filteredWorkOrders.filter((workOrder) => workOrder.status === "blocked")
-        .length,
-      completed: filteredWorkOrders.filter(
-        (workOrder) => workOrder.status === "completed"
-      ).length,
-      inProgress: filteredWorkOrders.filter(
-        (workOrder) => workOrder.status === "in_progress"
-      ).length,
-      total: filteredWorkOrders.length,
-      waitingParts: filteredWorkOrders.filter(
-        (workOrder) => workOrder.status === "waiting_parts"
-      ).length,
-    };
-  }, [filteredWorkOrders]);
+    setErrorMessage("");
+
+    try {
+      const { data, error } = await fetchRepairsQueue();
+
+      if (error) {
+        setErrorMessage(error.message ?? "Unable to load work orders.");
+        return;
+      }
+
+      setJobs(data.jobs);
+      setProfiles(data.profiles);
+      setVendors(data.vendors);
+    } catch (error) {
+      setErrorMessage(error.message ?? "Unable to load work orders.");
+    } finally {
+      if (showLoading) {
+        setIsLoading(false);
+      }
+    }
+  }
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadRepairs() {
+    async function loadInitialRepairs() {
+      setIsLoading(true);
+      setErrorMessage("");
+
       try {
-        const { data, error } = await fetchRepairsQueueData();
+        const { data, error } = await fetchRepairsQueue();
 
         if (!isMounted) {
           return;
         }
 
         if (error) {
-          setErrorMessage(error.message);
+          setErrorMessage(error.message ?? "Unable to load work orders.");
           return;
         }
 
-        setWorkOrders(data.workOrders);
-        setVehiclesById(data.vehiclesById);
-        setServiceCategories(data.serviceCategories);
+        setJobs(data.jobs);
         setProfiles(data.profiles);
+        setVendors(data.vendors);
       } catch (error) {
         if (isMounted) {
           setErrorMessage(error.message ?? "Unable to load work orders.");
@@ -411,14 +440,14 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
       }
     }
 
-    loadRepairs();
+    loadInitialRepairs();
 
     return () => {
       isMounted = false;
     };
   }, []);
 
-  async function handleStatusChange(workOrder, newStatus) {
+  async function handleStatusChange(job, newStatus) {
     if (!canManageRepairJobs) {
       setStatusErrorMessage("Your role cannot update work orders.");
       return;
@@ -429,51 +458,49 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
       return;
     }
 
-    const previousStatus = workOrder.status;
+    const previousStatus = job.status;
 
     setStatusErrorMessage("");
-    setUpdatingStatusId(workOrder.id);
-    setWorkOrders((currentWorkOrders) =>
-      currentWorkOrders.map((currentWorkOrder) =>
-        currentWorkOrder.id === workOrder.id
-          ? { ...currentWorkOrder, status: newStatus }
-          : currentWorkOrder
+    setStatusSuccessMessage("");
+    setUpdatingStatusId(job.id);
+    setJobs((currentJobs) =>
+      currentJobs.map((currentJob) =>
+        currentJob.id === job.id ? { ...currentJob, status: newStatus } : currentJob
       )
     );
 
     try {
       const { error } = await supabase
         .from("repair_jobs")
-        .update({ status: newStatus })
-        .eq("id", workOrder.id);
+        .update({
+          completed_at:
+            newStatus === "completed"
+              ? new Date().toISOString()
+              : job.completed_at,
+          status: newStatus,
+        })
+        .eq("id", job.id);
 
       if (error) {
-        setWorkOrders((currentWorkOrders) =>
-          currentWorkOrders.map((currentWorkOrder) =>
-            currentWorkOrder.id === workOrder.id
-              ? { ...currentWorkOrder, status: previousStatus }
-              : currentWorkOrder
-          )
-        );
-        setStatusErrorMessage(error.message);
-        return;
+        throw error;
       }
 
       await logVehicleActivity({
-        vehicleId: workOrder.vehicle_id,
+        vehicleId: job.vehicle_id,
         action: "Repair job status changed",
         details: {
           from: previousStatus,
-          title: workOrder.title,
+          title: job.title,
           to: newStatus,
         },
       });
+      setStatusSuccessMessage("Work order status updated.");
     } catch (error) {
-      setWorkOrders((currentWorkOrders) =>
-        currentWorkOrders.map((currentWorkOrder) =>
-          currentWorkOrder.id === workOrder.id
-            ? { ...currentWorkOrder, status: previousStatus }
-            : currentWorkOrder
+      setJobs((currentJobs) =>
+        currentJobs.map((currentJob) =>
+          currentJob.id === job.id
+            ? { ...currentJob, status: previousStatus }
+            : currentJob
         )
       );
       setStatusErrorMessage(error.message ?? "Something went wrong.");
@@ -482,283 +509,202 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
     }
   }
 
-  function clearFilters() {
-    setPriorityFilter("all");
-    setSearchTerm("");
-    setSelectedServiceCategoryId("all");
-    setSelectedTechnicianId("all");
-    setStatusFilter("all");
+  function toggleDetails(jobId) {
+    setExpandedJobIds((currentIds) =>
+      currentIds.includes(jobId)
+        ? currentIds.filter((currentId) => currentId !== jobId)
+        : [...currentIds, jobId]
+    );
+  }
+
+  function updateJobList(jobId, updater) {
+    setJobs((currentJobs) =>
+      currentJobs.map((job) => (job.id === jobId ? updater(job) : job))
+    );
+  }
+
+  async function handlePartAdded(partRequest) {
+    if (partRequest?.id && partRequest?.repair_job_id) {
+      updateJobList(partRequest.repair_job_id, (job) => ({
+        ...job,
+        parts: [
+          partRequest,
+          ...job.parts.filter((part) => part.id !== partRequest.id),
+        ],
+      }));
+    }
+
+    setActivePartJob(null);
+    await loadRepairsQueue({ showLoading: false });
+  }
+
+  async function handleLaborAdded(laborLog) {
+    if (laborLog?.id && laborLog?.repair_job_id) {
+      updateJobList(laborLog.repair_job_id, (job) => ({
+        ...job,
+        laborLogs: [
+          laborLog,
+          ...job.laborLogs.filter((log) => log.id !== laborLog.id),
+        ],
+      }));
+    }
+
+    setActiveLaborJob(null);
+    await loadRepairsQueue({ showLoading: false });
+  }
+
+  async function handlePhotoAdded(photo) {
+    if (photo?.id && photo?.repair_job_id) {
+      updateJobList(photo.repair_job_id, (job) => ({
+        ...job,
+        photos: [photo, ...job.photos.filter((item) => item.id !== photo.id)],
+      }));
+    }
+
+    setActivePhotoJob(null);
+    await loadRepairsQueue({ showLoading: false });
+  }
+
+  function noopActivityRefresh() {
+    // Global queue actions log activity; the queue itself has no timeline.
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="space-y-5">
+      <section className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
-              Repairs Queue
-            </p>
-            <h2 className="mt-2 text-2xl font-bold text-zinc-950">
-              Work Orders
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
-              Review service work across vehicles, track technician workload,
-              and update work order status from one queue.
+            <h2 className="text-2xl font-black text-slate-950">Repairs</h2>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+              Track open work orders across all vehicles.
             </p>
           </div>
-
-          <label className="flex w-fit items-center gap-3 rounded-md border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-700">
-            <input
-              checked={myWorkOnly}
-              className="h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-400"
-              onChange={(event) => setMyWorkOnly(event.target.checked)}
-              type="checkbox"
-            />
-            My Work
-          </label>
+          <button
+            className={buttonClassNames.secondary}
+            disabled={isLoading}
+            onClick={() => loadRepairsQueue()}
+            type="button"
+          >
+            <AppIcon name="refresh" size={16} />
+            Refresh
+          </button>
         </div>
-      </section>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <SummaryCard label="Total Work Orders" value={summary.total} />
-        <SummaryCard label="In Progress" value={summary.inProgress} />
-        <SummaryCard label="Waiting Parts" value={summary.waitingParts} />
-        <SummaryCard label="Completed" value={summary.completed} />
-        <SummaryCard label="Blocked" value={summary.blocked} />
-      </section>
-
-      <section className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-3 lg:grid-cols-3 xl:grid-cols-6">
-          <label className="block xl:col-span-2" htmlFor="repair-search">
-            <span className="text-sm font-medium text-zinc-700">Search</span>
+        <div className="mt-4">
+          <label className="relative block" htmlFor="repairs-queue-search">
+            <span className="sr-only">Search work orders</span>
+            <AppIcon
+              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+              name="search"
+              size={18}
+            />
             <input
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
-              id="repair-search"
+              className="h-12 w-full rounded-2xl border border-slate-200 bg-white py-2 pl-11 pr-4 text-sm font-semibold text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+              id="repairs-queue-search"
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Title, stock, make, or model"
+              placeholder="Search work order, stock, vehicle, service, part, or vendor"
               type="search"
               value={searchTerm}
             />
           </label>
-
-          <label className="block" htmlFor="repair-status-filter">
-            <span className="text-sm font-medium text-zinc-700">Status</span>
-            <select
-              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
-              id="repair-status-filter"
-              onChange={(event) => setStatusFilter(event.target.value)}
-              value={statusFilter}
-            >
-              <option value="all">All Statuses</option>
-              {statusOptions.map((status) => (
-                <option key={status} value={status}>
-                  {formatLabel(status, statusLabels)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block" htmlFor="repair-priority-filter">
-            <span className="text-sm font-medium text-zinc-700">Priority</span>
-            <select
-              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
-              id="repair-priority-filter"
-              onChange={(event) => setPriorityFilter(event.target.value)}
-              value={priorityFilter}
-            >
-              <option value="all">All Priorities</option>
-              {priorityOptions.map((priority) => (
-                <option key={priority} value={priority}>
-                  {formatLabel(priority, priorityLabels)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block" htmlFor="repair-category-filter">
-            <span className="text-sm font-medium text-zinc-700">
-              Service Category
-            </span>
-            <select
-              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
-              id="repair-category-filter"
-              onChange={(event) => setSelectedServiceCategoryId(event.target.value)}
-              value={selectedServiceCategoryId}
-            >
-              <option value="all">All Categories</option>
-              {activeServiceCategories.map((serviceCategory) => (
-                <option key={serviceCategory.id} value={serviceCategory.id}>
-                  {serviceCategory.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {canUseTechnicianFilter && (
-            <label className="block" htmlFor="repair-technician-filter">
-              <span className="text-sm font-medium text-zinc-700">
-                Technician
-              </span>
-              <select
-                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200"
-                id="repair-technician-filter"
-                onChange={(event) => setSelectedTechnicianId(event.target.value)}
-                value={selectedTechnicianId}
-              >
-                <option value="all">All Technicians</option>
-                {technicians.map((technician) => (
-                  <option key={technician.id} value={technician.id}>
-                    {getProfileName(technician)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
         </div>
 
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-zinc-500">
-            Showing {filteredWorkOrders.length} of {workOrders.length} work
-            orders
-          </p>
-          <button
-            className="w-fit rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50"
-            onClick={clearFilters}
-            type="button"
-          >
-            Clear Filters
-          </button>
+        <div className="mt-4">
+          <RepairsQueueTabs
+            activeTab={activeTab}
+            counts={countsByTab}
+            onChange={setActiveTab}
+          />
         </div>
       </section>
 
-      {statusErrorMessage && (
-        <section className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          {statusErrorMessage}
-        </section>
-      )}
-
       {isLoading && (
-        <section className="rounded-lg border border-zinc-200 bg-white p-8 text-center shadow-sm">
-          <p className="font-medium text-zinc-700">Loading work orders...</p>
+        <section className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <p className="font-semibold text-slate-700">Loading work orders...</p>
         </section>
       )}
 
       {!isLoading && errorMessage && (
-        <section className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <section className="rounded-3xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800">
           {errorMessage}
         </section>
       )}
 
-      {!isLoading && !errorMessage && filteredWorkOrders.length === 0 && (
-        <section className="rounded-lg border border-dashed border-zinc-300 bg-white p-8 text-center shadow-sm">
-          <h3 className="text-lg font-bold text-zinc-950">
-            No work orders found
-          </h3>
-          <p className="mt-2 text-sm text-zinc-500">
-            Try adjusting your filters, or add work orders from a vehicle detail
-            page.
-          </p>
+      {!isLoading && statusErrorMessage && (
+        <section className="rounded-3xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800">
+          {statusErrorMessage}
         </section>
       )}
 
-      {!isLoading && !errorMessage && filteredWorkOrders.length > 0 && (
-        <section className="space-y-3">
-          {filteredWorkOrders.map((workOrder) => {
-            const vehicle = vehiclesById[workOrder.vehicle_id];
-            const assignedTechnician = profilesById[workOrder.assigned_to];
-            const creator = profilesById[workOrder.created_by];
-            const serviceCategory = getServiceCategoryLabel(
-              workOrder,
-              serviceCategoriesById
-            );
-
-            return (
-              <article
-                className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm"
-                key={workOrder.id}
-              >
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-lg font-bold text-zinc-950">
-                        {displayValue(workOrder.title)}
-                      </h3>
-                      <Badge className={priorityClassName(workOrder.priority)}>
-                        {formatLabel(workOrder.priority, priorityLabels)}
-                      </Badge>
-                    </div>
-
-                    <p className="mt-2 text-sm font-medium text-zinc-700">
-                      {displayValue(vehicle?.stock_number)} -{" "}
-                      {displayValue(getVehicleName(vehicle))}
-                    </p>
-                    <p className="mt-1 text-sm text-zinc-500">
-                      {displayValue(serviceCategory)}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-start gap-2 xl:justify-end">
-                    {canManageRepairJobs ? (
-                      <StatusDropdown
-                        currentStatus={workOrder.status}
-                        isUpdating={updatingStatusId === workOrder.id}
-                        onChange={(newStatus) =>
-                          handleStatusChange(workOrder, newStatus)
-                        }
-                        statuses={statusOptions}
-                      />
-                    ) : (
-                      <Badge className={statusClassName(workOrder.status)}>
-                        {formatLabel(workOrder.status, statusLabels)}
-                      </Badge>
-                    )}
-                    <button
-                      className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={!workOrder.vehicle_id}
-                      onClick={() => onSelectVehicle?.(workOrder.vehicle_id)}
-                      type="button"
-                    >
-                      View Vehicle
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
-                  <div>
-                    <p className="text-zinc-500">Assigned Technician</p>
-                    <p className="mt-1 font-medium text-zinc-800">
-                      {getProfileName(assignedTechnician)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500">Created By</p>
-                    <p className="mt-1 font-medium text-zinc-800">
-                      {getProfileName(creator)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500">Vehicle Status</p>
-                    <p className="mt-1 font-medium text-zinc-800">
-                      {formatLabel(vehicle?.status, {})}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500">Created Date</p>
-                    <p className="mt-1 font-medium text-zinc-800">
-                      {formatDate(workOrder.created_at)}
-                    </p>
-                  </div>
-                </div>
-
-                {workOrder.notes && (
-                  <p className="mt-4 whitespace-pre-wrap rounded-md bg-zinc-50 p-3 text-sm leading-6 text-zinc-600">
-                    {workOrder.notes}
-                  </p>
-                )}
-              </article>
-            );
-          })}
+      {!isLoading && statusSuccessMessage && (
+        <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+          {statusSuccessMessage}
         </section>
+      )}
+
+      {!isLoading && !errorMessage && filteredJobs.length === 0 && (
+        <RepairJobEmptyState
+          activeTab={activeTab}
+          hasSearch={Boolean(searchTerm.trim())}
+        />
+      )}
+
+      {!isLoading && !errorMessage && filteredJobs.length > 0 && (
+        <section className="space-y-3">
+          {filteredJobs.map((job) => (
+            <RepairJobCard
+              canManageLabor={canManageLabor}
+              canManageParts={canManageWorkOrderParts}
+              canManagePhotos={canManagePhotos}
+              canManageRepairJobs={canManageRepairJobs}
+              isExpanded={expandedJobIds.includes(job.id)}
+              isUpdating={updatingStatusId === job.id}
+              job={job}
+              key={job.id}
+              onAddLabor={setActiveLaborJob}
+              onAddPart={setActivePartJob}
+              onAddPhoto={setActivePhotoJob}
+              onOpenVehicle={onSelectVehicle}
+              onStatusChange={handleStatusChange}
+              onToggleDetails={toggleDetails}
+            />
+          ))}
+        </section>
+      )}
+
+      {activePartJob && canManageWorkOrderParts && (
+        <AddWorkOrderPartForm
+          currentProfile={currentProfile}
+          onActivityLogged={noopActivityRefresh}
+          onClose={() => setActivePartJob(null)}
+          onPartAdded={handlePartAdded}
+          vehicle={activePartJob.vehicle}
+          vehicleId={activePartJob.vehicle_id}
+          vendors={vendors}
+          workOrder={activePartJob}
+        />
+      )}
+
+      {activeLaborJob && canManageLabor && (
+        <AddWorkOrderLaborForm
+          currentProfile={currentProfile}
+          onActivityLogged={noopActivityRefresh}
+          onClose={() => setActiveLaborJob(null)}
+          onLaborAdded={handleLaborAdded}
+          profiles={profiles}
+          vehicleId={activeLaborJob.vehicle_id}
+          workOrder={activeLaborJob}
+        />
+      )}
+
+      {activePhotoJob && canManagePhotos && (
+        <AddWorkOrderPhotoForm
+          onActivityLogged={noopActivityRefresh}
+          onClose={() => setActivePhotoJob(null)}
+          onPhotoAdded={handlePhotoAdded}
+          vehicleId={activePhotoJob.vehicle_id}
+          workOrder={activePhotoJob}
+        />
       )}
     </div>
   );
