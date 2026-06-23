@@ -84,14 +84,16 @@ function EditVendorForm({ onClose, onVendorUpdated, vendor }) {
         .single();
 
       if (error) {
-        setErrorMessage(error.message);
+        console.error("Could not save vendor:", error);
+        setErrorMessage("Could not save vendor. Please try again.");
         return;
       }
 
       onVendorUpdated?.(data);
       onClose();
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not save vendor:", error);
+      setErrorMessage("Could not save vendor. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -191,7 +193,7 @@ function EditVendorForm({ onClose, onVendorUpdated, vendor }) {
             isSubmitting={isSubmitting}
             onCancel={onClose}
             submitLabel="Save Vendor"
-            submittingLabel="Saving..."
+            submittingLabel="Saving vendor..."
           />
         </form>
     </ModalShell>

@@ -98,6 +98,50 @@ function getVehicleSummary(vehicles) {
   };
 }
 
+async function fetchVehiclesWithPhotos() {
+  const vehiclesResponse = await supabase
+    .from("vehicles")
+    .select(vehicleColumns)
+    .order("stock_number", { ascending: true });
+
+  if (vehiclesResponse.error) {
+    return { data: null, error: vehiclesResponse.error };
+  }
+
+  const vehicles = vehiclesResponse.data ?? [];
+  const vehicleIds = vehicles.map((vehicle) => vehicle.id).filter(Boolean);
+
+  if (vehicleIds.length === 0) {
+    return {
+      data: {
+        vehiclePhotosByVehicleId: {},
+        vehicles,
+      },
+      error: null,
+    };
+  }
+
+  const photosResponse = await supabase
+    .from("vehicle_photos")
+    .select(vehiclePhotoColumns)
+    .in("vehicle_id", vehicleIds)
+    .order("created_at", { ascending: false });
+
+  if (photosResponse.error) {
+    console.error("Could not load vehicle photos:", photosResponse.error);
+  }
+
+  return {
+    data: {
+      vehiclePhotosByVehicleId: photosResponse.error
+        ? {}
+        : buildVehiclePhotoMap(photosResponse.data ?? []),
+      vehicles,
+    },
+    error: null,
+  };
+}
+
 function FilterSelect({ children, id, label, onChange, value }) {
   return (
     <label className="block" htmlFor={id}>
@@ -139,8 +183,8 @@ function VehiclesPage({ onSelectVehicle }) {
   const [titleStatusFilter, setTitleStatusFilter] = useState("all");
   const [areFiltersOpen, setAreFiltersOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [refreshCount, setRefreshCount] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -150,52 +194,26 @@ function VehiclesPage({ onSelectVehicle }) {
       setErrorMessage("");
 
       try {
-        const { data, error } = await supabase
-          .from("vehicles")
-          .select(vehicleColumns)
-          .order("stock_number", { ascending: true });
+        const { data, error } = await fetchVehiclesWithPhotos();
 
         if (!isMounted) {
           return;
         }
 
         if (error) {
-          setErrorMessage(error.message);
+          console.error("Could not load vehicles:", error);
+          setErrorMessage("Could not load vehicles.");
           setVehicles([]);
           setVehiclePhotosByVehicleId({});
           return;
         }
 
-        const vehicleData = data ?? [];
-        setVehicles(vehicleData);
-
-        const vehicleIds = vehicleData
-          .map((vehicle) => vehicle.id)
-          .filter(Boolean);
-
-        if (vehicleIds.length === 0) {
-          setVehiclePhotosByVehicleId({});
-          return;
-        }
-
-        const photosResponse = await supabase
-          .from("vehicle_photos")
-          .select(vehiclePhotoColumns)
-          .in("vehicle_id", vehicleIds)
-          .order("created_at", { ascending: false });
-
-        if (!isMounted) {
-          return;
-        }
-
-        setVehiclePhotosByVehicleId(
-          photosResponse.error
-            ? {}
-            : buildVehiclePhotoMap(photosResponse.data ?? [])
-        );
+        setVehicles(data.vehicles);
+        setVehiclePhotosByVehicleId(data.vehiclePhotosByVehicleId);
       } catch (error) {
         if (isMounted) {
-          setErrorMessage(error.message ?? "Something went wrong.");
+          console.error("Could not load vehicles:", error);
+          setErrorMessage("Could not load vehicles.");
           setVehicles([]);
           setVehiclePhotosByVehicleId({});
         }
@@ -211,10 +229,33 @@ function VehiclesPage({ onSelectVehicle }) {
     return () => {
       isMounted = false;
     };
-  }, [refreshCount]);
+  }, []);
 
-  function refreshVehicles() {
-    setRefreshCount((currentCount) => currentCount + 1);
+  async function refreshVehicles() {
+    if (isLoading || isRefreshing) {
+      return;
+    }
+
+    setIsRefreshing(true);
+    setErrorMessage("");
+
+    try {
+      const { data, error } = await fetchVehiclesWithPhotos();
+
+      if (error) {
+        console.error("Could not load vehicles:", error);
+        setErrorMessage("Could not load vehicles.");
+        return;
+      }
+
+      setVehicles(data.vehicles);
+      setVehiclePhotosByVehicleId(data.vehiclePhotosByVehicleId);
+    } catch (error) {
+      console.error("Could not load vehicles:", error);
+      setErrorMessage("Could not load vehicles.");
+    } finally {
+      setIsRefreshing(false);
+    }
   }
 
   function clearFilters() {
@@ -283,12 +324,17 @@ function VehiclesPage({ onSelectVehicle }) {
 
             <button
               aria-label="Refresh vehicles"
-              className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isLoading}
+              className={`inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 ${
+                isRefreshing ? "w-auto px-4" : "w-12"
+              }`}
+              disabled={isLoading || isRefreshing}
               onClick={refreshVehicles}
               type="button"
             >
               <AppIcon name="refresh" size={18} />
+              {isRefreshing && (
+                <span className="text-sm font-bold">Refreshing...</span>
+              )}
             </button>
           </div>
         </div>

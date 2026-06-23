@@ -838,6 +838,9 @@ function DashboardAttentionList({ metrics, onNavigate }) {
 function DashboardLoadingState() {
   return (
     <div className="space-y-4">
+      <section className="rounded-3xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-600 shadow-sm">
+        Loading dashboard...
+      </section>
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         {Array.from({ length: 6 }).map((_, index) => (
           <div
@@ -1042,7 +1045,7 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
 
         if (error) {
           console.error("Failed to load dashboard data", error);
-          setErrorMessage("Could not load dashboard data right now.");
+          setErrorMessage("Could not refresh dashboard.");
           setActivityLogs([]);
           setInvestmentSummaries([]);
           setPartRequests([]);
@@ -1065,7 +1068,7 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
       } catch (error) {
         if (isMounted) {
           console.error("Failed to load dashboard data", error);
-          setErrorMessage("Could not load dashboard data right now.");
+          setErrorMessage("Could not refresh dashboard.");
           setActivityLogs([]);
           setInvestmentSummaries([]);
           setPartRequests([]);

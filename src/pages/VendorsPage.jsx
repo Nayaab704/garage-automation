@@ -206,7 +206,7 @@ function getDeleteErrorMessage(error) {
     return "This vendor is already used in records. Consider editing it instead of deleting.";
   }
 
-  return error?.message ?? "Unable to delete vendor.";
+  return "Could not delete vendor. Please try again.";
 }
 
 function VendorStatsCard({ label, value }) {
@@ -527,14 +527,16 @@ function VendorsPage({ currentProfile }) {
         }
 
         if (error) {
-          setErrorMessage(error.message);
+          console.error("Could not load vendors:", error);
+          setErrorMessage("Could not load vendors. Please try again.");
           return;
         }
 
         setVendors(data.vendors ?? []);
       } catch (error) {
         if (isMounted) {
-          setErrorMessage(error.message ?? "Unable to load vendors.");
+          console.error("Could not load vendors:", error);
+          setErrorMessage("Could not load vendors. Please try again.");
         }
       } finally {
         if (isMounted) {
@@ -593,6 +595,7 @@ function VendorsPage({ currentProfile }) {
         .eq("id", vendor.id);
 
       if (error) {
+        console.error("Could not delete vendor:", error);
         setDeleteErrorMessage(getDeleteErrorMessage(error));
         return;
       }
@@ -604,7 +607,8 @@ function VendorsPage({ currentProfile }) {
         currentVendorId === vendor.id ? null : currentVendorId
       );
     } catch (error) {
-      setDeleteErrorMessage(error.message ?? "Unable to delete vendor.");
+      console.error("Could not delete vendor:", error);
+      setDeleteErrorMessage("Could not delete vendor. Please try again.");
     } finally {
       setDeletingVendorId(null);
     }

@@ -391,7 +391,8 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
       const { data, error } = await fetchRepairsQueue();
 
       if (error) {
-        setErrorMessage(error.message ?? "Unable to load work orders.");
+        console.error("Could not load repairs:", error);
+        setErrorMessage("Could not load repairs.");
         return;
       }
 
@@ -399,7 +400,8 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
       setProfiles(data.profiles);
       setVendors(data.vendors);
     } catch (error) {
-      setErrorMessage(error.message ?? "Unable to load work orders.");
+      console.error("Could not load repairs:", error);
+      setErrorMessage("Could not load repairs.");
     } finally {
       if (showLoading) {
         setIsLoading(false);
@@ -422,7 +424,8 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
         }
 
         if (error) {
-          setErrorMessage(error.message ?? "Unable to load work orders.");
+          console.error("Could not load repairs:", error);
+          setErrorMessage("Could not load repairs.");
           return;
         }
 
@@ -431,7 +434,8 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
         setVendors(data.vendors);
       } catch (error) {
         if (isMounted) {
-          setErrorMessage(error.message ?? "Unable to load work orders.");
+          console.error("Could not load repairs:", error);
+          setErrorMessage("Could not load repairs.");
         }
       } finally {
         if (isMounted) {
@@ -482,6 +486,7 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
         .eq("id", job.id);
 
       if (error) {
+        console.error("Could not update work order status:", error);
         throw error;
       }
 
@@ -503,7 +508,8 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
             : currentJob
         )
       );
-      setStatusErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not update work order status:", error);
+      setStatusErrorMessage("Could not update work order status. Please try again.");
     } finally {
       setUpdatingStatusId(null);
     }
@@ -535,10 +541,9 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
     }
 
     setActivePartJob(null);
-    await loadRepairsQueue({ showLoading: false });
   }
 
-  async function handleLaborAdded(laborLog) {
+  function handleLaborAdded(laborLog) {
     if (laborLog?.id && laborLog?.repair_job_id) {
       updateJobList(laborLog.repair_job_id, (job) => ({
         ...job,
@@ -550,10 +555,9 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
     }
 
     setActiveLaborJob(null);
-    await loadRepairsQueue({ showLoading: false });
   }
 
-  async function handlePhotoAdded(photo) {
+  function handlePhotoAdded(photo) {
     if (photo?.id && photo?.repair_job_id) {
       updateJobList(photo.repair_job_id, (job) => ({
         ...job,
@@ -562,7 +566,6 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
     }
 
     setActivePhotoJob(null);
-    await loadRepairsQueue({ showLoading: false });
   }
 
   function noopActivityRefresh() {
@@ -586,7 +589,7 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
             type="button"
           >
             <AppIcon name="refresh" size={16} />
-            Refresh
+            {isLoading ? "Loading..." : "Refresh"}
           </button>
         </div>
 
@@ -620,7 +623,7 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
 
       {isLoading && (
         <section className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <p className="font-semibold text-slate-700">Loading work orders...</p>
+          <p className="font-semibold text-slate-700">Loading repairs...</p>
         </section>
       )}
 
