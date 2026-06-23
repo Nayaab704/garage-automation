@@ -76,14 +76,16 @@ function PartsPage({
       const { data, error } = await fetchPartsQueue();
 
       if (error) {
-        setErrorMessage(error.message ?? "Unable to load the parts queue.");
+        console.error("Could not load parts queue:", error);
+        setErrorMessage("Unable to load the parts queue.");
         return;
       }
 
       setPartQueue(data.parts);
       setVendors(data.vendors);
     } catch (error) {
-      setErrorMessage(error.message ?? "Unable to load the parts queue.");
+      console.error("Could not load parts queue:", error);
+      setErrorMessage("Unable to load the parts queue.");
     } finally {
       if (showLoading) {
         setIsLoading(false);
@@ -106,7 +108,8 @@ function PartsPage({
         }
 
         if (error) {
-          setErrorMessage(error.message ?? "Unable to load the parts queue.");
+          console.error("Could not load parts queue:", error);
+          setErrorMessage("Unable to load the parts queue.");
           return;
         }
 
@@ -114,7 +117,8 @@ function PartsPage({
         setVendors(data.vendors);
       } catch (error) {
         if (isMounted) {
-          setErrorMessage(error.message ?? "Unable to load the parts queue.");
+          console.error("Could not load parts queue:", error);
+          setErrorMessage("Unable to load the parts queue.");
         }
       } finally {
         if (isMounted) {
@@ -156,7 +160,8 @@ function PartsPage({
         .single();
 
       if (error) {
-        setErrorMessage(error.message);
+        console.error("Could not update part approval:", error);
+        setErrorMessage("Could not save part review. Please try again.");
         return;
       }
 
@@ -185,7 +190,8 @@ function PartsPage({
           : "Part request rejected."
       );
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not update part approval:", error);
+      setErrorMessage("Could not save part review. Please try again.");
     } finally {
       setUpdatingPartId(null);
     }
@@ -195,6 +201,7 @@ function PartsPage({
     const selectedPart = selectedPartForPurchaseOrder;
     const partRequestId = result?.partRequestId ?? selectedPart?.id;
     const selectedQuote = selectedPart?.selectedQuote;
+    let purchasedQuote = null;
 
     if (selectedQuote?.id && result?.purchaseOrderId) {
       const quoteResult = await markQuotePurchased({
@@ -204,35 +211,75 @@ function PartsPage({
       });
 
       if (quoteResult.error) {
-        console.warn(
+        console.error(
           "Purchase order created, but price memory could not be marked purchased:",
           quoteResult.error
         );
+      } else {
+        purchasedQuote = quoteResult.data;
       }
     }
 
     setSelectedPartForPurchaseOrder(null);
+
+    if (partRequestId) {
+      const purchaseOrder = result?.purchaseOrder
+        ? {
+            ...result.purchaseOrder,
+            vendor:
+              vendors.find((vendor) => vendor.id === result.purchaseOrder.vendor_id) ??
+              null,
+          }
+        : null;
+      const purchaseOrderItem = result?.purchaseOrderItem
+        ? {
+            ...result.purchaseOrderItem,
+            purchaseOrder,
+          }
+        : null;
+
+      setPartQueue((currentParts) =>
+        currentParts.map((part) => {
+          if (part.id !== partRequestId) {
+            return part;
+          }
+
+          const nextPurchaseOrderItems = purchaseOrderItem?.id
+            ? [
+                purchaseOrderItem,
+                ...(part.purchaseOrderItems ?? []).filter(
+                  (item) => item.id !== purchaseOrderItem.id
+                ),
+              ]
+            : part.purchaseOrderItems;
+          const nextSelectedQuote = purchasedQuote
+            ? { ...(part.selectedQuote ?? {}), ...purchasedQuote }
+            : part.selectedQuote;
+
+          return {
+            ...part,
+            ...(result?.partRequest ?? {}),
+            purchaseOrderItems: nextPurchaseOrderItems,
+            selectedQuote: nextSelectedQuote,
+            status:
+              result?.partRequestStatusUpdated === false
+                ? part.status
+                : result?.partRequest?.status ?? "ordered",
+          };
+        })
+      );
+    }
 
     if (result?.partRequestStatusUpdated === false) {
       setErrorMessage(
         result.warningMessage ??
           "Purchase order created, but the part status could not be updated."
       );
-      await loadPartsQueue({ showLoading: false });
       return;
-    }
-
-    if (partRequestId) {
-      setPartQueue((currentParts) =>
-        currentParts.map((part) =>
-          part.id === partRequestId ? { ...part, status: "ordered" } : part
-        )
-      );
     }
 
     setErrorMessage("");
     setSuccessMessage("Purchase order created. Part moved out of Needs PO.");
-    await loadPartsQueue({ showLoading: false });
   }
 
   function handleCreatePurchaseOrder(part) {
@@ -272,7 +319,6 @@ function PartsPage({
     setErrorMessage("");
     setSuccessMessage("Vendor price selected for this part.");
     setPriceHistoryPart(null);
-    await loadPartsQueue({ showLoading: false });
   }
 
   function clearSearch() {

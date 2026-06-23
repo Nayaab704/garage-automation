@@ -458,7 +458,7 @@ function MarkReceivedModal({
             onClick={onConfirm}
             type="button"
           >
-            {isSubmitting ? "Receiving..." : "Mark Received"}
+            {isSubmitting ? "Marking received..." : "Mark Received"}
           </button>
         </div>
       </div>
@@ -849,7 +849,8 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
         }
 
         if (error) {
-          setErrorMessage(error.message);
+          console.error("Could not load purchase orders:", error);
+          setErrorMessage("Unable to load purchase orders.");
           return;
         }
 
@@ -872,7 +873,8 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
         setVendorsById(data.vendorsById);
       } catch (error) {
         if (isMounted) {
-          setErrorMessage(error.message ?? "Unable to load purchase orders.");
+          console.error("Could not load purchase orders:", error);
+          setErrorMessage("Unable to load purchase orders.");
         }
       } finally {
         if (isMounted) {
@@ -906,6 +908,9 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     const previousStatus = purchaseOrder.status;
     const shouldCancelItems = newStatus === "cancelled";
     const shouldMarkReceived = newStatus === "received";
+    const failureMessage = shouldMarkReceived
+      ? "Could not mark this purchase order as received. Please try again."
+      : "Could not update purchase order. Please try again.";
     const receivedAt =
       shouldMarkReceived && !purchaseOrder.received_at
         ? new Date().toISOString()
@@ -935,6 +940,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
         .eq("id", purchaseOrder.id);
 
       if (error) {
+        console.error("Could not update purchase order:", error);
         throw error;
       }
 
@@ -954,11 +960,8 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
             .in("id", itemIds);
 
           if (itemResponse.error) {
-            setStatusErrorMessage(
-              `Purchase order marked ${formatPurchaseOrderLabel(
-                newStatus
-              ).toLowerCase()}, but item statuses could not be updated: ${itemResponse.error.message}`
-            );
+            console.error("Could not update purchase order items:", itemResponse.error);
+            setStatusErrorMessage(failureMessage);
             return false;
           }
 
@@ -978,9 +981,11 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
             .in("id", partRequestIds);
 
           if (partRequestResponse.error) {
-            setStatusErrorMessage(
-              `Purchase order marked received, but linked part requests could not be updated: ${partRequestResponse.error.message}`
+            console.error(
+              "Could not update linked part requests after receiving purchase order:",
+              partRequestResponse.error
             );
+            setStatusErrorMessage(failureMessage);
             return false;
           }
 
@@ -1025,9 +1030,8 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
             : currentPurchaseOrder
         )
       );
-      setStatusErrorMessage(
-        error.message ?? "Unable to update purchase order."
-      );
+      console.error("Could not update purchase order:", error);
+      setStatusErrorMessage(failureMessage);
       return false;
     } finally {
       setUpdatingPurchaseOrderId(null);
@@ -1063,6 +1067,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
         .eq("id", item.id);
 
       if (error) {
+        console.error("Could not update purchase order item:", error);
         throw error;
       }
 
@@ -1073,9 +1078,11 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
           .eq("id", item.part_request_id);
 
         if (partRequestResponse.error) {
-          setStatusErrorMessage(
-            `Item marked received, but the linked part request could not be updated: ${partRequestResponse.error.message}`
+          console.error(
+            "Could not update linked part request after receiving item:",
+            partRequestResponse.error
           );
+          setStatusErrorMessage("Could not update item status. Please try again.");
           return;
         }
 
@@ -1106,7 +1113,8 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
             : currentItem
         )
       );
-      setStatusErrorMessage(error.message ?? "Unable to update item status.");
+      console.error("Could not update purchase order item:", error);
+      setStatusErrorMessage("Could not update item status. Please try again.");
     } finally {
       setUpdatingItemId(null);
     }
@@ -1132,7 +1140,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     const success = await handlePurchaseOrderStatusChange(
       confirmReceivedOrder,
       "received",
-      { successMessage: "Part marked as received." }
+      { successMessage: "Purchase order marked received." }
     );
 
     if (success) {

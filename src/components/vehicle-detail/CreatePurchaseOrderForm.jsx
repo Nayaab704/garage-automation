@@ -24,6 +24,9 @@ const purchaseOrderBlockedStatuses = [
   "cancelled",
 ];
 
+const partRequestResultColumns =
+  "id, vehicle_id, repair_job_id, part_name, quantity, status, notes, part_source, approval_status, unit_cost, selected_vendor_id, selected_quote_id, quoted_unit_cost, quoted_total_cost, created_by, created_at";
+
 function emptyToNull(value) {
   const trimmedValue = value.trim();
   return trimmedValue === "" ? null : trimmedValue;
@@ -322,6 +325,10 @@ function CreatePurchaseOrderForm({
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage("");
     setSuccessMessage("");
@@ -340,7 +347,8 @@ function CreatePurchaseOrderForm({
       );
 
       if (duplicateCheck.error) {
-        setErrorMessage(duplicateCheck.error.message);
+        console.error("Could not check duplicate purchase orders:", duplicateCheck.error);
+        setErrorMessage("Could not create purchase order. Please try again.");
         return;
       }
 
@@ -360,11 +368,12 @@ function CreatePurchaseOrderForm({
       const purchaseOrderResponse = await supabase
         .from("purchase_orders")
         .insert([purchaseOrder])
-        .select("id")
+        .select("*")
         .single();
 
       if (purchaseOrderResponse.error) {
-        setErrorMessage(purchaseOrderResponse.error.message);
+        console.error("Could not create purchase order:", purchaseOrderResponse.error);
+        setErrorMessage("Could not create purchase order. Please try again.");
         return;
       }
 
@@ -384,32 +393,33 @@ function CreatePurchaseOrderForm({
       const itemResponse = await supabase
         .from("purchase_order_items")
         .insert([purchaseOrderItem])
-        .select("id")
+        .select("*")
         .single();
 
       if (itemResponse.error) {
+        console.error("Could not create purchase order item:", itemResponse.error);
         const cleanupResponse = await supabase
           .from("purchase_orders")
           .delete()
           .eq("id", purchaseOrderId);
 
         if (cleanupResponse.error) {
-          setErrorMessage(
-            `${itemResponse.error.message} The empty purchase order could not be removed: ${cleanupResponse.error.message}`
-          );
-        } else {
-          setErrorMessage(
-            `${itemResponse.error.message} The empty purchase order was removed.`
+          console.error(
+            "Could not remove empty purchase order after item create failed:",
+            cleanupResponse.error
           );
         }
 
+        setErrorMessage("Could not create purchase order. Please try again.");
         return;
       }
 
       const partRequestResponse = await supabase
         .from("part_requests")
         .update({ status: "ordered" })
-        .eq("id", formData.part_request_id);
+        .eq("id", formData.part_request_id)
+        .select(partRequestResultColumns)
+        .single();
 
       let statusWarning = "";
       const selectedPartRequest = partRequests.find(
@@ -417,7 +427,12 @@ function CreatePurchaseOrderForm({
       );
 
       if (partRequestResponse.error) {
-        statusWarning = `Purchase order created, but the part request status could not be updated: ${partRequestResponse.error.message}`;
+        console.error(
+          "Purchase order created, but part request status could not be updated:",
+          partRequestResponse.error
+        );
+        statusWarning =
+          "Purchase order created, but the part status could not be updated.";
       }
       const partRequestStatusUpdated = !partRequestResponse.error;
 
@@ -455,15 +470,26 @@ function CreatePurchaseOrderForm({
       onActivityLogged?.();
 
       await onPurchaseOrderCreated?.({
+        partRequest:
+          partRequestResponse.data ??
+          (partRequestStatusUpdated
+            ? { ...selectedPartRequest, status: "ordered" }
+            : selectedPartRequest),
         partRequestId: formData.part_request_id,
         partRequestStatusUpdated,
+        purchaseOrder: purchaseOrderResponse.data ?? {
+          ...purchaseOrder,
+          id: purchaseOrderId,
+        },
+        purchaseOrderItem: itemResponse.data ?? purchaseOrderItem,
         purchaseOrderItemId: itemResponse.data?.id ?? null,
         purchaseOrderId,
         status: "ordered",
         warningMessage: statusWarning,
       });
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not create purchase order:", error);
+      setErrorMessage("Could not create purchase order. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -637,7 +663,7 @@ function CreatePurchaseOrderForm({
             isSubmitting={isSubmitting}
             onCancel={onClose}
             submitLabel="Create Purchase Order"
-            submittingLabel="Creating..."
+            submittingLabel="Creating PO..."
           />
         </form>
     </ModalShell>

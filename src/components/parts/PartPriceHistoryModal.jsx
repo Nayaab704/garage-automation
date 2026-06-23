@@ -96,7 +96,8 @@ function PartPriceHistoryModal({
       }
 
       if (error) {
-        setErrorMessage(error.message);
+        console.error("Could not load previous vendor prices:", error);
+        setErrorMessage("Unable to search previous vendor prices.");
         setQuotes([]);
       } else {
         setQuotes(data ?? []);
@@ -113,7 +114,7 @@ function PartPriceHistoryModal({
   }, [part]);
 
   async function handleUseQuote(quote) {
-    if (!onUseQuote) {
+    if (!onUseQuote || selectingQuoteId) {
       return;
     }
 
@@ -124,7 +125,7 @@ function PartPriceHistoryModal({
       const normalizedQuote = normalizeQuoteForSelection(quote);
 
       if (!normalizedQuote.vendor_id) {
-        throw new Error("This quote has no linked vendor, so it cannot be used for PO.");
+        throw new Error("Missing vendor on selected quote.");
       }
 
       const updatedPart = await selectQuoteForPartRequest({
@@ -135,9 +136,8 @@ function PartPriceHistoryModal({
 
       await onUseQuote(normalizedQuote, updatedPart);
     } catch (error) {
-      setErrorMessage(
-        error.message ?? "Could not select this vendor price. Please try again."
-      );
+      console.error("Could not select vendor price:", error);
+      setErrorMessage("Could not select this vendor price. Please try again.");
     } finally {
       setSelectingQuoteId("");
     }
