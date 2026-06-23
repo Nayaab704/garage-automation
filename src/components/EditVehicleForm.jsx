@@ -131,20 +131,24 @@ function EditVehicleForm({ onClose, onVehicleUpdated, vehicle }) {
 
     try {
       const vehiclePayload = buildVehiclePayload(formData);
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("vehicles")
         .update(vehiclePayload)
-        .eq("id", vehicle.id);
+        .eq("id", vehicle.id)
+        .select("*")
+        .single();
 
       if (error) {
-        setErrorMessage(error.message);
+        console.error("Could not save vehicle:", error);
+        setErrorMessage("Could not save vehicle. Please try again.");
         return;
       }
 
-      await onVehicleUpdated();
+      await onVehicleUpdated(data ?? { ...vehicle, ...vehiclePayload });
       onClose();
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not save vehicle:", error);
+      setErrorMessage("Could not save vehicle. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

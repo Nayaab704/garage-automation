@@ -233,6 +233,7 @@ function AddVendorQuoteInline({
       const { data, error } = await createVendorPartQuote(payload);
 
       if (error) {
+        console.error("Could not save vendor quote:", error);
         setErrorMessage("Could not save vendor quote. Please try again.");
         return;
       }
@@ -248,6 +249,9 @@ function AddVendorQuoteInline({
           "Unknown vendor",
         vendor_name: data?.vendor_name_snapshot ?? vendor.name,
       });
+    } catch (error) {
+      console.error("Could not save vendor quote:", error);
+      setErrorMessage("Could not save vendor quote. Please try again.");
     } finally {
       setIsSaving(false);
     }

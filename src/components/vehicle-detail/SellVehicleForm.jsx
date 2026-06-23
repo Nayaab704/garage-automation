@@ -96,15 +96,17 @@ function SellVehicleForm({
       const saleResponse = await supabase
         .from("sales")
         .insert([sale])
-        .select("id")
+        .select("*")
         .single();
 
       if (saleResponse.error) {
-        setErrorMessage(saleResponse.error.message);
+        console.error("Could not sell vehicle:", saleResponse.error);
+        setErrorMessage("Could not sell vehicle. Please try again.");
         return;
       }
 
       const saleId = saleResponse.data.id;
+      let warrantyRecord = null;
 
       if (hasWarrantyDetails(formData)) {
         const warranty = {
@@ -117,22 +119,30 @@ function SellVehicleForm({
 
         const warrantyResponse = await supabase
           .from("warranties")
-          .insert([warranty]);
+          .insert([warranty])
+          .select("*")
+          .single();
 
         if (warrantyResponse.error) {
-          setErrorMessage(warrantyResponse.error.message);
+          console.error("Could not sell vehicle:", warrantyResponse.error);
+          setErrorMessage("Could not sell vehicle. Please try again.");
           return;
         }
+
+        warrantyRecord = warrantyResponse.data ?? warranty;
       }
 
       const vehicleResponse = await supabase
         .from("vehicles")
         .update({ status: "sold" })
-        .eq("id", vehicle.id);
+        .eq("id", vehicle.id)
+        .select("*")
+        .single();
 
       if (vehicleResponse.error) {
+        console.error("Could not mark vehicle sold:", vehicleResponse.error);
         setErrorMessage(
-          `Sale was created, but the vehicle could not be marked sold: ${vehicleResponse.error.message}`
+          "Sale was created, but the vehicle could not be marked sold. Please try again."
         );
         return;
       }
@@ -150,10 +160,15 @@ function SellVehicleForm({
         },
       });
       onActivityLogged?.();
-      await onVehicleSold();
+      await onVehicleSold({
+        sale: saleResponse.data ?? sale,
+        vehicle: vehicleResponse.data ?? { ...vehicle, status: "sold" },
+        warranty: warrantyRecord,
+      });
       onClose();
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not sell vehicle:", error);
+      setErrorMessage("Could not sell vehicle. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

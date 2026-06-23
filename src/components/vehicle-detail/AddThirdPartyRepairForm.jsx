@@ -129,7 +129,8 @@ function AddThirdPartyRepairForm({
         .single();
 
       if (error) {
-        setErrorMessage(error.message);
+        console.error("Could not save third-party repair:", error);
+        setErrorMessage("Could not save third-party repair. Please try again.");
         return;
       }
 
@@ -155,7 +156,8 @@ function AddThirdPartyRepairForm({
       onActivityLogged?.();
       await onThirdPartyRepairAdded?.(data ?? thirdPartyRepair);
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not save third-party repair:", error);
+      setErrorMessage("Could not save third-party repair. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -316,7 +318,7 @@ function AddThirdPartyRepairForm({
             isSubmitting={isSubmitting}
             onCancel={onClose}
             submitLabel="Add Third-Party Repair"
-            submittingLabel="Adding..."
+            submittingLabel="Saving..."
           />
         </form>
     </ModalShell>

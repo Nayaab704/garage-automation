@@ -109,7 +109,8 @@ function AddWorkOrderLaborForm({
         .single();
 
       if (error) {
-        setErrorMessage(error.message);
+        console.error("Could not save labor:", error);
+        setErrorMessage("Could not save labor.");
         return;
       }
 
@@ -128,7 +129,8 @@ function AddWorkOrderLaborForm({
       onActivityLogged?.();
       await onLaborAdded?.(data ?? laborLog);
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not save labor:", error);
+      setErrorMessage("Could not save labor.");
     } finally {
       setIsSubmitting(false);
     }
@@ -197,7 +199,7 @@ function AddWorkOrderLaborForm({
             isSubmitting={isSubmitting}
             onCancel={onClose}
             submitLabel="Add Labor"
-            submittingLabel="Adding..."
+            submittingLabel="Adding labor..."
           />
         </form>
     </ModalShell>

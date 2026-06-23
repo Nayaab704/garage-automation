@@ -92,9 +92,19 @@ function CheckRow({
     ? getProfileName(profiles, finalCheck.checked_by)
     : "";
   const checkedAt = formatDateTime(finalCheck.checked_at);
-  const checkedMeta = finalCheck.is_checked
-    ? ["Checked", checkedBy, checkedAt].filter(Boolean).join(" - ")
-    : "";
+  let checkedMeta = "";
+  let statusClassName = "bg-slate-100 text-slate-700 ring-slate-200";
+  let statusLabel = "Pending";
+
+  if (isUpdating) {
+    checkedMeta = "Saving...";
+    statusClassName = "bg-blue-50 text-blue-700 ring-blue-200";
+    statusLabel = "Saving...";
+  } else if (finalCheck.is_checked) {
+    checkedMeta = ["Checked", checkedBy, checkedAt].filter(Boolean).join(" - ");
+    statusClassName = "bg-emerald-50 text-emerald-700 ring-emerald-200";
+    statusLabel = "Checked";
+  }
 
   return (
     <label
@@ -132,13 +142,9 @@ function CheckRow({
       </span>
 
       <span
-        className={`mt-0.5 w-fit shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${
-          finalCheck.is_checked
-            ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-            : "bg-slate-100 text-slate-700 ring-slate-200"
-        }`}
+        className={`mt-0.5 w-fit shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusClassName}`}
       >
-        {finalCheck.is_checked ? "Checked" : "Pending"}
+        {statusLabel}
       </span>
     </label>
   );
@@ -259,7 +265,8 @@ function FinalCheckSection({
         .single();
 
       if (error) {
-        setErrorMessage(error.message);
+        console.error("Could not update checklist:", error);
+        setErrorMessage("Could not update checklist.");
         return;
       }
 
@@ -289,7 +296,8 @@ function FinalCheckSection({
 
       onActivityLogged?.();
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not update checklist:", error);
+      setErrorMessage("Could not update checklist.");
     } finally {
       setUpdatingCheckId(null);
     }

@@ -243,7 +243,8 @@ function AddWorkOrderPartForm({
         .single();
 
       if (error) {
-        setErrorMessage(error.message);
+        console.error("Could not save part:", error);
+        setErrorMessage("Could not save part. Please try again.");
         return;
       }
 
@@ -279,7 +280,8 @@ function AddWorkOrderPartForm({
       onActivityLogged?.();
       await onPartAdded?.(data ?? partRequest);
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not save part:", error);
+      setErrorMessage("Could not save part. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -385,7 +387,7 @@ function AddWorkOrderPartForm({
             isSubmitting={isSubmitting}
             onCancel={onClose}
             submitLabel="Add Part"
-            submittingLabel="Adding..."
+            submittingLabel="Adding part..."
           />
         </form>
     </ModalShell>

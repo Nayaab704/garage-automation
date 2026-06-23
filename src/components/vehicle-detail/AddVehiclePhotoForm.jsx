@@ -100,7 +100,8 @@ function AddVehiclePhotoForm({
         });
 
       if (uploadResponse.error) {
-        setErrorMessage(uploadResponse.error.message);
+        console.error("Could not upload photo:", uploadResponse.error);
+        setErrorMessage("Could not upload photo.");
         return;
       }
 
@@ -120,11 +121,14 @@ function AddVehiclePhotoForm({
 
       const insertResponse = await supabase
         .from("vehicle_photos")
-        .insert([photo]);
+        .insert([photo])
+        .select("*")
+        .single();
 
       if (insertResponse.error) {
         await cleanupUploadedFile(photoPath);
-        setErrorMessage(insertResponse.error.message);
+        console.error("Could not upload photo:", insertResponse.error);
+        setErrorMessage("Could not upload photo.");
         return;
       }
 
@@ -142,9 +146,10 @@ function AddVehiclePhotoForm({
         },
       });
       onActivityLogged?.();
-      await onPhotoAdded();
+      await onPhotoAdded(insertResponse.data ?? photo);
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not upload photo:", error);
+      setErrorMessage("Could not upload photo.");
     } finally {
       setIsSubmitting(false);
     }

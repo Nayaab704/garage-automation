@@ -262,6 +262,27 @@ function applyVehicleDetails(responses, setters) {
   setters.setInvestmentSummary(responses.investmentSummaryResponse.data);
 }
 
+function upsertNewestById(items, nextItem) {
+  if (!nextItem?.id) {
+    return items;
+  }
+
+  return [
+    nextItem,
+    ...items.filter((currentItem) => currentItem.id !== nextItem.id),
+  ];
+}
+
+function replaceById(items, nextItem) {
+  if (!nextItem?.id) {
+    return items;
+  }
+
+  return items.map((currentItem) =>
+    currentItem.id === nextItem.id ? nextItem : currentItem
+  );
+}
+
 function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   const [vehicle, setVehicle] = useState(null);
   const [repairJobs, setRepairJobs] = useState([]);
@@ -411,26 +432,21 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   }
 
   function handleFinalCheckUpdated(updatedFinalCheck) {
-    if (!updatedFinalCheck?.id) {
-      return;
-    }
-
     setFinalChecks((currentFinalChecks) =>
-      currentFinalChecks.map((finalCheck) =>
-        finalCheck.id === updatedFinalCheck.id ? updatedFinalCheck : finalCheck
-      )
+      replaceById(currentFinalChecks, updatedFinalCheck)
+    );
+  }
+
+  function handleWorkOrderAdded(workOrder) {
+    setRepairJobs((currentRepairJobs) =>
+      upsertNewestById(currentRepairJobs, workOrder)
     );
   }
 
   async function handleWorkOrderLaborAdded(laborLog) {
-    if (laborLog?.id) {
-      setLaborLogs((currentLaborLogs) => [
-        laborLog,
-        ...currentLaborLogs.filter(
-          (currentLaborLog) => currentLaborLog.id !== laborLog.id
-        ),
-      ]);
-    }
+    setLaborLogs((currentLaborLogs) =>
+      upsertNewestById(currentLaborLogs, laborLog)
+    );
 
     await refreshInvestmentSummary();
   }
@@ -448,14 +464,9 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   }
 
   async function handleWorkOrderPartAdded(partRequest) {
-    if (partRequest?.id) {
-      setPartRequests((currentPartRequests) => [
-        partRequest,
-        ...currentPartRequests.filter(
-          (currentPartRequest) => currentPartRequest.id !== partRequest.id
-        ),
-      ]);
-    }
+    setPartRequests((currentPartRequests) =>
+      upsertNewestById(currentPartRequests, partRequest)
+    );
 
     if (partRequest?.part_source === "in_house") {
       await refreshInvestmentSummary();
@@ -463,27 +474,29 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   }
 
   function handleWorkOrderPartApprovalUpdated(updatedPartRequest) {
-    if (!updatedPartRequest?.id) {
-      return;
-    }
-
     setPartRequests((currentPartRequests) =>
-      currentPartRequests.map((partRequest) =>
-        partRequest.id === updatedPartRequest.id
-          ? updatedPartRequest
-          : partRequest
-      )
+      replaceById(currentPartRequests, updatedPartRequest)
     );
   }
 
-  async function handleWorkOrderPartPurchaseOrderCreated(updatedPartRequest) {
+  async function handleWorkOrderPartPurchaseOrderCreated(result) {
+    const updatedPartRequest = result?.partRequest ?? result;
+
     if (updatedPartRequest?.id) {
       setPartRequests((currentPartRequests) =>
-        currentPartRequests.map((partRequest) =>
-          partRequest.id === updatedPartRequest.id
-            ? updatedPartRequest
-            : partRequest
-        )
+        replaceById(currentPartRequests, updatedPartRequest)
+      );
+    }
+
+    if (result?.purchaseOrder?.id) {
+      setPurchaseOrders((currentPurchaseOrders) =>
+        upsertNewestById(currentPurchaseOrders, result.purchaseOrder)
+      );
+    }
+
+    if (result?.purchaseOrderItem?.id) {
+      setPurchaseOrderItems((currentPurchaseOrderItems) =>
+        upsertNewestById(currentPurchaseOrderItems, result.purchaseOrderItem)
       );
     }
 
@@ -491,14 +504,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   }
 
   function handleWorkOrderPhotoAdded(photo) {
-    if (!photo?.id) {
-      return;
-    }
-
-    setVehiclePhotos((currentPhotos) => [
-      photo,
-      ...currentPhotos.filter((currentPhoto) => currentPhoto.id !== photo.id),
-    ]);
+    setVehiclePhotos((currentPhotos) => upsertNewestById(currentPhotos, photo));
   }
 
   function handleWorkOrderPhotoDeleted(deletedPhoto) {
@@ -512,16 +518,9 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   }
 
   function handleDocumentAdded(documentRecord) {
-    if (!documentRecord?.id) {
-      return;
-    }
-
-    setVehicleDocuments((currentDocuments) => [
-      documentRecord,
-      ...currentDocuments.filter(
-        (currentDocument) => currentDocument.id !== documentRecord.id
-      ),
-    ]);
+    setVehicleDocuments((currentDocuments) =>
+      upsertNewestById(currentDocuments, documentRecord)
+    );
   }
 
   function handleDocumentDeleted(deletedDocument) {
@@ -535,12 +534,9 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   }
 
   async function handleThirdPartyRepairAdded(thirdPartyRepair) {
-    if (thirdPartyRepair?.id) {
-      setThirdPartyRepairs((currentRepairs) => [
-        thirdPartyRepair,
-        ...currentRepairs.filter((repair) => repair.id !== thirdPartyRepair.id),
-      ]);
-    }
+    setThirdPartyRepairs((currentRepairs) =>
+      upsertNewestById(currentRepairs, thirdPartyRepair)
+    );
 
     await refreshInvestmentSummary();
   }
@@ -549,6 +545,65 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
     if (deletedRepair?.id) {
       setThirdPartyRepairs((currentRepairs) =>
         currentRepairs.filter((repair) => repair.id !== deletedRepair.id)
+      );
+    }
+
+    await refreshInvestmentSummary();
+  }
+
+  async function handleVehicleUpdated(updatedVehicle) {
+    if (updatedVehicle?.id) {
+      setVehicle(updatedVehicle);
+    }
+
+    await refreshInvestmentSummary();
+  }
+
+  async function handleVehicleSold(result) {
+    if (result?.vehicle?.id) {
+      setVehicle(result.vehicle);
+    }
+
+    if (result?.sale?.id) {
+      setSales((currentSales) => upsertNewestById(currentSales, result.sale));
+    }
+
+    if (result?.warranty?.id) {
+      setWarranties((currentWarranties) =>
+        upsertNewestById(currentWarranties, result.warranty)
+      );
+    }
+
+    await refreshInvestmentSummary();
+  }
+
+  function handleVehiclePhotoAdded(photo) {
+    setVehiclePhotos((currentPhotos) => upsertNewestById(currentPhotos, photo));
+  }
+
+  function handleVehiclePhotoDeleted(deletedPhoto) {
+    if (!deletedPhoto?.id) {
+      return;
+    }
+
+    setVehiclePhotos((currentPhotos) =>
+      currentPhotos.filter((photo) => photo.id !== deletedPhoto.id)
+    );
+  }
+
+  async function handleExtraCostAdded(costEntry) {
+    setCostEntries((currentCostEntries) =>
+      upsertNewestById(currentCostEntries, costEntry)
+    );
+    await refreshInvestmentSummary();
+  }
+
+  async function handleExtraCostDeleted(deletedCostEntry) {
+    if (deletedCostEntry?.id) {
+      setCostEntries((currentCostEntries) =>
+        currentCostEntries.filter(
+          (costEntry) => costEntry.id !== deletedCostEntry.id
+        )
       );
     }
 
@@ -610,7 +665,6 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
         },
       });
       refreshActivityTimeline();
-      refreshVehicleDetails();
     } catch (error) {
       setVehicle((currentVehicle) =>
         currentVehicle
@@ -749,7 +803,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
               onPhotoDeleted={handleWorkOrderPhotoDeleted}
               onThirdPartyRepairAdded={handleThirdPartyRepairAdded}
               onThirdPartyRepairDeleted={handleThirdPartyRepairDeleted}
-              onWorkOrderAdded={refreshVehicleDetails}
+              onWorkOrderAdded={handleWorkOrderAdded}
               partRequests={partRequests}
               profiles={profiles}
               purchaseOrderItems={purchaseOrderItems}
@@ -768,7 +822,8 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             <VehiclePhotosSection
               canManage={canManagePhotos}
               onActivityLogged={refreshActivityTimeline}
-              onVehiclePhotoChanged={refreshVehicleDetails}
+              onVehiclePhotoAdded={handleVehiclePhotoAdded}
+              onVehiclePhotoDeleted={handleVehiclePhotoDeleted}
               vehicleId={vehicleId}
               vehiclePhotos={vehiclePhotos.filter((photo) => !photo.repair_job_id)}
             />
@@ -778,7 +833,8 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             canManage={canManageExtraCosts}
             costEntries={costEntries}
             onActivityLogged={refreshActivityTimeline}
-            onExtraCostChanged={refreshVehicleDetails}
+            onExtraCostAdded={handleExtraCostAdded}
+            onExtraCostDeleted={handleExtraCostDeleted}
             vehicleId={vehicleId}
           />
 
@@ -824,7 +880,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
           {isEditFormOpen && canEditVehicle && (
             <EditVehicleForm
               onClose={() => setIsEditFormOpen(false)}
-              onVehicleUpdated={refreshVehicleDetails}
+              onVehicleUpdated={handleVehicleUpdated}
               vehicle={vehicle}
             />
           )}
@@ -833,7 +889,7 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             <SellVehicleForm
               onClose={() => setIsSellFormOpen(false)}
               onActivityLogged={refreshActivityTimeline}
-              onVehicleSold={refreshVehicleDetails}
+              onVehicleSold={handleVehicleSold}
               vehicle={vehicle}
             />
           )}
@@ -842,8 +898,8 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             <AddVehiclePhotoForm
               onActivityLogged={refreshActivityTimeline}
               onClose={() => setIsVehiclePhotoFormOpen(false)}
-              onPhotoAdded={async () => {
-                refreshVehicleDetails();
+              onPhotoAdded={async (photo) => {
+                handleVehiclePhotoAdded(photo);
                 setIsVehiclePhotoFormOpen(false);
               }}
               vehicleId={vehicleId}

@@ -163,8 +163,9 @@ function ServiceWorkSection({
     ? workOrdersByCategoryId[selectedCategory.id] ?? []
     : [];
 
-  function handleWorkOrderAdded() {
-    onWorkOrderAdded?.();
+  function handleWorkOrderAdded(workOrder) {
+    onWorkOrderAdded?.(workOrder);
+    setCategoryForForm(null);
   }
 
   function handleCategorySelect(category) {

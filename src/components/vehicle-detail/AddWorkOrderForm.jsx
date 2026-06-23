@@ -124,10 +124,15 @@ function AddWorkOrderForm({
             : null,
       };
 
-      const { error } = await supabase.from("repair_jobs").insert([workOrder]);
+      const { data, error } = await supabase
+        .from("repair_jobs")
+        .insert([workOrder])
+        .select("*")
+        .single();
 
       if (error) {
-        setErrorMessage(error.message);
+        console.error("Could not save work order:", error);
+        setErrorMessage("Could not save work order. Please try again.");
         return;
       }
 
@@ -144,9 +149,10 @@ function AddWorkOrderForm({
         },
       });
       onActivityLogged?.();
-      await onWorkOrderAdded?.();
+      await onWorkOrderAdded?.(data ?? workOrder);
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not save work order:", error);
+      setErrorMessage("Could not save work order. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -229,7 +235,7 @@ function AddWorkOrderForm({
             isSubmitting={isSubmitting}
             onCancel={onClose}
             submitLabel="Add Work Order"
-            submittingLabel="Adding..."
+            submittingLabel="Saving..."
           />
         </form>
     </ModalShell>

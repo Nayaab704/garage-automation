@@ -98,7 +98,8 @@ function AddWorkOrderPhotoForm({
         });
 
       if (uploadResponse.error) {
-        setErrorMessage(uploadResponse.error.message);
+        console.error("Could not upload photo:", uploadResponse.error);
+        setErrorMessage("Could not upload photo.");
         return;
       }
 
@@ -124,7 +125,8 @@ function AddWorkOrderPhotoForm({
 
       if (insertResponse.error) {
         await cleanupUploadedFile(photoPath);
-        setErrorMessage(insertResponse.error.message);
+        console.error("Could not upload photo:", insertResponse.error);
+        setErrorMessage("Could not upload photo.");
         return;
       }
 
@@ -143,7 +145,8 @@ function AddWorkOrderPhotoForm({
       onActivityLogged?.();
       await onPhotoAdded?.(insertResponse.data ?? photo);
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not upload photo:", error);
+      setErrorMessage("Could not upload photo.");
     } finally {
       setIsSubmitting(false);
     }

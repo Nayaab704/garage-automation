@@ -148,7 +148,8 @@ function ExtraCostsSection({
   canManage = false,
   costEntries = [],
   onActivityLogged,
-  onExtraCostChanged,
+  onExtraCostAdded,
+  onExtraCostDeleted,
   vehicleId,
 }) {
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -189,7 +190,8 @@ function ExtraCostsSection({
         .eq("id", costEntryId);
 
       if (error) {
-        setDeleteError(error.message);
+        console.error("Could not delete extra cost:", error);
+        setDeleteError("Could not delete extra cost. Please try again.");
         return;
       }
 
@@ -206,9 +208,10 @@ function ExtraCostsSection({
         },
       });
       onActivityLogged?.();
-      await onExtraCostChanged();
+      await onExtraCostDeleted?.(costEntry);
     } catch (error) {
-      setDeleteError(error.message ?? "Something went wrong.");
+      console.error("Could not delete extra cost:", error);
+      setDeleteError("Could not delete extra cost. Please try again.");
     } finally {
       setDeletingCostEntryId(null);
     }
@@ -264,7 +267,10 @@ function ExtraCostsSection({
         <AddExtraCostForm
           onClose={() => setIsFormOpen(false)}
           onActivityLogged={onActivityLogged}
-          onExtraCostAdded={onExtraCostChanged}
+          onExtraCostAdded={async (costEntry) => {
+            await onExtraCostAdded?.(costEntry);
+            setIsFormOpen(false);
+          }}
           vehicleId={vehicleId}
         />
       )}

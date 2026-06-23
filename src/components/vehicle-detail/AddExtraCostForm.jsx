@@ -78,10 +78,15 @@ function AddExtraCostForm({
         description: emptyToNull(formData.description),
       };
 
-      const { error } = await supabase.from("cost_entries").insert([costEntry]);
+      const { data, error } = await supabase
+        .from("cost_entries")
+        .insert([costEntry])
+        .select("*")
+        .single();
 
       if (error) {
-        setErrorMessage(error.message);
+        console.error("Could not save extra cost:", error);
+        setErrorMessage("Could not save extra cost. Please try again.");
       } else {
         setFormData(emptyForm);
         setSuccessMessage("Extra cost added successfully.");
@@ -95,10 +100,11 @@ function AddExtraCostForm({
           },
         });
         onActivityLogged?.();
-        await onExtraCostAdded();
+        await onExtraCostAdded(data ?? costEntry);
       }
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not save extra cost:", error);
+      setErrorMessage("Could not save extra cost. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -165,7 +171,7 @@ function AddExtraCostForm({
             isSubmitting={isSubmitting}
             onCancel={onClose}
             submitLabel="Add Extra Cost"
-            submittingLabel="Adding..."
+            submittingLabel="Saving..."
           />
         </form>
     </ModalShell>

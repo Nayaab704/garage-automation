@@ -94,7 +94,8 @@ function PhotoCard({ canManage, isDeleting, onDelete, photo }) {
 function VehiclePhotosSection({
   canManage = false,
   onActivityLogged,
-  onVehiclePhotoChanged,
+  onVehiclePhotoAdded,
+  onVehiclePhotoDeleted,
   vehicleId,
   vehiclePhotos = [],
 }) {
@@ -138,7 +139,8 @@ function VehiclePhotosSection({
         .remove([photo.photo_path]);
 
       if (storageResponse.error) {
-        setDeleteError(storageResponse.error.message);
+        console.error("Could not delete photo:", storageResponse.error);
+        setDeleteError("Could not delete photo. Please try again.");
         return;
       }
 
@@ -148,7 +150,8 @@ function VehiclePhotosSection({
         .eq("id", photo.id);
 
       if (deleteResponse.error) {
-        setDeleteError(deleteResponse.error.message);
+        console.error("Could not delete photo:", deleteResponse.error);
+        setDeleteError("Could not delete photo. Please try again.");
         return;
       }
 
@@ -161,9 +164,10 @@ function VehiclePhotosSection({
         },
       });
       onActivityLogged?.();
-      await onVehiclePhotoChanged();
+      await onVehiclePhotoDeleted?.(photo);
     } catch (error) {
-      setDeleteError(error.message ?? "Something went wrong.");
+      console.error("Could not delete photo:", error);
+      setDeleteError("Could not delete photo. Please try again.");
     } finally {
       setDeletingPhotoId(null);
     }
@@ -219,7 +223,10 @@ function VehiclePhotosSection({
         <AddVehiclePhotoForm
           onClose={() => setIsFormOpen(false)}
           onActivityLogged={onActivityLogged}
-          onPhotoAdded={onVehiclePhotoChanged}
+          onPhotoAdded={async (photo) => {
+            await onVehiclePhotoAdded?.(photo);
+            setIsFormOpen(false);
+          }}
           vehicleId={vehicleId}
         />
       )}

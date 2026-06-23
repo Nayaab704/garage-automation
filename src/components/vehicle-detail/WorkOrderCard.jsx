@@ -568,7 +568,11 @@ function WorkOrderCard({
           currentProfile={currentProfile}
           onActivityLogged={onActivityLogged}
           onClose={() => setIsLaborFormOpen(false)}
-          onLaborAdded={onLaborAdded}
+          onLaborAdded={async (laborLog) => {
+            await onLaborAdded?.(laborLog);
+            setOpenSection("labor");
+            setIsLaborFormOpen(false);
+          }}
           profiles={profiles}
           vehicleId={vehicleId}
           workOrder={workOrder}
@@ -580,7 +584,11 @@ function WorkOrderCard({
           currentProfile={currentProfile}
           onActivityLogged={onActivityLogged}
           onClose={() => setIsPartFormOpen(false)}
-          onPartAdded={onPartAdded}
+          onPartAdded={async (partRequest) => {
+            await onPartAdded?.(partRequest);
+            setOpenSection("parts");
+            setIsPartFormOpen(false);
+          }}
           vehicle={vehicle}
           vehicleId={vehicleId}
           vendors={vendors}
@@ -594,6 +602,7 @@ function WorkOrderCard({
           onClose={() => setIsPhotoFormOpen(false)}
           onPhotoAdded={async (photo) => {
             await onPhotoAdded?.(photo);
+            setOpenSection("photos");
             setIsPhotoFormOpen(false);
           }}
           vehicleId={vehicleId}
@@ -606,7 +615,11 @@ function WorkOrderCard({
           currentProfile={currentProfile}
           onActivityLogged={onActivityLogged}
           onClose={() => setIsThirdPartyFormOpen(false)}
-          onThirdPartyRepairAdded={onThirdPartyRepairAdded}
+          onThirdPartyRepairAdded={async (thirdPartyRepair) => {
+            await onThirdPartyRepairAdded?.(thirdPartyRepair);
+            setOpenSection("third_party");
+            setIsThirdPartyFormOpen(false);
+          }}
           vehicleId={vehicleId}
           vendors={vendors}
           workOrder={workOrder}
