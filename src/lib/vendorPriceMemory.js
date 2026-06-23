@@ -262,7 +262,7 @@ export async function createVendorPartQuote(payload = {}) {
         data: null,
         error: getFriendlyError(
           error,
-          "Could not save vendor quote. Please try again."
+          "Could not save vendor quote."
         ),
       };
     }
@@ -272,7 +272,7 @@ export async function createVendorPartQuote(payload = {}) {
     console.error("Vendor price memory save failed:", error);
     return {
       data: null,
-      error: new Error("Could not save vendor quote. Please try again."),
+      error: new Error("Could not save vendor quote."),
     };
   }
 }

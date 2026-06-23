@@ -234,7 +234,7 @@ function AddVendorQuoteInline({
 
       if (error) {
         console.error("Could not save vendor quote:", error);
-        setErrorMessage("Could not save vendor quote. Please try again.");
+        setErrorMessage("Could not save vendor quote.");
         return;
       }
 
@@ -251,7 +251,7 @@ function AddVendorQuoteInline({
       });
     } catch (error) {
       console.error("Could not save vendor quote:", error);
-      setErrorMessage("Could not save vendor quote. Please try again.");
+      setErrorMessage("Could not save vendor quote.");
     } finally {
       setIsSaving(false);
     }
@@ -339,7 +339,7 @@ function AddVendorQuoteInline({
           onClick={handleSaveQuote}
           type="button"
         >
-          {isSaving ? "Saving..." : "Save Quote"}
+          {isSaving ? "Saving quote..." : "Save Quote"}
         </button>
       </div>
     </div>

@@ -97,9 +97,9 @@ function CheckRow({
   let statusLabel = "Pending";
 
   if (isUpdating) {
-    checkedMeta = "Saving...";
+    checkedMeta = "Updating...";
     statusClassName = "bg-blue-50 text-blue-700 ring-blue-200";
-    statusLabel = "Saving...";
+    statusLabel = "Updating...";
   } else if (finalCheck.is_checked) {
     checkedMeta = ["Checked", checkedBy, checkedAt].filter(Boolean).join(" - ");
     statusClassName = "bg-emerald-50 text-emerald-700 ring-emerald-200";

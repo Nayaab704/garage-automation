@@ -86,7 +86,7 @@ function AddExtraCostForm({
 
       if (error) {
         console.error("Could not save extra cost:", error);
-        setErrorMessage("Could not save extra cost. Please try again.");
+        setErrorMessage("Could not save extra cost.");
       } else {
         setFormData(emptyForm);
         setSuccessMessage("Extra cost added successfully.");
@@ -104,7 +104,7 @@ function AddExtraCostForm({
       }
     } catch (error) {
       console.error("Could not save extra cost:", error);
-      setErrorMessage("Could not save extra cost. Please try again.");
+      setErrorMessage("Could not save extra cost.");
     } finally {
       setIsSubmitting(false);
     }
