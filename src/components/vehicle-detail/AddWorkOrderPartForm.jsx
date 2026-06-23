@@ -180,6 +180,10 @@ function AddWorkOrderPartForm({
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
     const partName = emptyToNull(formData.part_name);
     const quantity = Number(formData.quantity || 1);
     const unitCost = Number(formData.unit_cost || 0);

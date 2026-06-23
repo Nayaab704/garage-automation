@@ -92,6 +92,10 @@ function WorkOrderPhotosList({
   const [errorMessage, setErrorMessage] = useState("");
 
   async function handleDelete(photo) {
+    if (deletingPhotoId) {
+      return;
+    }
+
     if (!canManage) {
       setErrorMessage("Your role cannot delete photos.");
       return;
@@ -124,7 +128,8 @@ function WorkOrderPhotosList({
         .remove([photo.photo_path]);
 
       if (storageResponse.error) {
-        setErrorMessage(storageResponse.error.message);
+        console.error("Could not delete photo:", storageResponse.error);
+        setErrorMessage("Could not delete photo. Please try again.");
         return;
       }
 
@@ -134,7 +139,8 @@ function WorkOrderPhotosList({
         .eq("id", photo.id);
 
       if (deleteResponse.error) {
-        setErrorMessage(deleteResponse.error.message);
+        console.error("Could not delete photo:", deleteResponse.error);
+        setErrorMessage("Could not delete photo. Please try again.");
         return;
       }
 
@@ -149,7 +155,8 @@ function WorkOrderPhotosList({
       onActivityLogged?.();
       await onPhotoDeleted?.(photo);
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not delete photo:", error);
+      setErrorMessage("Could not delete photo. Please try again.");
     } finally {
       setDeletingPhotoId(null);
     }

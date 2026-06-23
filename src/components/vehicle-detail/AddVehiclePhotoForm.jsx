@@ -70,6 +70,10 @@ function AddVehiclePhotoForm({
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
     if (!vehicleId) {
       setErrorMessage("Unable to upload a photo without a vehicle.");
       return;

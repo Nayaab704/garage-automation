@@ -87,6 +87,10 @@ function AddWorkOrderForm({
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
     const title = emptyToNull(formData.title);
 
     if (!title) {

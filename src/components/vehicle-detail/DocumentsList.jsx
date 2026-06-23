@@ -62,6 +62,10 @@ function DocumentsList({
   const [errorMessage, setErrorMessage] = useState("");
 
   async function handleDelete(documentRecord) {
+    if (deletingDocumentId) {
+      return;
+    }
+
     if (!canDelete) {
       setErrorMessage("Your role cannot delete documents.");
       return;
@@ -96,7 +100,8 @@ function DocumentsList({
         .remove([documentRecord.file_path]);
 
       if (storageResponse.error) {
-        setErrorMessage(storageResponse.error.message);
+        console.error("Could not delete document:", storageResponse.error);
+        setErrorMessage("Could not delete document. Please try again.");
         return;
       }
 
@@ -106,7 +111,8 @@ function DocumentsList({
         .eq("id", documentRecord.id);
 
       if (deleteResponse.error) {
-        setErrorMessage(deleteResponse.error.message);
+        console.error("Could not delete document:", deleteResponse.error);
+        setErrorMessage("Could not delete document. Please try again.");
         return;
       }
 
@@ -121,7 +127,8 @@ function DocumentsList({
       onActivityLogged?.();
       await onDocumentDeleted?.(documentRecord);
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not delete document:", error);
+      setErrorMessage("Could not delete document. Please try again.");
     } finally {
       setDeletingDocumentId(null);
     }

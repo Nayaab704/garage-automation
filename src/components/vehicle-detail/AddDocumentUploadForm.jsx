@@ -83,6 +83,10 @@ function AddDocumentUploadForm({
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
     if (!vehicleId) {
       setErrorMessage("Unable to upload a document without a vehicle.");
       return;
@@ -113,7 +117,8 @@ function AddDocumentUploadForm({
         });
 
       if (uploadResponse.error) {
-        setErrorMessage(uploadResponse.error.message);
+        console.error("Could not upload document:", uploadResponse.error);
+        setErrorMessage("Could not upload document. Please try again.");
         return;
       }
 
@@ -145,7 +150,8 @@ function AddDocumentUploadForm({
 
       if (insertResponse.error) {
         await cleanupUploadedFile(filePath);
-        setErrorMessage(insertResponse.error.message);
+        console.error("Could not save document:", insertResponse.error);
+        setErrorMessage("Could not upload document. Please try again.");
         return;
       }
 
@@ -164,7 +170,8 @@ function AddDocumentUploadForm({
       onActivityLogged?.();
       await onDocumentAdded?.(insertResponse.data ?? documentRecord);
     } catch (error) {
-      setErrorMessage(error.message ?? "Something went wrong.");
+      console.error("Could not upload document:", error);
+      setErrorMessage("Could not upload document. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

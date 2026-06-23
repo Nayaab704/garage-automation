@@ -64,6 +64,10 @@ function AddWorkOrderLaborForm({
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
     const selectedTechnician = getSelectedTechnician();
     const hours = Number(formData.hours || 0);
     const hourlyRate = Number(selectedTechnician?.hourly_rate || 0);

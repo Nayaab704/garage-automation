@@ -233,6 +233,10 @@ function FinalCheckSection({
   const progressLabel = `${completedCount}/${finalCheckTemplates.length} checked`;
 
   async function handleToggle(finalCheck, isChecked) {
+    if (updatingCheckId) {
+      return;
+    }
+
     if (!canUpdateCheck(currentProfile, finalCheck)) {
       setErrorMessage("Your role cannot update this final check.");
       return;

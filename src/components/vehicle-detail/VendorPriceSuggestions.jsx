@@ -189,6 +189,10 @@ function AddVendorQuoteInline({
   }
 
   async function handleSaveQuote() {
+    if (isSaving) {
+      return;
+    }
+
     const normalizedPartName = normalizePartName(partName);
     const hasPrice = String(formData.unit_price ?? "").trim() !== "";
     const unitPrice = Number(formData.unit_price);

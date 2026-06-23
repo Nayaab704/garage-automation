@@ -121,6 +121,10 @@ function EditVehicleForm({ onClose, onVehicleUpdated, vehicle }) {
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
     if (!vehicle.id) {
       setErrorMessage("Unable to update a vehicle without an ID.");
       return;

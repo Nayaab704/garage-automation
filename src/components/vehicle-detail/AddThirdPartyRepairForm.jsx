@@ -91,6 +91,10 @@ function AddThirdPartyRepairForm({
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
     const serviceRendered = emptyToNull(formData.service_rendered);
 
     if (!serviceRendered) {

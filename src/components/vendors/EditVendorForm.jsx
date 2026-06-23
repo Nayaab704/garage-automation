@@ -60,6 +60,10 @@ function EditVendorForm({ onClose, onVendorUpdated, vendor }) {
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
     if (!vendor?.id) {
       setErrorMessage("Unable to update a vendor without an ID.");
       return;

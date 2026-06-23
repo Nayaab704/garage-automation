@@ -54,6 +54,10 @@ function AddVendorForm({ onClose, onVendorAdded }) {
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
     const vendorPayload = buildVendorPayload(formData);
 
     if (!vendorPayload.name) {

@@ -42,7 +42,8 @@ function DeleteVehicleModal({
     });
 
     if (result.error) {
-      setErrorMessage(result.error.message);
+      console.error("Could not delete vehicle:", result.error);
+      setErrorMessage("Could not delete vehicle. Please try again.");
       setIsDeleting(false);
       return;
     }

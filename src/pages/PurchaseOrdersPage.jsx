@@ -1137,6 +1137,10 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
       return;
     }
 
+    if (updatingPurchaseOrderId === confirmReceivedOrder.id) {
+      return;
+    }
+
     const success = await handlePurchaseOrderStatusChange(
       confirmReceivedOrder,
       "received",

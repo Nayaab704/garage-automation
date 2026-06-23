@@ -68,6 +68,10 @@ function AddWorkOrderPhotoForm({
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
     if (!vehicleId || !workOrder?.id) {
       setErrorMessage("Unable to upload a photo without a work order.");
       return;
