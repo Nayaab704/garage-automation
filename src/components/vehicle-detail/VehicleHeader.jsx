@@ -168,7 +168,7 @@ function VehicleHeader({
             <button
               aria-label={
                 canManagePhotos
-                  ? "Upload vehicle photo"
+                  ? "Change main vehicle photo"
                   : "View vehicle photos"
               }
               className="group relative h-[72px] w-[92px] shrink-0 overflow-hidden rounded-2xl bg-slate-100 text-left ring-1 ring-inset ring-slate-200 transition hover:ring-blue-200 sm:h-[90px] sm:w-[132px]"
@@ -186,14 +186,14 @@ function VehicleHeader({
                   <AppIcon name="camera" size={32} />
                   {canManagePhotos && (
                     <span className="text-[11px] font-bold text-slate-500">
-                      Photo
+                      Main Photo
                     </span>
                   )}
                 </div>
               )}
               {canManagePhotos && thumbnailUrl && (
                 <span className="absolute inset-x-2 bottom-2 rounded-full bg-slate-950/75 px-2 py-1 text-center text-[11px] font-bold text-white opacity-0 transition group-hover:opacity-100">
-                  Change
+                  Change Main
                 </span>
               )}
             </button>

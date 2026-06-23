@@ -18,6 +18,7 @@ import VehiclePhotosSection from "../components/vehicle-detail/VehiclePhotosSect
 import { logVehicleActivity } from "../lib/activityLogger";
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
+import { getVehiclePrimaryPhoto } from "../lib/vehicleDisplayPhoto";
 
 async function fetchInvestmentSummary(vehicleId, stockNumber) {
   const byVehicleId = await supabase
@@ -281,6 +282,25 @@ function replaceById(items, nextItem) {
   return items.map((currentItem) =>
     currentItem.id === nextItem.id ? nextItem : currentItem
   );
+}
+
+function mergeVehicleState(currentVehicle, nextVehicle) {
+  if (!nextVehicle?.id) {
+    return currentVehicle;
+  }
+
+  const hasPrimaryPhotoId = Object.prototype.hasOwnProperty.call(
+    nextVehicle,
+    "primary_photo_id"
+  );
+
+  return {
+    ...currentVehicle,
+    ...nextVehicle,
+    primary_photo_id: hasPrimaryPhotoId
+      ? nextVehicle.primary_photo_id
+      : currentVehicle?.primary_photo_id ?? null,
+  };
 }
 
 function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
@@ -553,7 +573,9 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
 
   async function handleVehicleUpdated(updatedVehicle) {
     if (updatedVehicle?.id) {
-      setVehicle(updatedVehicle);
+      setVehicle((currentVehicle) =>
+        mergeVehicleState(currentVehicle, updatedVehicle)
+      );
     }
 
     await refreshInvestmentSummary();
@@ -561,7 +583,9 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
 
   async function handleVehicleSold(result) {
     if (result?.vehicle?.id) {
-      setVehicle(result.vehicle);
+      setVehicle((currentVehicle) =>
+        mergeVehicleState(currentVehicle, result.vehicle)
+      );
     }
 
     if (result?.sale?.id) {
@@ -581,7 +605,54 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
     setVehiclePhotos((currentPhotos) => upsertNewestById(currentPhotos, photo));
   }
 
-  function handleVehiclePhotoDeleted(deletedPhoto) {
+  async function updateVehiclePrimaryPhoto(photo) {
+    if (!photo?.id || !vehicle?.id) {
+      throw new Error("Missing main photo.");
+    }
+
+    const { data, error } = await supabase
+      .from("vehicles")
+      .update({ primary_photo_id: photo.id })
+      .eq("id", vehicle.id)
+      .select("id, primary_photo_id")
+      .single();
+
+    if (error || data?.primary_photo_id !== photo.id) {
+      console.error("Could not update main photo:", error ?? data);
+      throw new Error("Could not update main vehicle photo. Please try again.");
+    }
+
+    setVehiclePhotos((currentPhotos) => upsertNewestById(currentPhotos, photo));
+    setVehicle((currentVehicle) =>
+      mergeVehicleState(currentVehicle, {
+        id: vehicle.id,
+        primary_photo_id: data.primary_photo_id,
+      })
+    );
+
+    return data;
+  }
+
+  async function handleMainVehiclePhotoAdded(photo) {
+    await updateVehiclePrimaryPhoto(photo);
+  }
+
+  async function handleGalleryMainPhotoSelected(photo) {
+    await updateVehiclePrimaryPhoto(photo);
+
+    await logVehicleActivity({
+      vehicleId,
+      action: "Main photo updated",
+      details: {
+        photo_id: photo.id,
+        photo_type: photo.photo_type,
+        caption: photo.caption,
+      },
+    });
+    refreshActivityTimeline();
+  }
+
+  async function handleVehiclePhotoDeleted(deletedPhoto) {
     if (!deletedPhoto?.id) {
       return;
     }
@@ -589,6 +660,30 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
     setVehiclePhotos((currentPhotos) =>
       currentPhotos.filter((photo) => photo.id !== deletedPhoto.id)
     );
+
+    if (vehicle?.primary_photo_id !== deletedPhoto.id) {
+      return;
+    }
+
+    setVehicle((currentVehicle) =>
+      currentVehicle
+        ? { ...currentVehicle, primary_photo_id: null }
+        : currentVehicle
+    );
+
+    const { data, error } = await supabase
+      .from("vehicles")
+      .update({ primary_photo_id: null })
+      .eq("id", vehicle.id)
+      .select("id, primary_photo_id")
+      .single();
+
+    if (error) {
+      console.error("Could not clear main photo:", error);
+      return;
+    }
+
+    setVehicle((currentVehicle) => mergeVehicleState(currentVehicle, data));
   }
 
   async function handleExtraCostAdded(costEntry) {
@@ -694,15 +789,14 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
     (canManagePhotos || canManageRepairJobs);
   const canManageDocuments = canManagePhotos;
   const canSellVehicle = hasPermission(role, "sale:manage");
-  const primaryVehiclePhoto =
-    vehiclePhotos.find((photo) => !photo.repair_job_id) ?? vehiclePhotos[0];
+  const primaryVehiclePhoto = getVehiclePrimaryPhoto(vehicle, vehiclePhotos);
 
   return (
     <div className="space-y-4 text-slate-950">
-      <div className="sticky top-0 z-10 -mx-4 bg-slate-50/95 px-4 py-2 backdrop-blur sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:py-0">
-        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
+      <div className="sticky top-0 z-10 -mx-4 bg-slate-50/95 px-4 py-1.5 backdrop-blur sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:py-0">
+        <div className="flex items-center justify-between gap-3">
           <button
-            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 sm:w-auto sm:px-4"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 sm:w-auto sm:px-4"
             onClick={onBack}
             type="button"
           >
@@ -716,14 +810,8 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             </span>
           </button>
 
-          <div className="text-center">
-            <h1 className="text-base font-black text-slate-950 sm:text-xl">
-              Vehicle Details
-            </h1>
-          </div>
-
           <button
-            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:px-4"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:px-4"
             disabled={isLoading}
             onClick={refreshVehicleDetails}
             type="button"
@@ -822,8 +910,10 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
             <VehiclePhotosSection
               canManage={canManagePhotos}
               onActivityLogged={refreshActivityTimeline}
+              onSetMainPhoto={handleGalleryMainPhotoSelected}
               onVehiclePhotoAdded={handleVehiclePhotoAdded}
               onVehiclePhotoDeleted={handleVehiclePhotoDeleted}
+              primaryPhotoId={vehicle.primary_photo_id}
               vehicleId={vehicleId}
               vehiclePhotos={vehiclePhotos.filter((photo) => !photo.repair_job_id)}
             />
@@ -896,12 +986,16 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
 
           {isVehiclePhotoFormOpen && canManagePhotos && (
             <AddVehiclePhotoForm
+              activityAction="Main photo updated"
+              description="Upload the main image shown on this vehicle and vehicle cards."
+              failureMessage="Could not update main vehicle photo. Please try again."
               onActivityLogged={refreshActivityTimeline}
               onClose={() => setIsVehiclePhotoFormOpen(false)}
-              onPhotoAdded={async (photo) => {
-                handleVehiclePhotoAdded(photo);
-                setIsVehiclePhotoFormOpen(false);
-              }}
+              onPhotoAdded={handleMainVehiclePhotoAdded}
+              onSaved={() => setIsVehiclePhotoFormOpen(false)}
+              submitLabel="Save Main Photo"
+              successMessageText="Main photo updated."
+              title="Change Main Photo"
               vehicleId={vehicleId}
             />
           )}

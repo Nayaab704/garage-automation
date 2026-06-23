@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import AppIcon from "../components/ui/AppIcon";
 import VehicleCard from "../components/VehicleCard";
 import { supabase } from "../lib/supabaseClient";
+import { buildVehiclePrimaryPhotoMap } from "../lib/vehicleDisplayPhoto";
 import { formatVehicleStatus, vehicleStatusOptions } from "../lib/vehicleStatus";
 
 const vehicleColumns =
-  "id, stock_number, vin, year, make, model, trim, mileage, color, title_status, status";
+  "id, stock_number, vin, year, make, model, trim, mileage, color, title_status, status, primary_photo_id";
 
 const vehiclePhotoColumns =
   "id, vehicle_id, photo_url, repair_job_id, created_at";
@@ -51,24 +52,6 @@ function getFilteredVehicles(vehicles, searchText, statusFilter, titleFilter) {
   });
 }
 
-function buildVehiclePhotoMap(photos) {
-  return photos.reduce((photoMap, photo) => {
-    if (!photo.vehicle_id || !photo.photo_url) {
-      return photoMap;
-    }
-
-    const currentPhoto = photoMap[photo.vehicle_id];
-    const isVehicleLevelPhoto = !photo.repair_job_id;
-    const currentIsWorkOrderPhoto = currentPhoto?.repair_job_id;
-
-    if (!currentPhoto || (isVehicleLevelPhoto && currentIsWorkOrderPhoto)) {
-      photoMap[photo.vehicle_id] = photo;
-    }
-
-    return photoMap;
-  }, {});
-}
-
 function getActiveFilterCount(searchText, statusFilter, titleStatusFilter) {
   let count = 0;
 
@@ -109,9 +92,11 @@ async function fetchVehiclesWithPhotos() {
   }
 
   const vehicles = vehiclesResponse.data ?? [];
-  const vehicleIds = vehicles.map((vehicle) => vehicle.id).filter(Boolean);
+  const primaryPhotoIds = [
+    ...new Set(vehicles.map((vehicle) => vehicle.primary_photo_id).filter(Boolean)),
+  ];
 
-  if (vehicleIds.length === 0) {
+  if (primaryPhotoIds.length === 0) {
     return {
       data: {
         vehiclePhotosByVehicleId: {},
@@ -124,8 +109,7 @@ async function fetchVehiclesWithPhotos() {
   const photosResponse = await supabase
     .from("vehicle_photos")
     .select(vehiclePhotoColumns)
-    .in("vehicle_id", vehicleIds)
-    .order("created_at", { ascending: false });
+    .in("id", primaryPhotoIds);
 
   if (photosResponse.error) {
     console.error("Could not load vehicle photos:", photosResponse.error);
@@ -135,7 +119,7 @@ async function fetchVehiclesWithPhotos() {
     data: {
       vehiclePhotosByVehicleId: photosResponse.error
         ? {}
-        : buildVehiclePhotoMap(photosResponse.data ?? []),
+        : buildVehiclePrimaryPhotoMap(vehicles, photosResponse.data ?? []),
       vehicles,
     },
     error: null,

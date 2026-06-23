@@ -37,9 +37,16 @@ function buildPhotoPath(vehicleId, fileName) {
 }
 
 function AddVehiclePhotoForm({
+  activityAction = "Photo uploaded",
+  description = "Add a vehicle image to the photo gallery.",
+  failureMessage = "Could not upload photo.",
   onActivityLogged,
   onClose,
-  onPhotoAdded,
+  onPhotoAdded = async () => {},
+  onSaved,
+  submitLabel = "Upload Photo",
+  successMessageText = "Photo uploaded successfully.",
+  title = "Upload Photo",
   vehicleId,
 }) {
   const [formData, setFormData] = useState(emptyForm);
@@ -105,7 +112,7 @@ function AddVehiclePhotoForm({
 
       if (uploadResponse.error) {
         console.error("Could not upload photo:", uploadResponse.error);
-        setErrorMessage("Could not upload photo.");
+        setErrorMessage(failureMessage);
         return;
       }
 
@@ -132,17 +139,16 @@ function AddVehiclePhotoForm({
       if (insertResponse.error) {
         await cleanupUploadedFile(photoPath);
         console.error("Could not upload photo:", insertResponse.error);
-        setErrorMessage("Could not upload photo.");
+        setErrorMessage(failureMessage);
         return;
       }
 
-      setFormData(emptyForm);
-      setSelectedFile(null);
-      setFileInputKey((currentKey) => currentKey + 1);
-      setSuccessMessage("Photo uploaded successfully.");
+      const savedPhoto = insertResponse.data ?? photo;
+
+      await onPhotoAdded(savedPhoto);
       await logVehicleActivity({
         vehicleId,
-        action: "Photo uploaded",
+        action: activityAction,
         details: {
           photo_type: photo.photo_type,
           caption: photo.caption,
@@ -150,10 +156,14 @@ function AddVehiclePhotoForm({
         },
       });
       onActivityLogged?.();
-      await onPhotoAdded(insertResponse.data ?? photo);
+      setFormData(emptyForm);
+      setSelectedFile(null);
+      setFileInputKey((currentKey) => currentKey + 1);
+      setSuccessMessage(successMessageText);
+      await onSaved?.();
     } catch (error) {
-      console.error("Could not upload photo:", error);
-      setErrorMessage("Could not upload photo.");
+      console.error("Could not save photo:", error);
+      setErrorMessage(failureMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -161,10 +171,10 @@ function AddVehiclePhotoForm({
 
   return (
     <ModalShell
-      description="Add a vehicle image to the photo gallery."
+      description={description}
       isCloseDisabled={isSubmitting}
       onClose={onClose}
-      title="Upload Photo"
+      title={title}
     >
       <form className="space-y-5" onSubmit={handleSubmit}>
           <label className="block" htmlFor="vehicle-photo-file">
@@ -215,7 +225,7 @@ function AddVehiclePhotoForm({
           <FormActions
             isSubmitting={isSubmitting}
             onCancel={onClose}
-            submitLabel="Upload Photo"
+            submitLabel={submitLabel}
             submittingLabel="Uploading..."
           />
         </form>
