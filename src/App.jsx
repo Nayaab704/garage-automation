@@ -14,6 +14,19 @@ import { MAIN_NAV_PAGES } from "./config/appConfig";
 import { fetchCurrentUserProfile } from "./lib/currentUserProfile";
 import { hasPermission } from "./lib/permissions";
 import { supabase } from "./lib/supabaseClient";
+import {
+  clearLastVehicleContext,
+  getLastVehicleContext,
+  saveLastVehicleContext,
+} from "./lib/vehicleNavigationContext";
+
+const returnToVehiclePages = new Set([
+  "Vehicles",
+  "Repairs",
+  "Parts",
+  "Purchase Orders",
+  "Vendors",
+]);
 
 const pageDetails = {
   Dashboard: {
@@ -110,6 +123,10 @@ function App() {
   const [authError, setAuthError] = useState("");
   const [profileError, setProfileError] = useState("");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [lastVehicleContext, setLastVehicleContext] = useState(() =>
+    getLastVehicleContext()
+  );
+  const [vehicleResumeRequest, setVehicleResumeRequest] = useState(null);
   const canViewDashboard = hasPermission(currentProfile?.role, "dashboard:view");
   const effectiveActivePage =
     activePage === "Dashboard" && !canViewDashboard ? "Vehicles" : activePage;
@@ -118,6 +135,9 @@ function App() {
   const navigationPage =
     effectiveActivePage === "vehicleDetail" ? "Vehicles" : effectiveActivePage;
   const userEmail = session?.user?.email ?? "";
+  const shouldShowReturnToVehicle =
+    Boolean(lastVehicleContext?.vehicleId) &&
+    returnToVehiclePages.has(effectiveActivePage);
 
   useEffect(() => {
     let isMounted = true;
@@ -156,6 +176,13 @@ function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!nextSession) {
+        clearLastVehicleContext();
+        setLastVehicleContext(null);
+        setVehicleResumeRequest(null);
+        setSelectedVehicleId(null);
+      }
+
       setSession(nextSession);
       setIsAuthLoading(false);
     });
@@ -220,6 +247,8 @@ function App() {
   }, [session?.user?.id]);
 
   function handlePageChange(pageName) {
+    preserveVehicleScrollPosition();
+
     if (pageName === "Dashboard" && !canViewDashboard) {
       setSelectedVehicleId(null);
       setActivePage("Vehicles");
@@ -232,12 +261,78 @@ function App() {
 
   function handleSelectVehicle(vehicleId) {
     setSelectedVehicleId(vehicleId);
+    setVehicleResumeRequest(null);
     setActivePage("vehicleDetail");
   }
 
   function handleBackToVehicles() {
+    preserveVehicleScrollPosition();
     setSelectedVehicleId(null);
     setActivePage("Vehicles");
+  }
+
+  function handleVehicleContextChange(context) {
+    if (!context?.vehicleId) {
+      return;
+    }
+
+    setLastVehicleContext((currentContext) => {
+      const shouldMerge = currentContext?.vehicleId === context.vehicleId;
+      const nextContext = saveLastVehicleContext({
+        ...(shouldMerge ? currentContext : {}),
+        ...context,
+        path: "vehicleDetail",
+      });
+
+      return nextContext;
+    });
+  }
+
+  function preserveVehicleScrollPosition() {
+    if (effectiveActivePage !== "vehicleDetail" || !selectedVehicleId) {
+      return;
+    }
+
+    handleVehicleContextChange({
+      scrollY: window.scrollY,
+      vehicleId: selectedVehicleId,
+    });
+  }
+
+  function handleReturnToVehicle(context = lastVehicleContext) {
+    const vehicleContext = context?.vehicleId
+      ? context
+      : getLastVehicleContext();
+
+    if (!vehicleContext?.vehicleId) {
+      clearLastVehicleContext();
+      setLastVehicleContext(null);
+      setVehicleResumeRequest(null);
+      return;
+    }
+
+    setLastVehicleContext(vehicleContext);
+    setSelectedVehicleId(vehicleContext.vehicleId);
+    setVehicleResumeRequest({
+      ...vehicleContext,
+      token: Date.now(),
+    });
+    setActivePage("vehicleDetail");
+  }
+
+  function clearVehicleContext(vehicleId) {
+    setLastVehicleContext((currentContext) => {
+      if (!currentContext || (vehicleId && currentContext.vehicleId !== vehicleId)) {
+        return currentContext;
+      }
+
+      clearLastVehicleContext();
+      return null;
+    });
+
+    setVehicleResumeRequest((currentRequest) =>
+      currentRequest?.vehicleId === vehicleId ? null : currentRequest
+    );
   }
 
   async function handleLogout() {
@@ -253,6 +348,9 @@ function App() {
         return;
       }
 
+      clearLastVehicleContext();
+      setLastVehicleContext(null);
+      setVehicleResumeRequest(null);
       setSelectedVehicleId(null);
       setCurrentProfile(null);
       setActivePage("Vehicles");
@@ -328,6 +426,14 @@ function App() {
         <VehicleDetailPage
           currentProfile={currentProfile}
           onBack={handleBackToVehicles}
+          onInvalidVehicle={clearVehicleContext}
+          onVehicleContextChange={handleVehicleContextChange}
+          onVehicleDeleted={clearVehicleContext}
+          resumeContext={
+            vehicleResumeRequest?.vehicleId === selectedVehicleId
+              ? vehicleResumeRequest
+              : null
+          }
           vehicleId={selectedVehicleId}
         />
       );
@@ -381,7 +487,11 @@ function App() {
       isProfileLoading={isProfileLoading}
       onPageChange={handlePageChange}
       onLogout={handleLogout}
+      onReturnToVehicle={handleReturnToVehicle}
       profileError={profileError}
+      returnToVehicleContext={
+        shouldShowReturnToVehicle ? lastVehicleContext : null
+      }
       showTitle={showShellTitle}
       title={currentPage.title}
       userEmail={userEmail}

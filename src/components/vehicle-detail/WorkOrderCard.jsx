@@ -316,6 +316,10 @@ function WorkOrderCard({
     );
   }
 
+  function openPurchaseOrdersSection() {
+    setOpenSection("purchase_orders");
+  }
+
   return (
     <article
       className={`rounded-2xl border bg-white shadow-sm transition ${
@@ -496,9 +500,12 @@ function WorkOrderCard({
                 currentProfile={currentProfile}
                 hideHeader
                 onActivityLogged={onActivityLogged}
+                onOpenPurchaseOrders={openPurchaseOrdersSection}
                 onPartApprovalUpdated={onPartApprovalUpdated}
                 onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
                 parts={parts}
+                purchaseOrderItems={linkedPurchaseOrderItems}
+                purchaseOrders={linkedPurchaseOrders}
                 vehicleId={vehicleId}
                 vendors={vendors}
               />

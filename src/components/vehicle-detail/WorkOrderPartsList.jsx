@@ -1,6 +1,16 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { hasPermission } from "../../lib/permissions";
 import { logVehicleActivity } from "../../lib/activityLogger";
+import {
+  approvalLabels,
+  formatPartLabel,
+  getPrimaryPurchaseOrderItem,
+  isPartNeedsPo,
+  isPartOrdered,
+  isPartReceived,
+  partSourceLabels,
+  partStatusLabels,
+} from "../../lib/partWorkflowUtils";
 import { supabase } from "../../lib/supabaseClient";
 import CreatePurchaseOrderForm from "./CreatePurchaseOrderForm";
 
@@ -12,33 +22,6 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
 });
 
 const numberFormatter = new Intl.NumberFormat("en-US");
-
-const partSourceLabels = {
-  in_house: "In-house / Available",
-  needs_to_buy: "Needs to Buy",
-};
-
-const approvalLabels = {
-  not_required: "Not Required",
-  pending: "Pending Review",
-  approved: "Approved",
-  rejected: "Rejected",
-};
-
-const statusLabels = {
-  cancelled: "Cancelled",
-  requested: "Requested",
-  ordered: "Ordered",
-  received: "Received",
-  installed: "Installed",
-};
-
-const purchaseOrderBlockedStatuses = [
-  "ordered",
-  "received",
-  "installed",
-  "cancelled",
-];
 
 function displayValue(value) {
   return value === null || value === undefined || value === ""
@@ -61,18 +44,6 @@ function formatNumber(value) {
   return numberFormatter.format(numberValue);
 }
 
-function formatLabel(value, labels) {
-  if (labels[value]) {
-    return labels[value];
-  }
-
-  return displayValue(value)
-    .toString()
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
 function approvalClassName(approvalStatus) {
   if (approvalStatus === "approved" || approvalStatus === "not_required") {
     return "bg-emerald-50 text-emerald-700 ring-emerald-200";
@@ -86,7 +57,7 @@ function approvalClassName(approvalStatus) {
 }
 
 function statusClassName(status) {
-  if (status === "cancelled") {
+  if (status === "cancelled" || status === "issues") {
     return "bg-red-50 text-red-700 ring-red-200";
   }
 
@@ -94,8 +65,12 @@ function statusClassName(status) {
     return "bg-emerald-50 text-emerald-700 ring-emerald-200";
   }
 
-  if (status === "ordered") {
+  if (status === "ordered" || status === "po_created") {
     return "bg-blue-50 text-blue-700 ring-blue-200";
+  }
+
+  if (status === "needs_po" || status === "needs_to_buy") {
+    return "bg-amber-50 text-amber-800 ring-amber-200";
   }
 
   return "bg-zinc-100 text-zinc-700 ring-zinc-200";
@@ -143,18 +118,90 @@ function canApprovePart(currentProfile, part) {
 function canCreatePurchaseOrder(currentProfile, part) {
   return (
     hasPermission(currentProfile?.role, "purchase_order:manage") &&
-    part.part_source === "needs_to_buy" &&
-    !purchaseOrderBlockedStatuses.includes(part.status)
+    isPartNeedsPo(part)
   );
+}
+
+function getPurchaseOrderLabel(purchaseOrder) {
+  if (!purchaseOrder?.id) {
+    return "PO";
+  }
+
+  return `PO ${String(purchaseOrder.id).slice(0, 8).toUpperCase()}`;
+}
+
+function getPurchaseOrderStatusLabel(purchaseOrder, item) {
+  return formatPartLabel(
+    purchaseOrder?.status ?? item?.status ?? "ordered",
+    partStatusLabels
+  );
+}
+
+function getLifecycleBadge(part) {
+  const primaryPurchaseOrderItem = getPrimaryPurchaseOrderItem(part);
+
+  if (isPartReceived(part)) {
+    return {
+      className: statusClassName("received"),
+      label: "Received",
+    };
+  }
+
+  if (primaryPurchaseOrderItem) {
+    return {
+      className: statusClassName("po_created"),
+      label: "PO Created",
+    };
+  }
+
+  if (isPartOrdered(part)) {
+    return {
+      className: statusClassName("ordered"),
+      label: "Ordered",
+    };
+  }
+
+  if (isPartNeedsPo(part)) {
+    return {
+      className: statusClassName("needs_po"),
+      label: "Needs to Buy",
+    };
+  }
+
+  return {
+    className: statusClassName(part.status),
+    label: formatPartLabel(part.status, partStatusLabels),
+  };
+}
+
+function enrichPartsWithPurchaseOrders(parts, purchaseOrderItems, purchaseOrders) {
+  const purchaseOrdersById = new Map(
+    purchaseOrders
+      .filter((purchaseOrder) => purchaseOrder?.id)
+      .map((purchaseOrder) => [purchaseOrder.id, purchaseOrder])
+  );
+
+  return parts.map((part) => ({
+    ...part,
+    purchaseOrderItems: purchaseOrderItems
+      .filter((item) => item.part_request_id === part.id)
+      .map((item) => ({
+        ...item,
+        purchaseOrder: purchaseOrdersById.get(item.purchase_order_id) ?? null,
+      })),
+  }));
 }
 
 function WorkOrderPartsList({
   currentProfile,
   hideHeader = false,
   onActivityLogged,
+  onOpenPurchaseOrders,
   onPartApprovalUpdated,
   onPartPurchaseOrderCreated,
   parts = [],
+  purchaseOrderItems = [],
+  purchaseOrders = [],
   vehicleId,
   vendors = [],
 }) {
@@ -163,6 +210,10 @@ function WorkOrderPartsList({
   const [successMessage, setSuccessMessage] = useState("");
   const [updatingPartId, setUpdatingPartId] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const enrichedParts = useMemo(
+    () => enrichPartsWithPurchaseOrders(parts, purchaseOrderItems, purchaseOrders),
+    [parts, purchaseOrderItems, purchaseOrders]
+  );
 
   async function handleApprovalChange(part, approvalStatus) {
     if (!canApprovePart(currentProfile, part)) {
@@ -211,25 +262,31 @@ function WorkOrderPartsList({
     const partRequestId =
       result?.partRequestId ?? selectedPartForPurchaseOrder?.id;
 
+    if (partRequestId && selectedPartForPurchaseOrder) {
+      onPartPurchaseOrderCreated?.({
+        ...result,
+        partRequest:
+          result?.partRequest ??
+          (result?.partRequestStatusUpdated === false
+            ? selectedPartForPurchaseOrder
+            : { ...selectedPartForPurchaseOrder, status: "ordered" }),
+        partRequestId,
+      });
+    }
+
+    setSelectedPartForPurchaseOrder(null);
+
     if (result?.partRequestStatusUpdated === false) {
-      setSelectedPartForPurchaseOrder(null);
       setErrorMessage(
         result.warningMessage ??
           "Purchase order created, but the part status could not be updated."
       );
+      setSuccessMessage("");
       return;
     }
 
-    if (partRequestId && selectedPartForPurchaseOrder) {
-      onPartPurchaseOrderCreated?.({
-        ...selectedPartForPurchaseOrder,
-        status: "ordered",
-      });
-    }
-
     setErrorMessage("");
-    setSelectedPartForPurchaseOrder(null);
-    setSuccessMessage("Purchase order created. Part status is now Ordered.");
+    setSuccessMessage("Purchase order created. Part now shows PO Created.");
   }
 
   return (
@@ -249,92 +306,127 @@ function WorkOrderPartsList({
         </div>
       ) : (
         <div className="space-y-3">
-          {parts.map((part, index) => (
-            <article
-              className="rounded-md border border-zinc-100 bg-white p-3"
-              key={part.id ?? index}
-            >
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <h6 className="font-semibold text-zinc-950">
-                    {displayValue(part.part_name)}
-                  </h6>
-                  <p className="mt-1 text-sm text-zinc-500">
-                    Qty {formatNumber(part.quantity)} x{" "}
-                    {formatCurrency(part.unit_cost)} ={" "}
-                    <span className="font-semibold text-zinc-700">
-                      {formatCurrency(getTotalCost(part))}
-                    </span>
+          {enrichedParts.map((part, index) => {
+            const primaryPurchaseOrderItem = getPrimaryPurchaseOrderItem(part);
+            const linkedPurchaseOrder = primaryPurchaseOrderItem?.purchaseOrder;
+            const lifecycleBadge = getLifecycleBadge(part);
+            const canCreatePoForPart = canCreatePurchaseOrder(currentProfile, part);
+            const canApprove = canApprovePart(currentProfile, part);
+            const shouldShowSourceBadge =
+              part.part_source !== "needs_to_buy" || !primaryPurchaseOrderItem;
+
+            return (
+              <article
+                className="rounded-md border border-zinc-100 bg-white p-3"
+                key={part.id ?? index}
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <h6 className="font-semibold text-zinc-950">
+                      {displayValue(part.part_name)}
+                    </h6>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      Qty {formatNumber(part.quantity)} x{" "}
+                      {formatCurrency(part.unit_cost)} ={" "}
+                      <span className="font-semibold text-zinc-700">
+                        {formatCurrency(getTotalCost(part))}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Badge className={lifecycleBadge.className}>
+                      {lifecycleBadge.label}
+                    </Badge>
+                    {shouldShowSourceBadge && (
+                      <Badge className={sourceClassName(part.part_source)}>
+                        {formatPartLabel(part.part_source, partSourceLabels)}
+                      </Badge>
+                    )}
+                    <Badge className={approvalClassName(part.approval_status)}>
+                      {formatPartLabel(part.approval_status, approvalLabels)}
+                    </Badge>
+                  </div>
+                </div>
+
+                {primaryPurchaseOrderItem && (
+                  <p className="mt-3 rounded-md border border-blue-100 bg-blue-50 p-3 text-sm font-medium text-blue-800">
+                    PO already created
+                    {linkedPurchaseOrder
+                      ? `: ${getPurchaseOrderLabel(linkedPurchaseOrder)}`
+                      : ""}
+                    . Status:{" "}
+                    {getPurchaseOrderStatusLabel(
+                      linkedPurchaseOrder,
+                      primaryPurchaseOrderItem
+                    )}
+                    .
                   </p>
-                </div>
+                )}
 
-                <div className="flex flex-wrap gap-2">
-                  <Badge className={sourceClassName(part.part_source)}>
-                    {formatLabel(part.part_source, partSourceLabels)}
-                  </Badge>
-                  <Badge className={approvalClassName(part.approval_status)}>
-                    {formatLabel(part.approval_status, approvalLabels)}
-                  </Badge>
-                  <Badge className={statusClassName(part.status)}>
-                    {formatLabel(part.status, statusLabels)}
-                  </Badge>
-                </div>
-              </div>
+                {part.notes && (
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-zinc-600">
+                    {part.notes}
+                  </p>
+                )}
 
-              {part.notes && (
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-zinc-600">
-                  {part.notes}
-                </p>
-              )}
-
-              {canCreatePurchaseOrder(currentProfile, part) &&
-                part.approval_status === "pending" && (
+                {canCreatePoForPart && part.approval_status === "pending" && (
                   <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                     Pending admin review, but PO can still be created.
                   </p>
                 )}
 
-              {(canApprovePart(currentProfile, part) ||
-                canCreatePurchaseOrder(currentProfile, part)) && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {canApprovePart(currentProfile, part) && (
-                    <>
-                      <button
-                        className="min-h-9 rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-300"
-                        disabled={updatingPartId === part.id}
-                        onClick={() => handleApprovalChange(part, "approved")}
-                        type="button"
-                      >
-                        {updatingPartId === part.id ? "Saving..." : "Approve"}
-                      </button>
-                      <button
-                        className="min-h-9 rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={updatingPartId === part.id}
-                        onClick={() => handleApprovalChange(part, "rejected")}
-                        type="button"
-                      >
-                        Reject
-                      </button>
-                    </>
-                  )}
+                {(canApprove || canCreatePoForPart || primaryPurchaseOrderItem) && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {canApprove && (
+                      <>
+                        <button
+                          className="min-h-9 rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-300"
+                          disabled={updatingPartId === part.id}
+                          onClick={() => handleApprovalChange(part, "approved")}
+                          type="button"
+                        >
+                          {updatingPartId === part.id ? "Saving..." : "Approve"}
+                        </button>
+                        <button
+                          className="min-h-9 rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={updatingPartId === part.id}
+                          onClick={() => handleApprovalChange(part, "rejected")}
+                          type="button"
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
 
-                  {canCreatePurchaseOrder(currentProfile, part) && (
-                    <button
-                      className="min-h-9 rounded-md bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-zinc-800"
-                      onClick={() => {
-                        setErrorMessage("");
-                        setSuccessMessage("");
-                        setSelectedPartForPurchaseOrder(part);
-                      }}
-                      type="button"
-                    >
-                      Create PO
-                    </button>
-                  )}
-                </div>
-              )}
-            </article>
-          ))}
+                    {canCreatePoForPart && (
+                      <button
+                        className="min-h-9 rounded-md bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-zinc-800"
+                        onClick={() => {
+                          setErrorMessage("");
+                          setSuccessMessage("");
+                          setSelectedPartForPurchaseOrder(part);
+                        }}
+                        type="button"
+                      >
+                        Create PO
+                      </button>
+                    )}
+
+                    {primaryPurchaseOrderItem && (
+                      <button
+                        className="min-h-9 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                        onClick={onOpenPurchaseOrders}
+                        type="button"
+                      >
+                        View PO
+                      </button>
+                    )}
+                  </div>
+                )}
+              </article>
+            );
+          })}
         </div>
       )}
 

@@ -118,6 +118,7 @@ function ServiceWorkSection({
   onPartPurchaseOrderCreated,
   onPhotoAdded,
   onPhotoDeleted,
+  onServiceContextChange,
   onThirdPartyRepairAdded,
   onThirdPartyRepairDeleted,
   onWorkOrderAdded,
@@ -126,6 +127,8 @@ function ServiceWorkSection({
   purchaseOrderItems = [],
   purchaseOrders = [],
   repairJobs = [],
+  restoreExpandedWorkOrderId = null,
+  restoreSelectedCategoryId = null,
   serviceCategories = [],
   thirdPartyRepairs = [],
   vehicle,
@@ -134,7 +137,9 @@ function ServiceWorkSection({
   vendors = [],
 }) {
   const [categoryForForm, setCategoryForForm] = useState(null);
-  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState(
+    restoreSelectedCategoryId
+  );
   const activeServiceCategories = useMemo(
     () => getPhaseOneServiceCategories(serviceCategories),
     [serviceCategories]
@@ -169,9 +174,16 @@ function ServiceWorkSection({
   }
 
   function handleCategorySelect(category) {
-    setSelectedCategoryId((currentCategoryId) =>
-      currentCategoryId === category.id ? null : category.id
-    );
+    setSelectedCategoryId((currentCategoryId) => {
+      const nextCategoryId = currentCategoryId === category.id ? null : category.id;
+
+      onServiceContextChange?.({
+        expandedWorkOrderId: null,
+        selectedServiceCategory: nextCategoryId,
+      });
+
+      return nextCategoryId;
+    });
   }
 
   return (
@@ -244,12 +256,14 @@ function ServiceWorkSection({
               onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
               onPhotoAdded={onPhotoAdded}
               onPhotoDeleted={onPhotoDeleted}
+              onServiceContextChange={onServiceContextChange}
               onThirdPartyRepairAdded={onThirdPartyRepairAdded}
               onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
               partRequests={partRequests}
               profiles={profiles}
               purchaseOrderItems={purchaseOrderItems}
               purchaseOrders={purchaseOrders}
+              restoreExpandedWorkOrderId={restoreExpandedWorkOrderId}
               selectedCategory={selectedCategory}
               thirdPartyRepairs={thirdPartyRepairs}
               vehicle={vehicle}

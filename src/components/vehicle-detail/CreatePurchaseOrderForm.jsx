@@ -4,6 +4,7 @@ import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
 import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
+import { isPartNeedsPo } from "../../lib/partWorkflowUtils";
 import { supabase } from "../../lib/supabaseClient";
 
 const emptyForm = {
@@ -16,13 +17,6 @@ const emptyForm = {
   tax: "",
   notes: "",
 };
-
-const purchaseOrderBlockedStatuses = [
-  "ordered",
-  "received",
-  "installed",
-  "cancelled",
-];
 
 const partRequestResultColumns =
   "id, vehicle_id, repair_job_id, part_name, quantity, status, notes, part_source, approval_status, unit_cost, selected_vendor_id, selected_quote_id, quoted_unit_cost, quoted_total_cost, created_by, created_at";
@@ -104,10 +98,7 @@ function mergeVendorOptions(vendors, selectedVendorOption) {
 }
 
 function canCreatePurchaseOrderForPart(partRequest) {
-  return (
-    partRequest?.part_source === "needs_to_buy" &&
-    !purchaseOrderBlockedStatuses.includes(partRequest?.status)
-  );
+  return isPartNeedsPo(partRequest);
 }
 
 function getInitialFormData(initialPartRequest, initialVendorId = "") {

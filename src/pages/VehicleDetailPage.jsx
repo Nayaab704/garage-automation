@@ -19,6 +19,7 @@ import { logVehicleActivity } from "../lib/activityLogger";
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 import { getVehiclePrimaryPhoto } from "../lib/vehicleDisplayPhoto";
+import { buildVehicleReturnLabel } from "../lib/vehicleNavigationContext";
 
 async function fetchInvestmentSummary(vehicleId, stockNumber) {
   const byVehicleId = await supabase
@@ -303,7 +304,15 @@ function mergeVehicleState(currentVehicle, nextVehicle) {
   };
 }
 
-function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
+function VehicleDetailPage({
+  currentProfile,
+  onBack,
+  onInvalidVehicle,
+  onVehicleContextChange,
+  onVehicleDeleted,
+  resumeContext,
+  vehicleId,
+}) {
   const [vehicle, setVehicle] = useState(null);
   const [repairJobs, setRepairJobs] = useState([]);
   const [partRequests, setPartRequests] = useState([]);
@@ -332,6 +341,17 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
   const [refreshCount, setRefreshCount] = useState(0);
   const serviceWorkRef = useRef(null);
   const vehiclePhotosRef = useRef(null);
+  const restoredResumeTokenRef = useRef(null);
+  const onInvalidVehicleRef = useRef(onInvalidVehicle);
+  const onVehicleContextChangeRef = useRef(onVehicleContextChange);
+
+  useEffect(() => {
+    onInvalidVehicleRef.current = onInvalidVehicle;
+  }, [onInvalidVehicle]);
+
+  useEffect(() => {
+    onVehicleContextChangeRef.current = onVehicleContextChange;
+  }, [onVehicleContextChange]);
 
   useEffect(() => {
     let isMounted = true;
@@ -352,6 +372,10 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
 
         if (!isMounted) {
           return;
+        }
+
+        if (responses.vehicleResponse.error?.code === "PGRST116") {
+          onInvalidVehicleRef.current?.(vehicleId);
         }
 
         applyVehicleDetails(responses, {
@@ -407,7 +431,61 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
     return () => {
       isMounted = false;
     };
-  }, [vehicleId, refreshCount]);
+  }, [refreshCount, vehicleId]);
+
+  useEffect(() => {
+    if (!vehicle?.id) {
+      return;
+    }
+
+    onVehicleContextChangeRef.current?.(buildVehicleContext(vehicle));
+  }, [vehicle]);
+
+  useEffect(() => {
+    if (
+      isLoading ||
+      !vehicle?.id ||
+      !resumeContext?.token ||
+      resumeContext.vehicleId !== vehicle.id ||
+      restoredResumeTokenRef.current === resumeContext.token
+    ) {
+      return;
+    }
+
+    restoredResumeTokenRef.current = resumeContext.token;
+
+    if (typeof resumeContext.scrollY === "number") {
+      window.setTimeout(() => {
+        window.scrollTo({ top: resumeContext.scrollY, behavior: "auto" });
+      }, 150);
+    }
+  }, [isLoading, resumeContext, vehicle?.id]);
+
+  function buildVehicleContext(vehicleRecord, updates = {}) {
+    return {
+      label: buildVehicleReturnLabel(vehicleRecord),
+      make: vehicleRecord.make ?? null,
+      model: vehicleRecord.model ?? null,
+      stockNumber: vehicleRecord.stock_number ?? null,
+      trim: vehicleRecord.trim ?? null,
+      vehicleId: vehicleRecord.id,
+      year: vehicleRecord.year ?? null,
+      ...updates,
+    };
+  }
+
+  function handleServiceContextChange(updates) {
+    if (!vehicle?.id) {
+      return;
+    }
+
+    onVehicleContextChange?.(
+      buildVehicleContext(vehicle, {
+        ...updates,
+        scrollY: window.scrollY,
+      })
+    );
+  }
 
   function refreshVehicleDetails() {
     setRefreshCount((currentCount) => currentCount + 1);
@@ -889,9 +967,20 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
               onPartPurchaseOrderCreated={handleWorkOrderPartPurchaseOrderCreated}
               onPhotoAdded={handleWorkOrderPhotoAdded}
               onPhotoDeleted={handleWorkOrderPhotoDeleted}
+              onServiceContextChange={handleServiceContextChange}
               onThirdPartyRepairAdded={handleThirdPartyRepairAdded}
               onThirdPartyRepairDeleted={handleThirdPartyRepairDeleted}
               onWorkOrderAdded={handleWorkOrderAdded}
+              restoreExpandedWorkOrderId={
+                resumeContext?.vehicleId === vehicle.id
+                  ? resumeContext.expandedWorkOrderId
+                  : null
+              }
+              restoreSelectedCategoryId={
+                resumeContext?.vehicleId === vehicle.id
+                  ? resumeContext.selectedServiceCategory
+                  : null
+              }
               partRequests={partRequests}
               profiles={profiles}
               purchaseOrderItems={purchaseOrderItems}
@@ -1003,7 +1092,10 @@ function VehicleDetailPage({ currentProfile, vehicleId, onBack }) {
           {isDeleteModalOpen && canDeleteVehicle && (
             <DeleteVehicleModal
               onClose={() => setIsDeleteModalOpen(false)}
-              onDeleted={onBack}
+              onDeleted={() => {
+                onVehicleDeleted?.(vehicle.id);
+                onBack();
+              }}
               vehicle={vehicle}
               vehicleDocuments={vehicleDocuments}
               vehiclePhotos={vehiclePhotos}

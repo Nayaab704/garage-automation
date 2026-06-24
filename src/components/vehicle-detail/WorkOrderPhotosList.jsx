@@ -2,6 +2,8 @@ import { useState } from "react";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 import AddWorkOrderPhotoForm from "./AddWorkOrderPhotoForm";
+import ModalShell from "../ui/ModalShell";
+import { buttonClassNames } from "../ui/uiStyles";
 
 function displayValue(value) {
   return value === null || value === undefined || value === ""
@@ -33,46 +35,110 @@ function getWorkOrderTitle(workOrder) {
   return workOrder?.title || workOrder?.name || "Work Order";
 }
 
-function PhotoCard({ canManage, isDeleting, onDelete, photo }) {
-  const caption = displayValue(photo.caption);
+function PhotoThumbnail({ canManage, isDeleting, onDelete, onPreview, photo }) {
   const altText = photo.caption || "Work order photo";
 
   return (
-    <article className="overflow-hidden rounded-md border border-zinc-100 bg-white">
-      <div className="aspect-[4/3] bg-zinc-100">
+    <article className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-sm">
+      <button
+        aria-label="Preview work order photo"
+        className="block h-28 w-full overflow-hidden text-left focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:h-32"
+        onClick={() => onPreview(photo)}
+        type="button"
+      >
         <img
           alt={altText}
-          className="h-full w-full object-cover"
+          className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
           loading="lazy"
           src={photo.photo_url}
         />
-      </div>
+      </button>
 
-      <div className="space-y-2 p-3">
-        {photo.caption && (
-          <p className="whitespace-pre-wrap text-sm leading-5 text-zinc-700">
-            {caption}
-          </p>
-        )}
+      <span className="pointer-events-none absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-inset ring-slate-200">
+        {photo.caption || formatDateTime(photo.created_at)}
+      </span>
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-zinc-500">
-            {formatDateTime(photo.created_at)}
-          </p>
+      {canManage && (
+        <button
+          className="absolute right-2 top-2 rounded-full border border-red-200 bg-white/95 px-2.5 py-1 text-xs font-bold text-red-700 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isDeleting}
+          onClick={() => onDelete(photo)}
+          type="button"
+        >
+          {isDeleting ? "Deleting..." : "Delete"}
+        </button>
+      )}
+    </article>
+  );
+}
+
+function PhotoPreviewModal({
+  canManage,
+  errorMessage,
+  isDeleting,
+  onClose,
+  onDelete,
+  photo,
+  workOrder,
+}) {
+  const caption = displayValue(photo.caption);
+  const altText = photo.caption || "Work order photo";
+
+  async function handleDelete() {
+    const wasDeleted = await onDelete(photo);
+
+    if (wasDeleted) {
+      onClose();
+    }
+  }
+
+  return (
+    <ModalShell
+      eyebrow={getWorkOrderTitle(workOrder)}
+      onClose={onClose}
+      size="xl"
+      title="Photo Preview"
+    >
+      <div className="space-y-4">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-950">
+          <img
+            alt={altText}
+            className="max-h-[68vh] w-full object-contain"
+            src={photo.photo_url}
+          />
+        </div>
+
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 space-y-2">
+            <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-200">
+              {formatDateTime(photo.created_at)}
+            </span>
+            {photo.caption && (
+              <p className="whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                {caption}
+              </p>
+            )}
+          </div>
 
           {canManage && (
             <button
-              className="rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className={buttonClassNames.danger}
               disabled={isDeleting}
-              onClick={() => onDelete(photo)}
+              onClick={handleDelete}
               type="button"
             >
-              {isDeleting ? "Deleting..." : "Delete"}
+              {isDeleting ? "Deleting..." : "Delete Photo"}
             </button>
           )}
         </div>
+
+        {errorMessage && (
+          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            {errorMessage}
+          </div>
+        )}
       </div>
-    </article>
+    </ModalShell>
   );
 }
 
@@ -90,25 +156,31 @@ function WorkOrderPhotosList({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [deletingPhotoId, setDeletingPhotoId] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [previewPhoto, setPreviewPhoto] = useState(null);
+
+  function handlePreview(photo) {
+    setErrorMessage("");
+    setPreviewPhoto(photo);
+  }
 
   async function handleDelete(photo) {
     if (deletingPhotoId) {
-      return;
+      return false;
     }
 
     if (!canManage) {
       setErrorMessage("Your role cannot delete photos.");
-      return;
+      return false;
     }
 
     if (!photo?.id) {
       setErrorMessage("Unable to delete a photo without an ID.");
-      return;
+      return false;
     }
 
     if (!photo.photo_path) {
       setErrorMessage("Unable to delete this photo because its file path is missing.");
-      return;
+      return false;
     }
 
     const confirmed = window.confirm(
@@ -116,7 +188,7 @@ function WorkOrderPhotosList({
     );
 
     if (!confirmed) {
-      return;
+      return false;
     }
 
     setDeletingPhotoId(photo.id);
@@ -130,7 +202,7 @@ function WorkOrderPhotosList({
       if (storageResponse.error) {
         console.error("Could not delete photo:", storageResponse.error);
         setErrorMessage("Could not delete photo. Please try again.");
-        return;
+        return false;
       }
 
       const deleteResponse = await supabase
@@ -141,7 +213,7 @@ function WorkOrderPhotosList({
       if (deleteResponse.error) {
         console.error("Could not delete photo:", deleteResponse.error);
         setErrorMessage("Could not delete photo. Please try again.");
-        return;
+        return false;
       }
 
       await logVehicleActivity({
@@ -154,9 +226,14 @@ function WorkOrderPhotosList({
       });
       onActivityLogged?.();
       await onPhotoDeleted?.(photo);
+      setPreviewPhoto((currentPhoto) =>
+        currentPhoto?.id === photo.id ? null : currentPhoto
+      );
+      return true;
     } catch (error) {
       console.error("Could not delete photo:", error);
       setErrorMessage("Could not delete photo. Please try again.");
+      return false;
     } finally {
       setDeletingPhotoId(null);
     }
@@ -193,13 +270,14 @@ function WorkOrderPhotosList({
           No photos uploaded yet.
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
           {photos.map((photo, index) => (
-            <PhotoCard
+            <PhotoThumbnail
               canManage={canManage}
               isDeleting={deletingPhotoId === photo.id}
               key={photo.id ?? index}
               onDelete={handleDelete}
+              onPreview={handlePreview}
               photo={photo}
             />
           ))}
@@ -221,6 +299,18 @@ function WorkOrderPhotosList({
             setIsFormOpen(false);
           }}
           vehicleId={vehicleId}
+          workOrder={workOrder}
+        />
+      )}
+
+      {previewPhoto && (
+        <PhotoPreviewModal
+          canManage={canManage}
+          errorMessage={errorMessage}
+          isDeleting={deletingPhotoId === previewPhoto.id}
+          onClose={() => setPreviewPhoto(null)}
+          onDelete={handleDelete}
+          photo={previewPhoto}
           workOrder={workOrder}
         />
       )}
