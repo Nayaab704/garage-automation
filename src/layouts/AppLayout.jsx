@@ -1,6 +1,5 @@
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
-import ReturnToVehicleBanner from "../components/ReturnToVehicleBanner";
 import AppBackground from "../components/ui/AppBackground";
 import { pageContainerClassName } from "../components/ui/uiStyles";
 
@@ -10,11 +9,11 @@ function AppLayout({
   currentProfile,
   isLoggingOut = false,
   isProfileLoading = false,
+  onBack,
   onPageChange,
   onLogout,
-  onReturnToVehicle,
   profileError = "",
-  returnToVehicleContext = null,
+  showBackButton = false,
   showTitle = false,
   title = "Vehicles",
   userEmail,
@@ -33,22 +32,18 @@ function AppLayout({
           currentProfile={currentProfile}
           isLoggingOut={isLoggingOut}
           isProfileLoading={isProfileLoading}
+          onBack={onBack}
           onPageChange={onPageChange}
           onLogout={onLogout}
           profileError={profileError}
+          showBackButton={showBackButton}
           showTitle={showTitle}
           title={title}
           userEmail={userEmail}
         />
 
         <main className="px-4 py-5 sm:px-6 lg:px-8">
-          <div className={pageContainerClassName}>
-            <ReturnToVehicleBanner
-              context={returnToVehicleContext}
-              onReturn={onReturnToVehicle}
-            />
-            {children}
-          </div>
+          <div className={pageContainerClassName}>{children}</div>
         </main>
       </div>
     </AppBackground>

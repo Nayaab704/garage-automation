@@ -101,14 +101,12 @@ function ServiceCategoryCard({
   onPartPurchaseOrderCreated,
   onPhotoAdded,
   onPhotoDeleted,
-  onServiceContextChange,
   onThirdPartyRepairAdded,
   onThirdPartyRepairDeleted,
   partRequests = [],
   profiles = [],
   purchaseOrderItems = [],
   purchaseOrders = [],
-  restoreExpandedWorkOrderId = null,
   thirdPartyRepairs = [],
   vehicle,
   vehicleId,
@@ -116,26 +114,8 @@ function ServiceCategoryCard({
   vendors = [],
   workOrders = [],
 }) {
-  const [openWorkOrderId, setOpenWorkOrderId] = useState(() =>
-    restoreExpandedWorkOrderId &&
-    workOrders.some((workOrder) => workOrder.id === restoreExpandedWorkOrderId)
-      ? restoreExpandedWorkOrderId
-      : null
-  );
+  const [openWorkOrderId, setOpenWorkOrderId] = useState(null);
   const statusSummary = getStatusSummary(workOrders);
-
-  function handleWorkOrderToggle(workOrder) {
-    setOpenWorkOrderId((currentId) => {
-      const nextWorkOrderId = currentId === workOrder.id ? null : workOrder.id;
-
-      onServiceContextChange?.({
-        expandedWorkOrderId: nextWorkOrderId,
-        selectedServiceCategory: category.id,
-      });
-
-      return nextWorkOrderId;
-    });
-  }
 
   return (
     <article className="rounded-3xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
@@ -230,7 +210,11 @@ function ServiceCategoryCard({
                 onPhotoDeleted={onPhotoDeleted}
                 onThirdPartyRepairAdded={onThirdPartyRepairAdded}
                 onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
-                onToggle={() => handleWorkOrderToggle(workOrder)}
+                onToggle={() =>
+                  setOpenWorkOrderId((currentId) =>
+                    currentId === workOrder.id ? null : workOrder.id
+                  )
+                }
                 parts={workOrderParts}
                 photos={workOrderPhotos}
                 profiles={profiles}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppLayout from "./layouts/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import IntakePage from "./pages/IntakePage";
@@ -14,19 +14,72 @@ import { MAIN_NAV_PAGES } from "./config/appConfig";
 import { fetchCurrentUserProfile } from "./lib/currentUserProfile";
 import { hasPermission } from "./lib/permissions";
 import { supabase } from "./lib/supabaseClient";
-import {
-  clearLastVehicleContext,
-  getLastVehicleContext,
-  saveLastVehicleContext,
-} from "./lib/vehicleNavigationContext";
 
-const returnToVehiclePages = new Set([
-  "Vehicles",
-  "Repairs",
-  "Parts",
-  "Purchase Orders",
-  "Vendors",
-]);
+const APP_HISTORY_ROUTE_KEY = "garageAppRoute";
+const APP_HISTORY_DEPTH_KEY = "garageAppHistoryDepth";
+const FALLBACK_PAGE = "Vehicles";
+
+function createAppRoute(page, vehicleId = null) {
+  return {
+    page,
+    vehicleId: page === "vehicleDetail" ? vehicleId : null,
+  };
+}
+
+function getRouteFromHistoryState(state) {
+  const route = state?.[APP_HISTORY_ROUTE_KEY];
+
+  if (!route?.page) {
+    return null;
+  }
+
+  return createAppRoute(route.page, route.vehicleId ?? null);
+}
+
+function getHistoryDepth(state) {
+  const depth = Number(state?.[APP_HISTORY_DEPTH_KEY] ?? 0);
+
+  return Number.isFinite(depth) && depth > 0 ? depth : 0;
+}
+
+function getInitialAppRoute() {
+  if (typeof window === "undefined") {
+    return createAppRoute(FALLBACK_PAGE);
+  }
+
+  return getRouteFromHistoryState(window.history.state) ?? createAppRoute(FALLBACK_PAGE);
+}
+
+function getInitialHistoryDepth() {
+  if (typeof window === "undefined") {
+    return 0;
+  }
+
+  return getHistoryDepth(window.history.state);
+}
+
+function areRoutesEqual(firstRoute, secondRoute) {
+  return (
+    firstRoute?.page === secondRoute?.page &&
+    firstRoute?.vehicleId === secondRoute?.vehicleId
+  );
+}
+
+function writeBrowserHistoryRoute(route, depth, method = "pushState") {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.history[method](
+    {
+      ...(window.history.state ?? {}),
+      [APP_HISTORY_ROUTE_KEY]: route,
+      [APP_HISTORY_DEPTH_KEY]: depth,
+    },
+    "",
+    window.location.href
+  );
+}
 
 const pageDetails = {
   Dashboard: {
@@ -114,8 +167,7 @@ function AccountPendingApproval({ isLoggingOut, onLogout }) {
 }
 
 function App() {
-  const [activePage, setActivePage] = useState("Vehicles");
-  const [selectedVehicleId, setSelectedVehicleId] = useState(null);
+  const [currentRoute, setCurrentRoute] = useState(() => getInitialAppRoute());
   const [session, setSession] = useState(null);
   const [currentProfile, setCurrentProfile] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -123,10 +175,12 @@ function App() {
   const [authError, setAuthError] = useState("");
   const [profileError, setProfileError] = useState("");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [lastVehicleContext, setLastVehicleContext] = useState(() =>
-    getLastVehicleContext()
+  const [appHistoryDepth, setAppHistoryDepth] = useState(() =>
+    getInitialHistoryDepth()
   );
-  const [vehicleResumeRequest, setVehicleResumeRequest] = useState(null);
+  const hasInitializedHistoryRef = useRef(false);
+  const activePage = currentRoute.page;
+  const selectedVehicleId = currentRoute.vehicleId;
   const canViewDashboard = hasPermission(currentProfile?.role, "dashboard:view");
   const effectiveActivePage =
     activePage === "Dashboard" && !canViewDashboard ? "Vehicles" : activePage;
@@ -135,9 +189,8 @@ function App() {
   const navigationPage =
     effectiveActivePage === "vehicleDetail" ? "Vehicles" : effectiveActivePage;
   const userEmail = session?.user?.email ?? "";
-  const shouldShowReturnToVehicle =
-    Boolean(lastVehicleContext?.vehicleId) &&
-    returnToVehiclePages.has(effectiveActivePage);
+  const showAppBackButton =
+    appHistoryDepth > 0 || effectiveActivePage !== FALLBACK_PAGE;
 
   useEffect(() => {
     let isMounted = true;
@@ -177,10 +230,12 @@ function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!nextSession) {
-        clearLastVehicleContext();
-        setLastVehicleContext(null);
-        setVehicleResumeRequest(null);
-        setSelectedVehicleId(null);
+        const fallbackRoute = createAppRoute(FALLBACK_PAGE);
+
+        writeBrowserHistoryRoute(fallbackRoute, 0, "replaceState");
+        setCurrentRoute(fallbackRoute);
+        setAppHistoryDepth(0);
+        hasInitializedHistoryRef.current = false;
       }
 
       setSession(nextSession);
@@ -246,93 +301,104 @@ function App() {
     };
   }, [session?.user?.id]);
 
-  function handlePageChange(pageName) {
-    preserveVehicleScrollPosition();
-
-    if (pageName === "Dashboard" && !canViewDashboard) {
-      setSelectedVehicleId(null);
-      setActivePage("Vehicles");
+  useEffect(() => {
+    if (!session || hasInitializedHistoryRef.current) {
       return;
     }
 
-    setSelectedVehicleId(null);
-    setActivePage(pageName);
+    writeBrowserHistoryRoute(currentRoute, appHistoryDepth, "replaceState");
+    hasInitializedHistoryRef.current = true;
+  }, [appHistoryDepth, currentRoute, session]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    function normalizeRouteForAccess(route) {
+      if (!route) {
+        return createAppRoute(FALLBACK_PAGE);
+      }
+
+      if (route.page === "Dashboard" && !canViewDashboard) {
+        return createAppRoute(FALLBACK_PAGE);
+      }
+
+      if (route.page === "vehicleDetail" && !route.vehicleId) {
+        return createAppRoute(FALLBACK_PAGE);
+      }
+
+      return route;
+    }
+
+    function handlePopState(event) {
+      const nextRoute = normalizeRouteForAccess(
+        getRouteFromHistoryState(event.state)
+      );
+
+      setCurrentRoute(nextRoute);
+      setAppHistoryDepth(getHistoryDepth(event.state));
+    }
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [canViewDashboard]);
+
+  function handlePageChange(pageName) {
+    navigateToRoute(pageName);
   }
 
   function handleSelectVehicle(vehicleId) {
-    setSelectedVehicleId(vehicleId);
-    setVehicleResumeRequest(null);
-    setActivePage("vehicleDetail");
+    navigateToRoute("vehicleDetail", vehicleId);
   }
 
-  function handleBackToVehicles() {
-    preserveVehicleScrollPosition();
-    setSelectedVehicleId(null);
-    setActivePage("Vehicles");
+  function normalizeAppRoute(pageName, vehicleId = null) {
+    if (pageName === "Dashboard" && !canViewDashboard) {
+      return createAppRoute(FALLBACK_PAGE);
+    }
+
+    if (pageName === "vehicleDetail" && !vehicleId) {
+      return createAppRoute(FALLBACK_PAGE);
+    }
+
+    return createAppRoute(pageName, vehicleId);
   }
 
-  function handleVehicleContextChange(context) {
-    if (!context?.vehicleId) {
+  function navigateToRoute(pageName, vehicleId = null) {
+    const nextRoute = normalizeAppRoute(pageName, vehicleId);
+
+    if (areRoutesEqual(currentRoute, nextRoute)) {
       return;
     }
 
-    setLastVehicleContext((currentContext) => {
-      const shouldMerge = currentContext?.vehicleId === context.vehicleId;
-      const nextContext = saveLastVehicleContext({
-        ...(shouldMerge ? currentContext : {}),
-        ...context,
-        path: "vehicleDetail",
-      });
+    const nextDepth = appHistoryDepth + 1;
 
-      return nextContext;
-    });
+    writeBrowserHistoryRoute(nextRoute, nextDepth);
+    setCurrentRoute(nextRoute);
+    setAppHistoryDepth(nextDepth);
   }
 
-  function preserveVehicleScrollPosition() {
-    if (effectiveActivePage !== "vehicleDetail" || !selectedVehicleId) {
+  function navigateToFallback() {
+    const fallbackRoute = createAppRoute(FALLBACK_PAGE);
+
+    if (!areRoutesEqual(currentRoute, fallbackRoute)) {
+      writeBrowserHistoryRoute(fallbackRoute, 0, "replaceState");
+      setCurrentRoute(fallbackRoute);
+    }
+
+    setAppHistoryDepth(0);
+  }
+
+  function handleAppBack() {
+    if (appHistoryDepth > 0 && typeof window !== "undefined") {
+      window.history.back();
       return;
     }
 
-    handleVehicleContextChange({
-      scrollY: window.scrollY,
-      vehicleId: selectedVehicleId,
-    });
-  }
-
-  function handleReturnToVehicle(context = lastVehicleContext) {
-    const vehicleContext = context?.vehicleId
-      ? context
-      : getLastVehicleContext();
-
-    if (!vehicleContext?.vehicleId) {
-      clearLastVehicleContext();
-      setLastVehicleContext(null);
-      setVehicleResumeRequest(null);
-      return;
-    }
-
-    setLastVehicleContext(vehicleContext);
-    setSelectedVehicleId(vehicleContext.vehicleId);
-    setVehicleResumeRequest({
-      ...vehicleContext,
-      token: Date.now(),
-    });
-    setActivePage("vehicleDetail");
-  }
-
-  function clearVehicleContext(vehicleId) {
-    setLastVehicleContext((currentContext) => {
-      if (!currentContext || (vehicleId && currentContext.vehicleId !== vehicleId)) {
-        return currentContext;
-      }
-
-      clearLastVehicleContext();
-      return null;
-    });
-
-    setVehicleResumeRequest((currentRequest) =>
-      currentRequest?.vehicleId === vehicleId ? null : currentRequest
-    );
+    navigateToFallback();
   }
 
   async function handleLogout() {
@@ -348,12 +414,13 @@ function App() {
         return;
       }
 
-      clearLastVehicleContext();
-      setLastVehicleContext(null);
-      setVehicleResumeRequest(null);
-      setSelectedVehicleId(null);
+      const fallbackRoute = createAppRoute(FALLBACK_PAGE);
+
+      writeBrowserHistoryRoute(fallbackRoute, 0, "replaceState");
+      setCurrentRoute(fallbackRoute);
+      setAppHistoryDepth(0);
+      hasInitializedHistoryRef.current = false;
       setCurrentProfile(null);
-      setActivePage("Vehicles");
     } catch (error) {
       setAuthError(error.message ?? "Unable to log out.");
     } finally {
@@ -425,15 +492,7 @@ function App() {
       return (
         <VehicleDetailPage
           currentProfile={currentProfile}
-          onBack={handleBackToVehicles}
-          onInvalidVehicle={clearVehicleContext}
-          onVehicleContextChange={handleVehicleContextChange}
-          onVehicleDeleted={clearVehicleContext}
-          resumeContext={
-            vehicleResumeRequest?.vehicleId === selectedVehicleId
-              ? vehicleResumeRequest
-              : null
-          }
+          onBack={handleAppBack}
           vehicleId={selectedVehicleId}
         />
       );
@@ -485,13 +544,11 @@ function App() {
       currentProfile={currentProfile}
       isLoggingOut={isLoggingOut}
       isProfileLoading={isProfileLoading}
+      onBack={handleAppBack}
       onPageChange={handlePageChange}
       onLogout={handleLogout}
-      onReturnToVehicle={handleReturnToVehicle}
       profileError={profileError}
-      returnToVehicleContext={
-        shouldShowReturnToVehicle ? lastVehicleContext : null
-      }
+      showBackButton={showAppBackButton}
       showTitle={showShellTitle}
       title={currentPage.title}
       userEmail={userEmail}
