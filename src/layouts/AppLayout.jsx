@@ -17,6 +17,7 @@ function AppLayout({
   showTitle = false,
   title = "Vehicles",
   userEmail,
+  userMetadata,
 }) {
   return (
     <AppBackground>
@@ -40,6 +41,7 @@ function AppLayout({
           showTitle={showTitle}
           title={title}
           userEmail={userEmail}
+          userMetadata={userMetadata}
         />
 
         <main className="px-4 py-5 sm:px-6 lg:px-8">

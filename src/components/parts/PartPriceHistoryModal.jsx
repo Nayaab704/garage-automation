@@ -4,6 +4,7 @@ import {
   searchVendorPartQuotes,
 } from "../../lib/vendorPriceMemory";
 import { selectQuoteForPartRequest } from "../../lib/partsQueue";
+import { formatUserFirstName } from "../../lib/userDisplay";
 import AppIcon from "../ui/AppIcon";
 import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
@@ -239,6 +240,14 @@ function PartPriceHistoryModal({
                     .filter(Boolean)
                     .join(" - ")}
                 </p>
+
+                {quote.createdByProfile && (
+                  <p className="mt-1 text-xs font-semibold text-slate-400">
+                    Quote added by{" "}
+                    {formatUserFirstName(quote.createdByProfile)} -{" "}
+                    {formatDate(quote.created_at ?? quote.quoted_at)}
+                  </p>
+                )}
 
                 {!hasLinkedVendor && (
                   <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">

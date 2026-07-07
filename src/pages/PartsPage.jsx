@@ -4,12 +4,18 @@ import PartsQueueCard from "../components/parts/PartsQueueCard";
 import PartsQueueEmptyState from "../components/parts/PartsQueueEmptyState";
 import PartsQueueTabs from "../components/parts/PartsQueueTabs";
 import AppIcon from "../components/ui/AppIcon";
+import ModalShell from "../components/ui/ModalShell";
+import { buttonClassNames } from "../components/ui/uiStyles";
 import CreatePurchaseOrderForm from "../components/vehicle-detail/CreatePurchaseOrderForm";
 import { logVehicleActivity } from "../lib/activityLogger";
 import {
   getPartQueueCounts,
   getSelectedVendorId,
 } from "../lib/partWorkflowUtils";
+import {
+  getPrimaryReturnedPurchaseOrderItem,
+  getReturnDeduction,
+} from "../lib/partReturns";
 import {
   fetchPartsQueue,
   filterPartsQueueResults,
@@ -22,10 +28,74 @@ import {
 } from "../lib/vendorPriceMemory";
 
 const partRequestColumns =
-  "id, vehicle_id, repair_job_id, part_name, quantity, status, notes, part_source, approval_status, unit_cost, selected_vendor_id, selected_quote_id, quoted_unit_cost, quoted_total_cost, created_by, created_at";
+  "id, vehicle_id, repair_job_id, part_name, quantity, status, notes, part_source, approval_status, approved_by, approved_at, unit_cost, selected_vendor_id, selected_quote_id, quoted_unit_cost, quoted_total_cost, created_by, created_at";
 
 function canApprovePartsForProfile(profile) {
   return profile?.role === "admin" || profile?.role === "owner";
+}
+
+const currencyFormatter = new Intl.NumberFormat("en-US", {
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+  style: "currency",
+});
+
+function numberOrZero(value) {
+  const numberValue = Number(value ?? 0);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function formatCurrency(value) {
+  return currencyFormatter.format(numberOrZero(value));
+}
+
+function getRestoredItemStatus(item) {
+  return item?.purchaseOrder?.status === "received" ? "received" : "ordered";
+}
+
+function UndoReturnModal({ isSubmitting, onClose, onConfirm, part }) {
+  const returnedItem = getPrimaryReturnedPurchaseOrderItem(part);
+
+  return (
+    <ModalShell
+      description="This will add the returned amount back into vehicle costs."
+      isCloseDisabled={isSubmitting}
+      onClose={onClose}
+      title="Undo return for this part?"
+    >
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-black text-slate-950">
+            {part?.part_name || returnedItem?.description || "Unnamed part"}
+          </p>
+          <p className="mt-1 text-sm font-semibold text-slate-500">
+            Restores {formatCurrency(getReturnDeduction(returnedItem))} to
+            vehicle costs.
+          </p>
+        </div>
+
+        <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+          <button
+            className={`w-full sm:w-auto ${buttonClassNames.secondary}`}
+            disabled={isSubmitting}
+            onClick={onClose}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className={`w-full sm:w-auto ${buttonClassNames.primary}`}
+            disabled={isSubmitting}
+            onClick={onConfirm}
+            type="button"
+          >
+            {isSubmitting ? "Undoing return..." : "Undo Return"}
+          </button>
+        </div>
+      </div>
+    </ModalShell>
+  );
 }
 
 function PartsPage({
@@ -42,10 +112,12 @@ function PartsPage({
   const [selectedPartForPurchaseOrder, setSelectedPartForPurchaseOrder] =
     useState(null);
   const [successMessage, setSuccessMessage] = useState("");
+  const [undoReturnPart, setUndoReturnPart] = useState(null);
   const [updatingPartId, setUpdatingPartId] = useState(null);
   const [vendors, setVendors] = useState([]);
 
   const canApproveParts = canApprovePartsForProfile(currentProfile);
+  const canManageReturns = canApprovePartsForProfile(currentProfile);
   const canManagePurchaseOrders = hasPermission(
     currentProfile?.role,
     "purchase_order:manage"
@@ -152,9 +224,21 @@ function PartsPage({
     setSuccessMessage("");
 
     try {
+      const reviewValues =
+        approvalStatus === "approved"
+          ? {
+              approval_status: approvalStatus,
+              approved_at: new Date().toISOString(),
+              approved_by: currentProfile?.id ?? null,
+            }
+          : {
+              approval_status: approvalStatus,
+              approved_at: null,
+              approved_by: null,
+            };
       const { data, error } = await supabase
         .from("part_requests")
-        .update({ approval_status: approvalStatus })
+        .update(reviewValues)
         .eq("id", part.id)
         .select(partRequestColumns)
         .single();
@@ -168,7 +252,15 @@ function PartsPage({
       setPartQueue((currentParts) =>
         currentParts.map((currentPart) =>
           currentPart.id === part.id
-            ? { ...currentPart, ...(data ?? {}), approval_status: approvalStatus }
+            ? {
+                ...currentPart,
+                ...(data ?? reviewValues),
+                approvedByProfile:
+                  approvalStatus === "approved"
+                    ? currentProfile
+                    : null,
+                approval_status: approvalStatus,
+              }
             : currentPart
         )
       );
@@ -286,6 +378,92 @@ function PartsPage({
     setSuccessMessage("");
     setErrorMessage("");
     setSelectedPartForPurchaseOrder(part);
+  }
+
+  async function handleConfirmUndoReturn() {
+    const part = undoReturnPart;
+    const returnedItem = getPrimaryReturnedPurchaseOrderItem(part);
+
+    if (!canManageReturns) {
+      setErrorMessage("Your role cannot undo returns.");
+      return;
+    }
+
+    if (!part?.id || !returnedItem?.id) {
+      setErrorMessage("Could not find a returned item to undo.");
+      setUndoReturnPart(null);
+      return;
+    }
+
+    setUpdatingPartId(part.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const restoredStatus = getRestoredItemStatus(returnedItem);
+      const updateValues = {
+        return_notes: null,
+        return_reason: null,
+        return_status: null,
+        returned_amount: null,
+        returned_at: null,
+        returned_by: null,
+        returned_quantity: null,
+        returned_shipping_amount: null,
+        status: restoredStatus,
+      };
+      const { data, error } = await supabase
+        .from("purchase_order_items")
+        .update(updateValues)
+        .eq("id", returnedItem.id)
+        .select("*")
+        .single();
+
+      if (error) {
+        console.error("Could not undo return:", error);
+        setErrorMessage("Could not undo return. Please try again.");
+        return;
+      }
+
+      const nextItem = data ?? { ...returnedItem, ...updateValues };
+
+      setPartQueue((currentParts) =>
+        currentParts.map((currentPart) =>
+          currentPart.id === part.id
+            ? {
+                ...currentPart,
+                purchaseOrderItems: (currentPart.purchaseOrderItems ?? []).map(
+                  (item) =>
+                    item.id === returnedItem.id
+                      ? {
+                          ...item,
+                          ...nextItem,
+                          purchaseOrder: item.purchaseOrder,
+                        }
+                      : item
+                ),
+              }
+            : currentPart
+        )
+      );
+
+      await logVehicleActivity({
+        vehicleId: part.vehicle_id,
+        action: "Part return undone",
+        details: {
+          part_name: part.part_name,
+          purchase_order_item_id: returnedItem.id,
+          restored_status: restoredStatus,
+        },
+      });
+      setUndoReturnPart(null);
+      setSuccessMessage("Return undone. Vehicle costs include the part again.");
+    } catch (error) {
+      console.error("Could not undo return:", error);
+      setErrorMessage("Could not undo return. Please try again.");
+    } finally {
+      setUpdatingPartId(null);
+    }
   }
 
   async function handleUseQuoteForPart(quote, data) {
@@ -415,6 +593,7 @@ function PartsPage({
             <PartsQueueCard
               canApproveParts={canApproveParts}
               canCreatePurchaseOrders={canManagePurchaseOrders}
+              canManageReturns={canManageReturns}
               isUpdating={updatingPartId === part.id}
               key={part.id}
               onApprove={(currentPart) =>
@@ -426,6 +605,7 @@ function PartsPage({
               onReject={(currentPart) =>
                 handleApprovalChange(currentPart, "rejected")
               }
+              onUndoReturn={setUndoReturnPart}
               onViewPrices={setPriceHistoryPart}
               part={part}
             />
@@ -454,6 +634,15 @@ function PartsPage({
           onUseQuote={handleUseQuoteForPart}
           part={priceHistoryPart}
           selectedQuoteId={priceHistoryPart.selected_quote_id}
+        />
+      )}
+
+      {undoReturnPart && canManageReturns && (
+        <UndoReturnModal
+          isSubmitting={updatingPartId === undoReturnPart.id}
+          onClose={() => setUndoReturnPart(null)}
+          onConfirm={handleConfirmUndoReturn}
+          part={undoReturnPart}
         />
       )}
     </div>

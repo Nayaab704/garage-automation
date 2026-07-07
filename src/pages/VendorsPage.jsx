@@ -9,6 +9,7 @@ import {
   fetchVendorsWithStats,
   withEmptyVendorStats,
 } from "../lib/vendors";
+import { formatUserFirstName } from "../lib/userDisplay";
 
 const vendorTypeOptions = [
   { value: "all", label: "All Types" },
@@ -371,6 +372,13 @@ function VendorHistoryItem({ entry }) {
           <span>{availabilityLabels[entry.availability] ?? entry.availability}</span>
         )}
       </div>
+
+      {entry.source === "quote" && entry.createdByProfile && (
+        <p className="mt-2 text-xs font-semibold text-slate-400">
+          Quote added by {formatUserFirstName(entry.createdByProfile)} -{" "}
+          {formatDate(entry.date)}
+        </p>
+      )}
 
       {(vehicleLabel || workOrderLabel) && (
         <div className="mt-3 space-y-1 text-xs font-semibold text-slate-500">

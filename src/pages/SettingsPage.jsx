@@ -14,6 +14,9 @@ const roleOptions = [
   { label: "Sales", value: "sales" },
 ];
 
+const profileSelectFields =
+  "id, auth_user_id, full_name, email, role, phone, hourly_rate, is_active, created_at";
+
 function displayValue(value) {
   return value === null || value === undefined || value === ""
     ? "Not available"
@@ -174,7 +177,134 @@ function TeamMemberCard({
   );
 }
 
-function SettingsPage({ currentProfile }) {
+function ProfileSettingsCard({ currentProfile, onCurrentProfileUpdated }) {
+  const [fullName, setFullName] = useState(currentProfile?.full_name ?? "");
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const savedFullName = currentProfile?.full_name ?? "";
+  const hasChanged = fullName.trim() !== savedFullName.trim();
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    const nextFullName = fullName.trim();
+
+    if (!currentProfile?.id) {
+      setErrorMessage("Profile is still loading. Please try again.");
+      return;
+    }
+
+    if (!nextFullName) {
+      setErrorMessage("Full name is required.");
+      return;
+    }
+
+    setIsSaving(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({ full_name: nextFullName })
+        .eq("id", currentProfile.id)
+        .select(profileSelectFields)
+        .single();
+
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
+
+      const { error: metadataError } = await supabase.auth.updateUser({
+        data: {
+          full_name: nextFullName,
+          name: nextFullName,
+        },
+      });
+
+      if (metadataError) {
+        console.error("Could not update auth display name:", metadataError);
+      }
+
+      onCurrentProfileUpdated?.(data);
+      setFullName(nextFullName);
+      setSuccessMessage("Full name updated.");
+    } catch (error) {
+      setErrorMessage(error.message ?? "Unable to update full name.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <section className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-zinc-950">My Profile</h2>
+          <p className="mt-2 text-sm text-zinc-600">
+            This name appears in the app header and team activity.
+          </p>
+        </div>
+
+        {currentProfile?.role && (
+          <span
+            className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${getProfileRoleClassName(
+              currentProfile.role
+            )}`}
+          >
+            {formatProfileRole(currentProfile.role)}
+          </span>
+        )}
+      </div>
+
+      <form className="mt-5 grid gap-4 lg:grid-cols-[1fr_auto]" onSubmit={handleSubmit}>
+        <label className="block" htmlFor="profile-full-name">
+          <span className="text-sm font-semibold text-zinc-700">Full Name</span>
+          <input
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isSaving || !currentProfile?.id}
+            id="profile-full-name"
+            onChange={(event) => setFullName(event.target.value)}
+            required
+            type="text"
+            value={fullName}
+          />
+          {currentProfile?.email && (
+            <span className="mt-1 block truncate text-xs text-zinc-500">
+              {currentProfile.email}
+            </span>
+          )}
+        </label>
+
+        <div className="flex items-end">
+          <button
+            className="w-full rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 lg:w-auto"
+            disabled={isSaving || !hasChanged}
+            type="submit"
+          >
+            {isSaving ? "Saving..." : "Save Name"}
+          </button>
+        </div>
+      </form>
+
+      {errorMessage && (
+        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          {errorMessage}
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          {successMessage}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SettingsPage({ currentProfile, onCurrentProfileUpdated }) {
   const [profiles, setProfiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -198,9 +328,7 @@ function SettingsPage({ currentProfile }) {
       try {
         const { data, error } = await supabase
           .from("profiles")
-          .select(
-            "id, full_name, email, role, phone, hourly_rate, is_active, created_at"
-          )
+          .select(profileSelectFields)
           .order("created_at", { ascending: false });
 
         if (!isMounted) {
@@ -256,9 +384,7 @@ function SettingsPage({ currentProfile }) {
         .from("profiles")
         .update({ role: nextRole })
         .eq("id", profile.id)
-        .select(
-          "id, full_name, email, role, phone, hourly_rate, is_active, created_at"
-        )
+        .select(profileSelectFields)
         .single();
 
       if (error) {
@@ -290,9 +416,7 @@ function SettingsPage({ currentProfile }) {
         .from("profiles")
         .update({ is_active: !profile.is_active })
         .eq("id", profile.id)
-        .select(
-          "id, full_name, email, role, phone, hourly_rate, is_active, created_at"
-        )
+        .select(profileSelectFields)
         .single();
 
       if (error) {
@@ -328,9 +452,7 @@ function SettingsPage({ currentProfile }) {
         .from("profiles")
         .update({ hourly_rate: hourlyRate })
         .eq("id", profile.id)
-        .select(
-          "id, full_name, email, role, phone, hourly_rate, is_active, created_at"
-        )
+        .select(profileSelectFields)
         .single();
 
       if (error) {
@@ -349,17 +471,31 @@ function SettingsPage({ currentProfile }) {
 
   if (!canManageUsers) {
     return (
-      <section className="rounded-lg border border-zinc-200 bg-white p-8 shadow-sm">
-        <h2 className="text-xl font-bold text-zinc-950">Team Management</h2>
-        <p className="mt-2 text-zinc-600">
-          You do not have permission to manage users.
-        </p>
+      <section className="space-y-5">
+        <ProfileSettingsCard
+          currentProfile={currentProfile}
+          key={currentProfile?.id ?? "current-profile"}
+          onCurrentProfileUpdated={onCurrentProfileUpdated}
+        />
+
+        <section className="rounded-lg border border-zinc-200 bg-white p-8 shadow-sm">
+          <h2 className="text-xl font-bold text-zinc-950">Team Management</h2>
+          <p className="mt-2 text-zinc-600">
+            You do not have permission to manage users.
+          </p>
+        </section>
       </section>
     );
   }
 
   return (
     <section className="space-y-5">
+      <ProfileSettingsCard
+        currentProfile={currentProfile}
+        key={currentProfile?.id ?? "current-profile"}
+        onCurrentProfileUpdated={onCurrentProfileUpdated}
+      />
+
       <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-bold text-zinc-950">Team Management</h2>
         <p className="mt-2 text-sm text-zinc-600">

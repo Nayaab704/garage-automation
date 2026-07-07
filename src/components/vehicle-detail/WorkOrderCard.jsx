@@ -11,6 +11,7 @@ import ThirdPartyRepairsList from "./ThirdPartyRepairsList";
 import WorkOrderLaborList from "./WorkOrderLaborList";
 import WorkOrderPartsList from "./WorkOrderPartsList";
 import WorkOrderPhotosList from "./WorkOrderPhotosList";
+import { getPurchaseOrderItemNetTotal } from "../../lib/partReturns";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -105,17 +106,7 @@ function getVendorName(vendors, vendorId) {
 
 function getPurchaseOrderTotal(items) {
   return items.reduce((total, item) => {
-    const quantity = Number(item.quantity || 0);
-    const unitCost = Number(item.unit_cost || 0);
-    const shippingCost = Number(item.shipping_cost || 0);
-    const tax = Number(item.tax || 0);
-    const itemTotal =
-      (Number.isFinite(quantity) ? quantity : 0) *
-        (Number.isFinite(unitCost) ? unitCost : 0) +
-      (Number.isFinite(shippingCost) ? shippingCost : 0) +
-      (Number.isFinite(tax) ? tax : 0);
-
-    return total + itemTotal;
+    return total + getPurchaseOrderItemNetTotal(item);
   }, 0);
 }
 
@@ -275,6 +266,7 @@ function WorkOrderCard({
   onPartAdded,
   onPartApprovalUpdated,
   onPartPurchaseOrderCreated,
+  onPurchaseOrderItemUpdated,
   onPhotoAdded,
   onPhotoDeleted,
   onThirdPartyRepairAdded,
@@ -503,7 +495,9 @@ function WorkOrderCard({
                 onOpenPurchaseOrders={openPurchaseOrdersSection}
                 onPartApprovalUpdated={onPartApprovalUpdated}
                 onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
+                onPurchaseOrderItemUpdated={onPurchaseOrderItemUpdated}
                 parts={parts}
+                profiles={profiles}
                 purchaseOrderItems={linkedPurchaseOrderItems}
                 purchaseOrders={linkedPurchaseOrders}
                 vehicleId={vehicleId}

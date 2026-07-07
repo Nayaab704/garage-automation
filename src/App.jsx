@@ -7,6 +7,7 @@ import PartsPage from "./pages/PartsPage";
 import PurchaseOrdersPage from "./pages/PurchaseOrdersPage";
 import RepairsPage from "./pages/RepairsPage";
 import SettingsPage from "./pages/SettingsPage";
+import TeamManagementPage from "./pages/TeamManagementPage";
 import VehicleDetailPage from "./pages/VehicleDetailPage";
 import VehiclesPage from "./pages/VehiclesPage";
 import VendorsPage from "./pages/VendorsPage";
@@ -110,6 +111,10 @@ const pageDetails = {
     title: "Vendors",
     description: "Manage supplier, service, auction, and partner contacts.",
   },
+  Team: {
+    title: "Team Management",
+    description: "Approve users, assign roles, and manage team access.",
+  },
   Analytics: {
     title: "Analytics",
     description: "Operational reporting and profitability insights will live here.",
@@ -182,13 +187,19 @@ function App() {
   const activePage = currentRoute.page;
   const selectedVehicleId = currentRoute.vehicleId;
   const canViewDashboard = hasPermission(currentProfile?.role, "dashboard:view");
+  const canManageUsers = hasPermission(currentProfile?.role, "user:manage");
   const effectiveActivePage =
-    activePage === "Dashboard" && !canViewDashboard ? "Vehicles" : activePage;
+    activePage === "Dashboard" && !canViewDashboard
+      ? "Vehicles"
+      : activePage === "Team" && !canManageUsers
+        ? "Vehicles"
+        : activePage;
   const currentPage = pageDetails[effectiveActivePage];
   const showShellTitle = !MAIN_NAV_PAGES.includes(effectiveActivePage);
   const navigationPage =
     effectiveActivePage === "vehicleDetail" ? "Vehicles" : effectiveActivePage;
   const userEmail = session?.user?.email ?? "";
+  const userMetadata = session?.user?.user_metadata ?? null;
   const showAppBackButton =
     appHistoryDepth > 0 || effectiveActivePage !== FALLBACK_PAGE;
 
@@ -324,6 +335,10 @@ function App() {
         return createAppRoute(FALLBACK_PAGE);
       }
 
+      if (route.page === "Team" && !canManageUsers) {
+        return createAppRoute(FALLBACK_PAGE);
+      }
+
       if (route.page === "vehicleDetail" && !route.vehicleId) {
         return createAppRoute(FALLBACK_PAGE);
       }
@@ -345,7 +360,7 @@ function App() {
     return () => {
       window.removeEventListener("popstate", handlePopState);
     };
-  }, [canViewDashboard]);
+  }, [canManageUsers, canViewDashboard]);
 
   function handlePageChange(pageName) {
     navigateToRoute(pageName);
@@ -357,6 +372,10 @@ function App() {
 
   function normalizeAppRoute(pageName, vehicleId = null) {
     if (pageName === "Dashboard" && !canViewDashboard) {
+      return createAppRoute(FALLBACK_PAGE);
+    }
+
+    if (pageName === "Team" && !canManageUsers) {
       return createAppRoute(FALLBACK_PAGE);
     }
 
@@ -488,6 +507,10 @@ function App() {
       return <VendorsPage currentProfile={currentProfile} />;
     }
 
+    if (effectiveActivePage === "Team") {
+      return <TeamManagementPage currentProfile={currentProfile} />;
+    }
+
     if (effectiveActivePage === "vehicleDetail") {
       return (
         <VehicleDetailPage
@@ -499,7 +522,12 @@ function App() {
     }
 
     if (effectiveActivePage === "Settings") {
-      return <SettingsPage currentProfile={currentProfile} />;
+      return (
+        <SettingsPage
+          currentProfile={currentProfile}
+          onCurrentProfileUpdated={setCurrentProfile}
+        />
+      );
     }
 
     return <PlaceholderPage title={effectiveActivePage} />;
@@ -529,7 +557,7 @@ function App() {
     );
   }
 
-  if (currentProfile && currentProfile.is_active === false) {
+  if (!currentProfile || currentProfile.is_active === false) {
     return (
       <AccountPendingApproval
         isLoggingOut={isLoggingOut}
@@ -552,6 +580,7 @@ function App() {
       showTitle={showShellTitle}
       title={currentPage.title}
       userEmail={userEmail}
+      userMetadata={userMetadata}
     >
       {authError && (
         <div className="mb-6 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">

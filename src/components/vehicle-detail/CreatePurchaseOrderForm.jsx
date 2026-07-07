@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import FormActions from "../ui/FormActions";
 import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
@@ -13,13 +13,25 @@ const emptyForm = {
   description: "",
   quantity: "1",
   unit_cost: "",
-  shipping_cost: "",
+  shipping_cost: "100",
   tax: "",
   notes: "",
 };
 
 const partRequestResultColumns =
-  "id, vehicle_id, repair_job_id, part_name, quantity, status, notes, part_source, approval_status, unit_cost, selected_vendor_id, selected_quote_id, quoted_unit_cost, quoted_total_cost, created_by, created_at";
+  "id, vehicle_id, repair_job_id, part_name, quantity, status, notes, part_source, approval_status, approved_by, approved_at, unit_cost, selected_vendor_id, selected_quote_id, quoted_unit_cost, quoted_total_cost, created_by, created_at";
+
+const DEFAULT_SHIPPING_COST = 100;
+const SHIPPING_QUICK_OPTIONS = [0, 50, DEFAULT_SHIPPING_COST, 150];
+
+const currencyFormatter = new Intl.NumberFormat("en-US", {
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+  style: "currency",
+});
+
+const numberFormatter = new Intl.NumberFormat("en-US");
 
 function emptyToNull(value) {
   const trimmedValue = value.trim();
@@ -54,6 +66,28 @@ function getPartRequestName(partRequest) {
 
 function valueToString(value) {
   return value === null || value === undefined ? "" : String(value);
+}
+
+function getSafeNumber(value, defaultValue = 0) {
+  const trimmedValue = String(value ?? "").trim();
+
+  if (trimmedValue === "") {
+    return defaultValue;
+  }
+
+  const numberValue = Number(trimmedValue);
+
+  return Number.isFinite(numberValue) && numberValue >= 0
+    ? numberValue
+    : defaultValue;
+}
+
+function formatCurrency(value) {
+  return currencyFormatter.format(getSafeNumber(value));
+}
+
+function formatNumber(value) {
+  return numberFormatter.format(getSafeNumber(value));
 }
 
 function getPartRequestVendorId(partRequest) {
@@ -128,14 +162,64 @@ function getInitialFormData(initialPartRequest, initialVendorId = "") {
   };
 }
 
-function parseNumberWithDefault(value, defaultValue, label) {
-  const numberValue = Number(value || defaultValue);
+function getShippingSelection(value) {
+  const trimmedValue = String(value ?? "").trim();
 
-  if (!Number.isFinite(numberValue) || numberValue < 0) {
-    return { error: `${label} must be 0 or greater.`, value: null };
+  if (trimmedValue === "") {
+    return "custom";
+  }
+
+  const numberValue = Number(trimmedValue);
+
+  return SHIPPING_QUICK_OPTIONS.includes(numberValue) ? numberValue : "custom";
+}
+
+function parseUnitCost(value) {
+  const trimmedValue = String(value ?? "").trim();
+  const numberValue = Number(trimmedValue);
+
+  if (trimmedValue === "" || !Number.isFinite(numberValue) || numberValue < 0) {
+    return { error: "Please enter a valid unit cost.", value: null };
   }
 
   return { error: "", value: numberValue };
+}
+
+function parseOptionalCost(value, invalidMessage, negativeMessage) {
+  const trimmedValue = String(value ?? "").trim();
+
+  if (trimmedValue === "") {
+    return { error: "", value: 0 };
+  }
+
+  const numberValue = Number(trimmedValue);
+
+  if (!Number.isFinite(numberValue)) {
+    return { error: invalidMessage, value: null };
+  }
+
+  if (numberValue < 0) {
+    return { error: negativeMessage, value: null };
+  }
+
+  return { error: "", value: numberValue };
+}
+
+function getCostSummary(formData) {
+  const quantity = getSafeNumber(formData.quantity, 1);
+  const unitCost = getSafeNumber(formData.unit_cost);
+  const shippingCost = getSafeNumber(formData.shipping_cost);
+  const tax = getSafeNumber(formData.tax);
+  const subtotal = quantity * unitCost;
+
+  return {
+    quantity,
+    shippingCost,
+    subtotal,
+    tax,
+    total: subtotal + shippingCost + tax,
+    unitCost,
+  };
 }
 
 async function hasActivePurchaseOrderItem(partRequestId) {
@@ -179,6 +263,10 @@ function CreatePurchaseOrderForm({
   const [formData, setFormData] = useState(() =>
     initialFormData
   );
+  const [selectedShippingOption, setSelectedShippingOption] = useState(() =>
+    getShippingSelection(initialFormData.shipping_cost)
+  );
+  const shippingInputRef = useRef(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -213,6 +301,7 @@ function CreatePurchaseOrderForm({
         selectedPriceSourcePart?.selectedQuote?.id)
   );
   const selectedPriceVendorName = getPartRequestVendorName(selectedPriceSourcePart);
+  const costSummary = useMemo(() => getCostSummary(formData), [formData]);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -221,6 +310,26 @@ function CreatePurchaseOrderForm({
       ...currentFormData,
       [name]: value,
     }));
+
+    if (name === "shipping_cost") {
+      setSelectedShippingOption(getShippingSelection(value));
+    }
+  }
+
+  function handleShippingQuickSelect(value) {
+    setSelectedShippingOption(value);
+    setFormData((currentFormData) => ({
+      ...currentFormData,
+      shipping_cost: String(value),
+    }));
+  }
+
+  function handleCustomShippingSelect() {
+    setSelectedShippingOption("custom");
+    window.requestAnimationFrame(() => {
+      shippingInputRef.current?.focus();
+      shippingInputRef.current?.select();
+    });
   }
 
   function handlePartRequestChange(event) {
@@ -254,13 +363,17 @@ function CreatePurchaseOrderForm({
   function validateForm() {
     const description = emptyToNull(formData.description);
     const quantity = Number(formData.quantity || 1);
-    const unitCost = parseNumberWithDefault(formData.unit_cost, 0, "Unit cost");
-    const shippingCost = parseNumberWithDefault(
+    const unitCost = parseUnitCost(formData.unit_cost);
+    const shippingCost = parseOptionalCost(
       formData.shipping_cost,
-      0,
-      "Shipping cost"
+      "Please enter a valid shipping cost.",
+      "Shipping cannot be negative."
     );
-    const tax = parseNumberWithDefault(formData.tax, 0, "Tax");
+    const tax = parseOptionalCost(
+      formData.tax,
+      "Please enter a valid tax amount.",
+      "Tax cannot be negative."
+    );
 
     if (!formData.vendor_id) {
       return { error: "Vendor is required." };
@@ -428,6 +541,7 @@ function CreatePurchaseOrderForm({
       const partRequestStatusUpdated = !partRequestResponse.error;
 
       setFormData(initialFormData);
+      setSelectedShippingOption(getShippingSelection(initialFormData.shipping_cost));
       setSuccessMessage("Purchase order created successfully.");
       setWarningMessage(statusWarning);
       await logVehicleActivity({
@@ -574,63 +688,132 @@ function CreatePurchaseOrderForm({
             <legend className="px-1 text-sm font-black text-slate-950">
               Cost Details
             </legend>
-          <div className="grid gap-4 sm:grid-cols-4">
-            <label className="block" htmlFor="purchase-order-quantity">
-              <span className={formControlClassNames.label}>Quantity</span>
-              <input
-                className={formControlClassNames.input}
-                id="purchase-order-quantity"
-                min="1"
-                name="quantity"
-                onChange={handleChange}
-                step="1"
-                type="number"
-                value={formData.quantity}
-              />
-            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block" htmlFor="purchase-order-quantity">
+                <span className={formControlClassNames.label}>Quantity</span>
+                <input
+                  className={formControlClassNames.input}
+                  id="purchase-order-quantity"
+                  min="1"
+                  name="quantity"
+                  onChange={handleChange}
+                  step="1"
+                  type="number"
+                  value={formData.quantity}
+                />
+              </label>
 
-            <label className="block" htmlFor="purchase-order-unit-cost">
-              <span className={formControlClassNames.label}>Unit Cost</span>
-              <input
-                className={formControlClassNames.input}
-                id="purchase-order-unit-cost"
-                min="0"
-                name="unit_cost"
-                onChange={handleChange}
-                step="0.01"
-                type="number"
-                value={formData.unit_cost}
-              />
-            </label>
+              <label className="block" htmlFor="purchase-order-unit-cost">
+                <span className={formControlClassNames.label}>Unit Cost</span>
+                <input
+                  className={formControlClassNames.input}
+                  id="purchase-order-unit-cost"
+                  min="0"
+                  name="unit_cost"
+                  onChange={handleChange}
+                  step="0.01"
+                  type="number"
+                  value={formData.unit_cost}
+                />
+              </label>
+            </div>
 
-            <label className="block" htmlFor="purchase-order-shipping">
+            <div>
               <span className={formControlClassNames.label}>Shipping</span>
-              <input
-                className={formControlClassNames.input}
-                id="purchase-order-shipping"
-                min="0"
-                name="shipping_cost"
-                onChange={handleChange}
-                step="0.01"
-                type="number"
-                value={formData.shipping_cost}
-              />
-            </label>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {SHIPPING_QUICK_OPTIONS.map((option) => {
+                  const isSelected = selectedShippingOption === option;
+
+                  return (
+                    <button
+                      aria-pressed={isSelected}
+                      className={`inline-flex min-h-10 items-center justify-center rounded-2xl border px-3 py-2 text-sm font-black shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-100 ${
+                        isSelected
+                          ? "border-emerald-600 bg-emerald-600 text-white"
+                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
+                      key={option}
+                      onClick={() => handleShippingQuickSelect(option)}
+                      type="button"
+                    >
+                      ${option}
+                      {option === DEFAULT_SHIPPING_COST ? " Default" : ""}
+                    </button>
+                  );
+                })}
+                <button
+                  aria-pressed={selectedShippingOption === "custom"}
+                  className={`inline-flex min-h-10 items-center justify-center rounded-2xl border px-3 py-2 text-sm font-black shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-100 ${
+                    selectedShippingOption === "custom"
+                      ? "border-emerald-600 bg-emerald-600 text-white"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                  onClick={handleCustomShippingSelect}
+                  type="button"
+                >
+                  Custom
+                </button>
+              </div>
+
+              <label className="mt-3 block" htmlFor="purchase-order-shipping">
+                <span className="sr-only">Shipping amount</span>
+                <input
+                  className={formControlClassNames.input}
+                  id="purchase-order-shipping"
+                  min="0"
+                  name="shipping_cost"
+                  onChange={handleChange}
+                  ref={shippingInputRef}
+                  step="0.01"
+                  type="number"
+                  value={formData.shipping_cost}
+                />
+              </label>
+            </div>
 
             <label className="block" htmlFor="purchase-order-tax">
-              <span className={formControlClassNames.label}>Tax</span>
+              <span className={formControlClassNames.label}>Tax Optional</span>
               <input
                 className={formControlClassNames.input}
                 id="purchase-order-tax"
                 min="0"
                 name="tax"
                 onChange={handleChange}
+                placeholder="Optional"
                 step="0.01"
                 type="number"
                 value={formData.tax}
               />
             </label>
-          </div>
+
+            <div className="space-y-2 border-t border-slate-200 pt-4 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-semibold text-slate-600">Subtotal</span>
+                <span className="text-right font-black text-slate-950">
+                  Qty {formatNumber(costSummary.quantity)} x{" "}
+                  {formatCurrency(costSummary.unitCost)} ={" "}
+                  {formatCurrency(costSummary.subtotal)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-semibold text-slate-600">Shipping</span>
+                <span className="font-black text-slate-950">
+                  {formatCurrency(costSummary.shippingCost)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-semibold text-slate-600">Tax</span>
+                <span className="font-black text-slate-950">
+                  {formatCurrency(costSummary.tax)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-2">
+                <span className="text-base font-black text-slate-950">Total</span>
+                <span className="text-xl font-black text-emerald-700">
+                  {formatCurrency(costSummary.total)}
+                </span>
+              </div>
+            </div>
           </fieldset>
 
           <label className="block" htmlFor="purchase-order-notes">

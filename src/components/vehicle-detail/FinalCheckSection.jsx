@@ -88,6 +88,8 @@ function CheckRow({
 }) {
   const isAllowed = canUpdateCheck(currentProfile, finalCheck);
   const isUpdating = updatingCheckId === finalCheck.id;
+  const showAdminOnlyHint =
+    !isAllowed && finalCheck.required_role === "admin" && !finalCheck.is_checked;
   const checkedBy = finalCheck.checked_by
     ? getProfileName(profiles, finalCheck.checked_by)
     : "";
@@ -133,6 +135,10 @@ function CheckRow({
         {checkedMeta ? (
           <span className="mt-0.5 block truncate text-xs text-slate-500">
             {checkedMeta}
+          </span>
+        ) : showAdminOnlyHint ? (
+          <span className="mt-0.5 block text-xs font-semibold text-slate-400">
+            Admin only
           </span>
         ) : finalCheck.notes ? (
           <span className="mt-0.5 block truncate text-xs text-slate-500">

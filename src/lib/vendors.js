@@ -1,16 +1,20 @@
 import { supabase } from "./supabaseClient";
+import {
+  getPurchaseOrderItemNetTotal,
+  purchaseOrderItemReturnColumns,
+} from "./partReturns";
 
 const vendorColumns =
   "id, name, phone, email, address, vendor_type, notes, created_at";
 
 const vendorQuoteColumns =
-  "id, vendor_id, vendor_name_snapshot, vehicle_id, repair_job_id, part_request_id, purchase_order_id, purchase_order_item_id, raw_part_name, normalized_part_name, quantity, unit_price, shipping_cost, tax_cost, total_price, quote_status, availability, notes, quoted_at, created_at, stock_number_snapshot, vehicle_year_snapshot, vehicle_make_snapshot, vehicle_model_snapshot, vehicle_trim_snapshot";
+  "id, vendor_id, vendor_name_snapshot, vehicle_id, repair_job_id, part_request_id, purchase_order_id, purchase_order_item_id, raw_part_name, normalized_part_name, quantity, unit_price, shipping_cost, tax_cost, total_price, quote_status, availability, notes, quoted_at, created_by, created_at, stock_number_snapshot, vehicle_year_snapshot, vehicle_make_snapshot, vehicle_model_snapshot, vehicle_trim_snapshot";
 
 const purchaseOrderColumns =
   "id, vehicle_id, vendor_id, status, ordered_at, received_at, created_at";
 
 const purchaseOrderItemColumns =
-  "id, purchase_order_id, part_request_id, description, quantity, unit_cost, shipping_cost, tax, status, notes, created_at";
+  `id, purchase_order_id, part_request_id, description, quantity, unit_cost, shipping_cost, tax, status, notes, created_at, ${purchaseOrderItemReturnColumns}`;
 
 const partRequestColumns =
   "id, vehicle_id, repair_job_id, part_name, quantity, status";
@@ -34,11 +38,7 @@ function getDateTime(value) {
 }
 
 function getItemTotal(item) {
-  return (
-    numberOrZero(item.quantity) * numberOrZero(item.unit_cost) +
-    numberOrZero(item.shipping_cost) +
-    numberOrZero(item.tax)
-  );
+  return getPurchaseOrderItemNetTotal(item);
 }
 
 function getQuoteTotal(quote) {
@@ -70,6 +70,7 @@ function getQuoteVendorId(quote, vendorIdByName) {
 }
 
 function mapQuoteHistoryEntry({
+  profilesById,
   quote,
   repairJobsById,
   serviceCategoriesById,
@@ -82,6 +83,7 @@ function mapQuoteHistoryEntry({
 
   return {
     availability: quote.availability,
+    createdByProfile: profilesById[quote.created_by] ?? null,
     date,
     id: `quote-${quote.id}`,
     isPurchased: quote.quote_status === "purchased",
@@ -255,6 +257,19 @@ export async function fetchVendorsWithStats() {
   }
 
   const partRequests = partRequestsResponse.data ?? [];
+  const profileIds = uniqueValues(quotes.map((quote) => quote.created_by));
+  const profilesResponse =
+    profileIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", profileIds)
+      : { data: [], error: null };
+
+  if (profilesResponse.error) {
+    return { data: null, error: profilesResponse.error };
+  }
+
   const vehicleIds = uniqueValues([
     ...purchaseOrders.map((purchaseOrder) => purchaseOrder.vehicle_id),
     ...partRequests.map((partRequest) => partRequest.vehicle_id),
@@ -314,6 +329,9 @@ export async function fetchVendorsWithStats() {
   const partRequestsById = Object.fromEntries(
     partRequests.map((partRequest) => [partRequest.id, partRequest])
   );
+  const profilesById = Object.fromEntries(
+    (profilesResponse.data ?? []).map((profile) => [profile.id, profile])
+  );
   const purchaseOrdersById = Object.fromEntries(
     purchaseOrders.map((purchaseOrder) => [purchaseOrder.id, purchaseOrder])
   );
@@ -332,6 +350,7 @@ export async function fetchVendorsWithStats() {
 
     historyByVendorId[vendorId].push(
       mapQuoteHistoryEntry({
+        profilesById,
         quote,
         repairJobsById,
         serviceCategoriesById,

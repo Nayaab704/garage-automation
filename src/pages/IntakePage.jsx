@@ -143,6 +143,11 @@ function IntakePage({ currentProfile, onViewVehicles }) {
                   Stock number: {createdVehicle.stock_number}
                 </p>
               )}
+              {createdVehicle.photoSaveWarning && (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+                  {createdVehicle.photoSaveWarning}
+                </div>
+              )}
               <button
                 className={`mt-4 ${buttonClassNames.primary}`}
                 onClick={onViewVehicles}

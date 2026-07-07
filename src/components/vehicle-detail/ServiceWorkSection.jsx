@@ -116,6 +116,7 @@ function ServiceWorkSection({
   onPartAdded,
   onPartApprovalUpdated,
   onPartPurchaseOrderCreated,
+  onPurchaseOrderItemUpdated,
   onPhotoAdded,
   onPhotoDeleted,
   onThirdPartyRepairAdded,
@@ -242,6 +243,7 @@ function ServiceWorkSection({
               onPartAdded={onPartAdded}
               onPartApprovalUpdated={onPartApprovalUpdated}
               onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
+              onPurchaseOrderItemUpdated={onPurchaseOrderItemUpdated}
               onPhotoAdded={onPhotoAdded}
               onPhotoDeleted={onPhotoDeleted}
               onThirdPartyRepairAdded={onThirdPartyRepairAdded}

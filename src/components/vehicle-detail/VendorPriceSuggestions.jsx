@@ -6,6 +6,7 @@ import {
   normalizePartName,
   searchVendorPartQuotes,
 } from "../../lib/vendorPriceMemory";
+import { formatUserFirstName } from "../../lib/userDisplay";
 import AppIcon from "../ui/AppIcon";
 import FormMessage from "../ui/FormMessage";
 import { buttonClassNames, formControlClassNames } from "../ui/uiStyles";
@@ -148,6 +149,13 @@ function VendorPriceCard({ isSelected = false, onUseQuote, quote }) {
         <span>{formatDate(quote.quoted_at)}</span>
       </div>
 
+      {quote.createdByProfile && (
+        <p className="mt-2 text-xs font-semibold text-slate-400">
+          Quote added by {formatUserFirstName(quote.createdByProfile)} -{" "}
+          {formatDate(quote.created_at ?? quote.quoted_at)}
+        </p>
+      )}
+
       <div className="mt-3 flex items-center justify-end">
         <button
           className={`min-h-9 rounded-xl px-3 py-1.5 text-xs font-black transition ${
@@ -252,6 +260,7 @@ function AddVendorQuoteInline({
           vendor.name ??
           "Unknown vendor",
         vendor_name: data?.vendor_name_snapshot ?? vendor.name,
+        createdByProfile: currentProfile,
       });
     } catch (error) {
       console.error("Could not save vendor quote:", error);

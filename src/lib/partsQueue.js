@@ -2,20 +2,21 @@ import {
   filterPartsQueue,
   getPartQueueCounts,
 } from "./partWorkflowUtils";
+import { purchaseOrderItemReturnColumns } from "./partReturns";
 import { getVendorQuoteDisplayName } from "./vendorPriceMemory";
 import { supabase } from "./supabaseClient";
 
 const partRequestColumns =
-  "id, vehicle_id, repair_job_id, part_name, quantity, status, notes, part_source, approval_status, unit_cost, selected_vendor_id, selected_quote_id, quoted_unit_cost, quoted_total_cost, created_by, created_at";
+  "id, vehicle_id, repair_job_id, part_name, quantity, status, notes, part_source, approval_status, approved_by, approved_at, unit_cost, selected_vendor_id, selected_quote_id, quoted_unit_cost, quoted_total_cost, created_by, created_at";
 
 const purchaseOrderColumns =
-  "id, vehicle_id, vendor_id, status, ordered_by, ordered_at, received_at, notes, created_at";
+  "id, vehicle_id, vendor_id, status, ordered_by, ordered_at, received_by, received_at, notes, created_at";
 
 const purchaseOrderItemColumns =
-  "id, purchase_order_id, part_request_id, description, quantity, unit_cost, shipping_cost, tax, status, notes, created_at";
+  `id, purchase_order_id, part_request_id, description, quantity, unit_cost, shipping_cost, tax, status, notes, created_at, ${purchaseOrderItemReturnColumns}`;
 
 const vendorPartQuoteColumns =
-  "id, vendor_id, vendor_name_snapshot, vehicle_id, repair_job_id, part_request_id, purchase_order_id, purchase_order_item_id, raw_part_name, normalized_part_name, quantity, unit_price, shipping_cost, tax_cost, total_price, quote_status, availability, notes, quoted_at, created_at";
+  "id, vendor_id, vendor_name_snapshot, vehicle_id, repair_job_id, part_request_id, purchase_order_id, purchase_order_item_id, raw_part_name, normalized_part_name, quantity, unit_price, shipping_cost, tax_cost, total_price, quote_status, availability, notes, quoted_at, created_by, created_at";
 
 function uniqueValues(values) {
   return [...new Set(values.filter(Boolean))];
@@ -65,9 +66,12 @@ function enrichPart({
       purchaseOrder: purchaseOrder
         ? {
             ...purchaseOrder,
+            orderedByProfile: profilesById[purchaseOrder.ordered_by] ?? null,
+            receivedByProfile: profilesById[purchaseOrder.received_by] ?? null,
             vendor: vendorsById[purchaseOrder.vendor_id] ?? null,
           }
         : null,
+      returnedByProfile: profilesById[item.returned_by] ?? null,
     };
   });
   const quotes = [...(quotesByPartRequestId[part.id] ?? [])].sort(latestQuoteFirst);
@@ -78,6 +82,7 @@ function enrichPart({
 
   return {
     ...part,
+    approvedByProfile: profilesById[part.approved_by] ?? null,
     createdByProfile: profilesById[part.created_by] ?? null,
     latestQuote,
     purchaseOrderItems,
@@ -112,7 +117,9 @@ export async function fetchPartsQueue() {
   const partRequestIds = uniqueValues(partRequests.map((part) => part.id));
   const vehicleIds = uniqueValues(partRequests.map((part) => part.vehicle_id));
   const repairJobIds = uniqueValues(partRequests.map((part) => part.repair_job_id));
-  const profileIds = uniqueValues(partRequests.map((part) => part.created_by));
+  const profileIds = uniqueValues(
+    partRequests.flatMap((part) => [part.created_by, part.approved_by])
+  );
   const selectedQuoteIds = uniqueValues(
     partRequests.map((part) => part.selected_quote_id)
   );
@@ -221,9 +228,6 @@ export async function fetchPartsQueue() {
   const repairJobsById = Object.fromEntries(
     (repairJobsResponse.data ?? []).map((repairJob) => [repairJob.id, repairJob])
   );
-  const profilesById = Object.fromEntries(
-    (profilesResponse.data ?? []).map((profile) => [profile.id, profile])
-  );
   const serviceCategoriesById = Object.fromEntries(
     (serviceCategoriesResponse.data ?? []).map((category) => [
       category.id,
@@ -258,11 +262,46 @@ export async function fetchPartsQueue() {
   }
 
   const allQuoteRecords = [...quoteRecordsById.values()];
+  const knownProfileIds = new Set(
+    (profilesResponse.data ?? []).map((profile) => profile.id)
+  );
+  const additionalProfileIds = uniqueValues([
+    ...purchaseOrderItems.map((item) => item.returned_by),
+    ...(purchaseOrdersResponse.data ?? []).flatMap((purchaseOrder) => [
+      purchaseOrder.ordered_by,
+      purchaseOrder.received_by,
+    ]),
+    ...allQuoteRecords.map((quote) => quote.created_by),
+  ]).filter((profileId) => !knownProfileIds.has(profileId));
+  const additionalProfilesResponse =
+    additionalProfileIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, full_name, email, role")
+          .in("id", additionalProfileIds)
+      : { data: [], error: null };
+
+  if (additionalProfilesResponse.error) {
+    return { data: null, error: additionalProfilesResponse.error };
+  }
+
+  const profilesById = Object.fromEntries(
+    [
+      ...(profilesResponse.data ?? []),
+      ...(additionalProfilesResponse.data ?? []),
+    ].map((profile) => [profile.id, profile])
+  );
+  const quoteRecordsWithProfiles = allQuoteRecords.map((quote) => ({
+    ...quote,
+    createdByProfile: profilesById[quote.created_by] ?? null,
+  }));
   const quotesById = Object.fromEntries(
-    allQuoteRecords.map((quote) => [quote.id, quote])
+    quoteRecordsWithProfiles.map((quote) => [quote.id, quote])
   );
   const quotesByPartRequestId = groupBy(
-    allQuoteRecords.filter((quote) => partRequestIds.includes(quote.part_request_id)),
+    quoteRecordsWithProfiles.filter((quote) =>
+      partRequestIds.includes(quote.part_request_id)
+    ),
     "part_request_id"
   );
   const parts = partRequests.map((part) =>

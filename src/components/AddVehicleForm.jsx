@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   buttonClassNames,
   cardClassNames,
@@ -99,6 +99,12 @@ const intakeInputClassName =
   "mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100";
 const intakeTextareaClassName =
   "mt-2 min-h-24 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100";
+const photoInputActionClassName =
+  "inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-emerald-100";
+const disabledPhotoInputActionClassName =
+  "pointer-events-none cursor-not-allowed opacity-60";
+const photoSaveFailureMessage =
+  "Vehicle was created, but the photo could not be saved. Please open the vehicle and add the main photo again.";
 
 function emptyToNull(value) {
   const trimmedValue = String(value ?? "").trim();
@@ -168,6 +174,97 @@ function buildVehiclePayload(formData) {
   };
 }
 
+function cleanFileName(fileName) {
+  return fileName
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]/g, "-")
+    .replace(/-+/g, "-");
+}
+
+function buildPhotoPath(vehicleId, fileName) {
+  const timestamp = Date.now();
+  return `vehicles/${vehicleId}/${timestamp}-${cleanFileName(fileName)}`;
+}
+
+async function cleanupUploadedFile(photoPath) {
+  await supabase.storage.from("vehicle-photos").remove([photoPath]);
+}
+
+async function saveMainVehiclePhoto(vehicle, selectedPhoto) {
+  const photoPath = buildPhotoPath(vehicle.id, selectedPhoto.name);
+
+  const uploadResponse = await supabase.storage
+    .from("vehicle-photos")
+    .upload(photoPath, selectedPhoto, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+
+  if (uploadResponse.error) {
+    console.error("Could not upload intake vehicle photo:", uploadResponse.error);
+    throw new Error("Photo upload failed.");
+  }
+
+  const publicUrlResponse = supabase.storage
+    .from("vehicle-photos")
+    .getPublicUrl(photoPath);
+
+  const photo = {
+    vehicle_id: vehicle.id,
+    photo_url: publicUrlResponse.data.publicUrl,
+    photo_path: photoPath,
+    photo_type: "general",
+    caption: "Main vehicle photo",
+  };
+
+  const insertResponse = await supabase
+    .from("vehicle_photos")
+    .insert([photo])
+    .select("*")
+    .single();
+
+  if (insertResponse.error) {
+    try {
+      await cleanupUploadedFile(photoPath);
+    } catch (cleanupError) {
+      console.error("Could not clean up intake vehicle photo:", cleanupError);
+    }
+
+    console.error("Could not save intake vehicle photo:", insertResponse.error);
+    throw new Error("Photo record failed.");
+  }
+
+  const savedPhoto = insertResponse.data;
+
+  if (!savedPhoto?.id) {
+    console.error("Intake vehicle photo was saved without an id:", savedPhoto);
+    throw new Error("Photo record missing id.");
+  }
+
+  const primaryPhotoResponse = await supabase
+    .from("vehicles")
+    .update({ primary_photo_id: savedPhoto.id })
+    .eq("id", vehicle.id)
+    .select("id, stock_number, vin, primary_photo_id")
+    .single();
+
+  if (
+    primaryPhotoResponse.error ||
+    primaryPhotoResponse.data?.primary_photo_id !== savedPhoto.id
+  ) {
+    console.error(
+      "Could not set intake vehicle main photo:",
+      primaryPhotoResponse.error ?? primaryPhotoResponse.data
+    );
+    throw new Error("Primary photo update failed.");
+  }
+
+  return {
+    photo: savedPhoto,
+    vehicle: primaryPhotoResponse.data,
+  };
+}
+
 function IntakeFormSection({ children, description, icon, title }) {
   return (
     <fieldset className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -198,9 +295,25 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
   const [formData, setFormData] = useState(() =>
     buildInitialFormData(initialValues)
   );
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [photoInputKey, setPhotoInputKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const photoPreviewUrl = useMemo(
+    () => (selectedPhoto ? URL.createObjectURL(selectedPhoto) : ""),
+    [selectedPhoto]
+  );
+
+  useEffect(() => {
+    if (!photoPreviewUrl) {
+      return undefined;
+    }
+
+    return () => {
+      URL.revokeObjectURL(photoPreviewUrl);
+    };
+  }, [photoPreviewUrl]);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -212,10 +325,48 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
     }));
   }
 
+  function handlePhotoChange(event) {
+    const photo = event.target.files?.[0] ?? null;
+
+    if (!photo) {
+      return;
+    }
+
+    if (!photo.type.startsWith("image/")) {
+      setSelectedPhoto(null);
+      setPhotoInputKey((currentKey) => currentKey + 1);
+      setErrorMessage("Please choose an image file.");
+      event.target.value = "";
+      return;
+    }
+
+    setSelectedPhoto(photo);
+    setErrorMessage("");
+    event.target.value = "";
+  }
+
+  function handleRemovePhoto() {
+    setSelectedPhoto(null);
+    setPhotoInputKey((currentKey) => currentKey + 1);
+    setErrorMessage("");
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
 
     if (isSubmitting) {
+      return;
+    }
+
+    if (!selectedPhoto) {
+      setErrorMessage("Please add a vehicle photo before creating the vehicle.");
+      setSuccessMessage("");
+      return;
+    }
+
+    if (!selectedPhoto.type.startsWith("image/")) {
+      setErrorMessage("Please choose an image file.");
+      setSuccessMessage("");
       return;
     }
 
@@ -237,13 +388,33 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
           "Could not create vehicle. Please check the details and try again."
         );
       } else {
+        let savedVehicle = data;
+
+        try {
+          const photoResult = await saveMainVehiclePhoto(data, selectedPhoto);
+          savedVehicle = {
+            ...data,
+            ...photoResult.vehicle,
+            primary_photo_id: photoResult.photo.id,
+          };
+        } catch (photoError) {
+          console.error("Failed to save intake vehicle photo", photoError);
+          await onVehicleAdded?.({
+            ...data,
+            photoSaveWarning: photoSaveFailureMessage,
+          });
+          return;
+        }
+
         setFormData(buildInitialFormData(initialValues));
+        setSelectedPhoto(null);
+        setPhotoInputKey((currentKey) => currentKey + 1);
         setSuccessMessage(
-          data?.stock_number
-            ? `Vehicle added successfully. Stock number: ${data.stock_number}.`
+          savedVehicle?.stock_number
+            ? `Vehicle added successfully. Stock number: ${savedVehicle.stock_number}.`
             : "Vehicle added successfully."
         );
-        await onVehicleAdded?.(data);
+        await onVehicleAdded?.(savedVehicle);
       }
     } catch (error) {
       console.error("Failed to create vehicle", error);
@@ -338,6 +509,96 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
                 </label>
               ))}
             </IntakeFieldGrid>
+          </IntakeFormSection>
+
+          <IntakeFormSection
+            description="Add a clear photo of the vehicle. This will be used as the main vehicle photo."
+            icon="camera"
+            title="Vehicle Photo"
+          >
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-3">
+                <input
+                  accept="image/*"
+                  capture="environment"
+                  className="sr-only"
+                  disabled={isSubmitting}
+                  id="vehicle-main-photo-camera"
+                  key={`camera-${photoInputKey}`}
+                  onChange={handlePhotoChange}
+                  type="file"
+                />
+                <label
+                  aria-disabled={isSubmitting}
+                  className={`${photoInputActionClassName} ${
+                    isSubmitting ? disabledPhotoInputActionClassName : ""
+                  }`}
+                  htmlFor="vehicle-main-photo-camera"
+                >
+                  <AppIcon name="camera" size={18} />
+                  Take Photo
+                </label>
+
+                <input
+                  accept="image/*"
+                  className="sr-only"
+                  disabled={isSubmitting}
+                  id="vehicle-main-photo-upload"
+                  key={`upload-${photoInputKey}`}
+                  onChange={handlePhotoChange}
+                  type="file"
+                />
+                <label
+                  aria-disabled={isSubmitting}
+                  className={`${photoInputActionClassName} ${
+                    isSubmitting ? disabledPhotoInputActionClassName : ""
+                  }`}
+                  htmlFor="vehicle-main-photo-upload"
+                >
+                  <AppIcon name="file" size={18} />
+                  Upload Photo
+                </label>
+              </div>
+
+              {selectedPhoto && (
+                <div className="flex flex-col gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3 sm:flex-row sm:items-center">
+                  {photoPreviewUrl && (
+                    <img
+                      alt="Selected main vehicle photo"
+                      className="h-28 w-full rounded-2xl object-cover sm:h-24 sm:w-32"
+                      src={photoPreviewUrl}
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-black text-emerald-950">
+                      Main vehicle photo
+                    </p>
+                    <p className="mt-1 truncate text-sm font-semibold text-emerald-800">
+                      {selectedPhoto.name}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <label
+                        aria-disabled={isSubmitting}
+                        className={`inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-white px-3 py-2 text-sm font-black text-emerald-800 shadow-sm transition hover:bg-emerald-50 ${
+                          isSubmitting ? disabledPhotoInputActionClassName : ""
+                        }`}
+                        htmlFor="vehicle-main-photo-camera"
+                      >
+                        Retake / Replace
+                      </label>
+                      <button
+                        className="inline-flex min-h-10 items-center justify-center rounded-2xl border border-red-200 bg-white px-3 py-2 text-sm font-black text-red-700 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isSubmitting}
+                        onClick={handleRemovePhoto}
+                        type="button"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </IntakeFormSection>
 
           <IntakeFormSection
@@ -448,7 +709,7 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
                 disabled={isSubmitting}
                 type="submit"
               >
-                {isSubmitting ? "Creating..." : "Create Vehicle"}
+                {isSubmitting ? "Creating vehicle..." : "Create Vehicle"}
               </button>
             </div>
           </div>

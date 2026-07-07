@@ -1,8 +1,15 @@
+import {
+  formatReturnReason,
+  getReturnedPurchaseOrderItems,
+  isPurchaseOrderItemReturned,
+} from "./partReturns";
+
 export const PART_QUEUE_TABS = [
   { key: "needs_po", label: "Needs PO" },
   { key: "pending_review", label: "Pending Review" },
   { key: "ordered", label: "Ordered" },
   { key: "received", label: "Received" },
+  { key: "returned", label: "Returned" },
   { key: "issues", label: "Issues" },
   { key: "all", label: "All" },
 ];
@@ -24,6 +31,7 @@ export const partStatusLabels = {
   requested: "Requested",
   ordered: "Ordered",
   received: "Received",
+  returned: "Returned",
   installed: "Installed",
 };
 
@@ -81,6 +89,7 @@ export function hasActivePurchaseOrderItem(part) {
     const purchaseOrderStatus = purchaseOrder?.status ?? "ordered";
 
     return (
+      !isPurchaseOrderItemReturned(item) &&
       !inactivePurchaseOrderItemStatuses.includes(itemStatus) &&
       !inactivePurchaseOrderStatuses.includes(purchaseOrderStatus)
     );
@@ -94,10 +103,18 @@ export function getPrimaryPurchaseOrderItem(part) {
       const purchaseOrderStatus = item.purchaseOrder?.status ?? "ordered";
 
       return (
+        !isPurchaseOrderItemReturned(item) &&
         !inactivePurchaseOrderItemStatuses.includes(itemStatus) &&
         !inactivePurchaseOrderStatuses.includes(purchaseOrderStatus)
       );
     }) ?? null
+  );
+}
+
+export function isPartReturned(part) {
+  return (
+    part?.status === "returned" ||
+    getReturnedPurchaseOrderItems(part).length > 0
   );
 }
 
@@ -167,6 +184,7 @@ export function isPartNeedsPo(part) {
   return (
     part?.part_source === "needs_to_buy" &&
     part?.approval_status !== "rejected" &&
+    !isPartReturned(part) &&
     !completedPartStatuses.includes(part?.status) &&
     !hasActivePurchaseOrderItem(part)
   );
@@ -181,6 +199,10 @@ export function isPartPendingReview(part) {
 }
 
 export function isPartReceived(part) {
+  if (isPartReturned(part)) {
+    return false;
+  }
+
   if (["received", "installed"].includes(part?.status)) {
     return true;
   }
@@ -194,7 +216,7 @@ export function isPartReceived(part) {
 }
 
 export function isPartOrdered(part) {
-  if (isPartReceived(part)) {
+  if (isPartReturned(part) || isPartReceived(part)) {
     return false;
   }
 
@@ -202,6 +224,10 @@ export function isPartOrdered(part) {
 }
 
 export function isPartIssue(part) {
+  if (isPartReturned(part)) {
+    return false;
+  }
+
   return (
     part?.approval_status === "rejected" ||
     part?.status === "cancelled" ||
@@ -212,12 +238,8 @@ export function isPartIssue(part) {
 }
 
 export function getPartQueueStatus(part) {
-  if (isPartNeedsPo(part)) {
-    return "needs_po";
-  }
-
-  if (isPartIssue(part)) {
-    return "issues";
+  if (isPartReturned(part)) {
+    return "returned";
   }
 
   if (isPartReceived(part)) {
@@ -228,6 +250,14 @@ export function getPartQueueStatus(part) {
     return "ordered";
   }
 
+  if (isPartNeedsPo(part)) {
+    return "needs_po";
+  }
+
+  if (isPartIssue(part)) {
+    return "issues";
+  }
+
   if (isPartPendingReview(part)) {
     return "pending_review";
   }
@@ -236,6 +266,18 @@ export function getPartQueueStatus(part) {
 }
 
 export function partMatchesQueueTab(part, tabKey) {
+  if (tabKey === "all") {
+    return true;
+  }
+
+  if (tabKey === "returned") {
+    return isPartReturned(part);
+  }
+
+  if (isPartReturned(part)) {
+    return false;
+  }
+
   if (tabKey === "needs_po") {
     return isPartNeedsPo(part);
   }
@@ -298,6 +340,13 @@ export function getPartQueueBadge(status) {
     };
   }
 
+  if (status === "returned") {
+    return {
+      className: "bg-red-50 text-red-700 ring-red-200",
+      label: "Returned",
+    };
+  }
+
   if (status === "issues") {
     return {
       className: "bg-red-50 text-red-700 ring-red-200",
@@ -318,6 +367,7 @@ export function getPartQueueSearchText(part) {
   const selectedQuote = part?.selectedQuote;
   const purchaseOrderItem = getPrimaryPurchaseOrderItem(part);
   const purchaseOrderVendor = purchaseOrderItem?.purchaseOrder?.vendor;
+  const returnedItems = getReturnedPurchaseOrderItems(part);
 
   return [
     part?.part_name,
@@ -338,6 +388,11 @@ export function getPartQueueSearchText(part) {
     selectedQuote?.raw_part_name,
     part?.selectedVendor?.name,
     purchaseOrderVendor?.name,
+    ...returnedItems.flatMap((item) => [
+      item.return_notes,
+      formatReturnReason(item.return_reason),
+      item.purchaseOrder?.vendor?.name,
+    ]),
   ]
     .filter(Boolean)
     .join(" ")

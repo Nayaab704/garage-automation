@@ -25,6 +25,10 @@ const emptyMessages = {
     body: "Received or installed parts will appear here.",
     title: "No received parts found.",
   },
+  returned: {
+    body: "Returned parts stay visible here with undo and reorder actions.",
+    title: "No returned parts found.",
+  },
 };
 
 function PartsQueueEmptyState({ activeTab, hasSearch }) {

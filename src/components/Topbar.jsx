@@ -16,6 +16,7 @@ function Topbar({
   showTitle = false,
   title = "Vehicles",
   userEmail,
+  userMetadata,
 }) {
   const visibleMobileItems = getVisibleMainNavItems(currentProfile?.role);
 
@@ -54,6 +55,7 @@ function Topbar({
           onLogout={onLogout}
           profileError={profileError}
           userEmail={userEmail}
+          userMetadata={userMetadata}
         />
       </div>
 

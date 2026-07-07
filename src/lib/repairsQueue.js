@@ -2,6 +2,7 @@ import {
   filterRepairsQueue,
   getRepairQueueCounts,
 } from "./repairWorkflowUtils";
+import { purchaseOrderItemReturnColumns } from "./partReturns";
 import { supabase } from "./supabaseClient";
 
 const repairJobColumns =
@@ -20,7 +21,7 @@ const thirdPartyRepairColumns =
   "id, vehicle_id, repair_job_id, vendor_id, service_rendered, status, repair_cost, transit_cost, notes, created_at";
 
 const purchaseOrderItemColumns =
-  "id, purchase_order_id, part_request_id, description, quantity, unit_cost, shipping_cost, tax, status, notes, created_at";
+  `id, purchase_order_id, part_request_id, description, quantity, unit_cost, shipping_cost, tax, status, notes, created_at, ${purchaseOrderItemReturnColumns}`;
 
 const purchaseOrderColumns =
   "id, vehicle_id, vendor_id, status, ordered_at, received_at, created_at";

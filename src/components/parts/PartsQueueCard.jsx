@@ -8,10 +8,16 @@ import {
   getPrimaryPurchaseOrderItem,
   getSelectedUnitCost,
   getSelectedVendorName,
+  isPartReturned,
   isPartNeedsPo,
   isPartPendingReview,
   partSourceLabels,
 } from "../../lib/partWorkflowUtils";
+import {
+  getPartReturnDeduction,
+  getPrimaryReturnedPurchaseOrderItem,
+} from "../../lib/partReturns";
+import { formatUserFirstName } from "../../lib/userDisplay";
 import AppIcon from "../ui/AppIcon";
 import { buttonClassNames } from "../ui/uiStyles";
 
@@ -34,9 +40,73 @@ function formatNumber(value) {
   return numberFormatter.format(Number.isFinite(numberValue) ? numberValue : 0);
 }
 
+function formatDate(value) {
+  if (!value) {
+    return "Not available";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Not available";
+  }
+
+  return date.toLocaleDateString("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 function getPurchaseOrderStatus(part) {
+  const returnedPurchaseOrderItem = getPrimaryReturnedPurchaseOrderItem(part);
+
+  if (returnedPurchaseOrderItem) {
+    return "returned";
+  }
+
   const primaryPurchaseOrderItem = getPrimaryPurchaseOrderItem(part);
   return primaryPurchaseOrderItem?.purchaseOrder?.status ?? primaryPurchaseOrderItem?.status;
+}
+
+function getReturnedAttributionText(
+  returnedPurchaseOrderItem,
+  { deduction = null, includeDeduction = false } = {}
+) {
+  if (!returnedPurchaseOrderItem) {
+    return "";
+  }
+
+  const returnedName = returnedPurchaseOrderItem.returnedByProfile
+    ? formatUserFirstName(returnedPurchaseOrderItem.returnedByProfile)
+    : returnedPurchaseOrderItem.returned_by
+      ? "User"
+      : "";
+  const returnedLabel = returnedName ? `Returned by ${returnedName}` : "Returned";
+  const returnedDate = returnedPurchaseOrderItem.returned_at
+    ? formatDate(returnedPurchaseOrderItem.returned_at)
+    : "";
+  const deductionText = includeDeduction
+    ? `${formatCurrency(deduction)} deducted`
+    : "";
+
+  return [returnedLabel, returnedDate, deductionText].filter(Boolean).join(" - ");
+}
+
+function getPartAttributionText(part) {
+  return [
+    part.createdByProfile
+      ? `Added by ${formatUserFirstName(part.createdByProfile)}`
+      : "",
+    part.created_at ? formatDate(part.created_at) : "",
+    part.approvedByProfile && part.approved_at
+      ? `Approved by ${formatUserFirstName(part.approvedByProfile)} ${formatDate(
+          part.approved_at
+        )}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" - ");
 }
 
 function Badge({ children, className }) {
@@ -52,18 +122,24 @@ function Badge({ children, className }) {
 function PartsQueueCard({
   canApproveParts,
   canCreatePurchaseOrders,
+  canManageReturns,
   isUpdating,
   onApprove,
   onCreatePurchaseOrder,
   onOpenPurchaseOrders,
   onOpenVehicle,
   onReject,
+  onUndoReturn,
   onViewPrices,
   part,
 }) {
   const queueStatus = getPartQueueStatus(part);
   const queueBadge = getPartQueueBadge(queueStatus);
-  const vendorLabel = getSelectedVendorName(part);
+  const returnedPurchaseOrderItem = getPrimaryReturnedPurchaseOrderItem(part);
+  const returned = isPartReturned(part);
+  const vendorLabel =
+    getSelectedVendorName(part) ||
+    returnedPurchaseOrderItem?.purchaseOrder?.vendor?.name;
   const purchaseOrderStatus = getPurchaseOrderStatus(part);
   const selectedQuote = part.selectedQuote;
   const workOrder = part.repairJob;
@@ -78,6 +154,16 @@ function PartsQueueCard({
   const quantityLabel = formatNumber(part.quantity || 1);
   const unitPriceLabel = formatCurrency(getSelectedUnitCost(part));
   const totalLabel = formatCurrency(getPartEstimatedTotal(part));
+  const returnDeduction = getPartReturnDeduction(part);
+  const returnedAttributionText = getReturnedAttributionText(
+    returnedPurchaseOrderItem
+  );
+  const attributionText = returned
+    ? getReturnedAttributionText(returnedPurchaseOrderItem, {
+        deduction: returnDeduction,
+        includeDeduction: true,
+      }) || "Returned"
+    : getPartAttributionText(part);
 
   return (
     <article className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -129,6 +215,29 @@ function PartsQueueCard({
                 PO status: {formatPartLabel(purchaseOrderStatus, {})}
               </p>
             )}
+            {returned && (
+              <div className="mt-3 grid gap-2 rounded-xl border border-red-100 bg-red-50/70 p-3 text-xs font-semibold text-red-800 sm:grid-cols-2">
+                <span>
+                  Qty:{" "}
+                  {formatNumber(
+                    returnedPurchaseOrderItem?.returned_quantity ??
+                      returnedPurchaseOrderItem?.quantity
+                  )}
+                </span>
+                <span>
+                  Unit cost: {formatCurrency(returnedPurchaseOrderItem?.unit_cost)}
+                </span>
+                <span>
+                  Shipping:{" "}
+                  {formatCurrency(returnedPurchaseOrderItem?.shipping_cost)}
+                </span>
+                <span>Tax: {formatCurrency(returnedPurchaseOrderItem?.tax)}</span>
+                <span>Deducted: {formatCurrency(returnDeduction)}</span>
+                <span>
+                  {returnedAttributionText || "Returned"}
+                </span>
+              </div>
+            )}
             {!purchaseOrderStatus && selectedQuote && (
               <p className="mt-1 text-xs font-semibold text-emerald-700">
                 Selected vendor price is ready for PO.
@@ -159,6 +268,12 @@ function PartsQueueCard({
             </p>
           )}
 
+          {attributionText && (
+            <p className="mt-3 text-xs font-semibold text-slate-400">
+              {attributionText}
+            </p>
+          )}
+
           {isPartPendingReview(part) && canCreatePoForPart && (
             <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
               Pending admin review. PO creation is still allowed.
@@ -182,9 +297,22 @@ function PartsQueueCard({
               onClick={onOpenPurchaseOrders}
               type="button"
             >
-              Open POs
+              {returned ? "View PO" : "Open POs"}
             </button>
           ) : null}
+
+          {returned && canManageReturns && (
+            <>
+              <button
+                className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
+                disabled={isUpdating}
+                onClick={() => onUndoReturn(part)}
+                type="button"
+              >
+                Undo Return
+              </button>
+            </>
+          )}
 
           <button
             className={`${buttonClassNames.secondary} flex-1 lg:w-full`}

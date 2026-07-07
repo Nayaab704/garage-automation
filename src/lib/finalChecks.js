@@ -5,6 +5,11 @@ export const finalCheckTemplates = [
     required_role: "technician",
   },
   {
+    check_key: "inspection_completed",
+    label: "Inspection completed",
+    required_role: "technician",
+  },
+  {
     check_key: "no_warning_lights",
     label: "No warning lights",
     required_role: "technician",
@@ -37,6 +42,11 @@ export const finalCheckTemplates = [
   {
     check_key: "title_status_reviewed",
     label: "Title status reviewed",
+    required_role: "admin",
+  },
+  {
+    check_key: "registration_completed",
+    label: "Registration completed",
     required_role: "admin",
   },
   {

@@ -41,6 +41,10 @@ function integerOrNull(value) {
   return Number.isInteger(numberValue) ? numberValue : null;
 }
 
+function uniqueValues(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
 function firstValue(record, fieldNames) {
   for (const fieldName of fieldNames) {
     const value = record?.[fieldName];
@@ -79,6 +83,69 @@ function mapVendorQuoteForDisplay(quote) {
     display_vendor_name: displayVendorName,
     vendor_name_snapshot: quote.vendor_name_snapshot ?? quote.vendor_name ?? null,
   };
+}
+
+async function enrichQuotesWithCreators(quotes = []) {
+  const quoteIds = uniqueValues(quotes.map((quote) => quote.id));
+
+  if (quoteIds.length === 0) {
+    return quotes;
+  }
+
+  const creatorsResponse = await supabase
+    .from("vendor_part_quotes")
+    .select("id, created_by, created_at")
+    .in("id", quoteIds);
+
+  if (creatorsResponse.error) {
+    console.warn("Vendor quote creators could not be loaded:", creatorsResponse.error);
+    return quotes;
+  }
+
+  const creatorByQuoteId = Object.fromEntries(
+    (creatorsResponse.data ?? []).map((record) => [record.id, record.created_by])
+  );
+  const createdAtByQuoteId = Object.fromEntries(
+    (creatorsResponse.data ?? []).map((record) => [record.id, record.created_at])
+  );
+  const profileIds = uniqueValues(Object.values(creatorByQuoteId));
+
+  if (profileIds.length === 0) {
+    return quotes.map((quote) => ({
+      ...quote,
+      created_by: creatorByQuoteId[quote.id] ?? quote.created_by ?? null,
+      created_at: createdAtByQuoteId[quote.id] ?? quote.created_at ?? null,
+    }));
+  }
+
+  const profilesResponse = await supabase
+    .from("profiles")
+    .select("id, full_name, email")
+    .in("id", profileIds);
+
+  if (profilesResponse.error) {
+    console.warn("Vendor quote creator profiles could not be loaded:", profilesResponse.error);
+    return quotes.map((quote) => ({
+      ...quote,
+      created_by: creatorByQuoteId[quote.id] ?? quote.created_by ?? null,
+      created_at: createdAtByQuoteId[quote.id] ?? quote.created_at ?? null,
+    }));
+  }
+
+  const profilesById = Object.fromEntries(
+    (profilesResponse.data ?? []).map((profile) => [profile.id, profile])
+  );
+
+  return quotes.map((quote) => {
+    const createdBy = creatorByQuoteId[quote.id] ?? quote.created_by ?? null;
+
+    return {
+      ...quote,
+      created_by: createdBy,
+      created_at: createdAtByQuoteId[quote.id] ?? quote.created_at ?? null,
+      createdByProfile: profilesById[createdBy] ?? null,
+    };
+  });
 }
 
 function getPartName({ partName, partRequest, purchaseOrderItem }) {
@@ -214,7 +281,11 @@ export async function searchVendorPartQuotes({
       };
     }
 
-    return { data: (data ?? []).map(mapVendorQuoteForDisplay), error: null };
+    const displayQuotes = (data ?? []).map(mapVendorQuoteForDisplay);
+    return {
+      data: await enrichQuotesWithCreators(displayQuotes),
+      error: null,
+    };
   } catch (error) {
     console.error("Vendor price memory search failed:", error);
     return {

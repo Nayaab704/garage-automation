@@ -1,17 +1,24 @@
 import { useMemo, useState } from "react";
+import MarkReturnedModal from "../parts/MarkReturnedModal";
 import { hasPermission } from "../../lib/permissions";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import {
   approvalLabels,
   formatPartLabel,
   getPrimaryPurchaseOrderItem,
+  isPartReturned,
   isPartNeedsPo,
   isPartOrdered,
   isPartReceived,
   partSourceLabels,
   partStatusLabels,
 } from "../../lib/partWorkflowUtils";
+import {
+  getPrimaryReturnedPurchaseOrderItem,
+  getReturnDeduction,
+} from "../../lib/partReturns";
 import { supabase } from "../../lib/supabaseClient";
+import { formatUserFirstName } from "../../lib/userDisplay";
 import CreatePurchaseOrderForm from "./CreatePurchaseOrderForm";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -44,6 +51,52 @@ function formatNumber(value) {
   return numberFormatter.format(numberValue);
 }
 
+function formatDate(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toLocaleDateString("en-US", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function getProfileById(profiles, profileId) {
+  return profiles.find((profile) => profile.id === profileId) ?? null;
+}
+
+function getReturnedAttributionText(
+  returnedPurchaseOrderItem,
+  returnedByProfile,
+  { includeDeduction = false } = {}
+) {
+  if (!returnedPurchaseOrderItem) {
+    return "";
+  }
+
+  const returnedName = returnedByProfile
+    ? formatUserFirstName(returnedByProfile)
+    : returnedPurchaseOrderItem.returned_by
+      ? "User"
+      : "";
+  const returnedLabel = returnedName ? `Returned by ${returnedName}` : "Returned";
+  const returnedDate = returnedPurchaseOrderItem.returned_at
+    ? formatDate(returnedPurchaseOrderItem.returned_at)
+    : "";
+  const deductionText = includeDeduction
+    ? `${formatCurrency(getReturnDeduction(returnedPurchaseOrderItem))} deducted`
+    : "";
+
+  return [returnedLabel, returnedDate, deductionText].filter(Boolean).join(" - ");
+}
+
 function approvalClassName(approvalStatus) {
   if (approvalStatus === "approved" || approvalStatus === "not_required") {
     return "bg-emerald-50 text-emerald-700 ring-emerald-200";
@@ -58,6 +111,10 @@ function approvalClassName(approvalStatus) {
 
 function statusClassName(status) {
   if (status === "cancelled" || status === "issues") {
+    return "bg-red-50 text-red-700 ring-red-200";
+  }
+
+  if (status === "returned") {
     return "bg-red-50 text-red-700 ring-red-200";
   }
 
@@ -122,6 +179,14 @@ function canCreatePurchaseOrder(currentProfile, part) {
   );
 }
 
+function canManageReturns(currentProfile) {
+  return ["admin", "owner", "technician"].includes(currentProfile?.role);
+}
+
+function canMarkReturned(item) {
+  return ["ordered", "received"].includes(item?.status ?? "ordered");
+}
+
 function getPurchaseOrderLabel(purchaseOrder) {
   if (!purchaseOrder?.id) {
     return "PO";
@@ -138,6 +203,13 @@ function getPurchaseOrderStatusLabel(purchaseOrder, item) {
 }
 
 function getLifecycleBadge(part) {
+  if (isPartReturned(part)) {
+    return {
+      className: statusClassName("returned"),
+      label: "Returned",
+    };
+  }
+
   const primaryPurchaseOrderItem = getPrimaryPurchaseOrderItem(part);
 
   if (isPartReceived(part)) {
@@ -199,7 +271,9 @@ function WorkOrderPartsList({
   onOpenPurchaseOrders,
   onPartApprovalUpdated,
   onPartPurchaseOrderCreated,
+  onPurchaseOrderItemUpdated,
   parts = [],
+  profiles = [],
   purchaseOrderItems = [],
   purchaseOrders = [],
   vehicleId,
@@ -207,6 +281,7 @@ function WorkOrderPartsList({
 }) {
   const [selectedPartForPurchaseOrder, setSelectedPartForPurchaseOrder] =
     useState(null);
+  const [returningPartContext, setReturningPartContext] = useState(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [updatingPartId, setUpdatingPartId] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -214,6 +289,7 @@ function WorkOrderPartsList({
     () => enrichPartsWithPurchaseOrders(parts, purchaseOrderItems, purchaseOrders),
     [parts, purchaseOrderItems, purchaseOrders]
   );
+  const canManagePartReturns = canManageReturns(currentProfile);
 
   async function handleApprovalChange(part, approvalStatus) {
     if (!canApprovePart(currentProfile, part)) {
@@ -226,9 +302,21 @@ function WorkOrderPartsList({
     setSuccessMessage("");
 
     try {
+      const reviewValues =
+        approvalStatus === "approved"
+          ? {
+              approval_status: approvalStatus,
+              approved_at: new Date().toISOString(),
+              approved_by: currentProfile?.id ?? null,
+            }
+          : {
+              approval_status: approvalStatus,
+              approved_at: null,
+              approved_by: null,
+            };
       const { data, error } = await supabase
         .from("part_requests")
-        .update({ approval_status: approvalStatus })
+        .update(reviewValues)
         .eq("id", part.id)
         .select("*")
         .single();
@@ -289,6 +377,13 @@ function WorkOrderPartsList({
     setSuccessMessage("Purchase order created. Part now shows PO Created.");
   }
 
+  async function handleReturnedItemUpdated(updatedItem) {
+    await onPurchaseOrderItemUpdated?.(updatedItem);
+    onActivityLogged?.();
+    setSuccessMessage("Part marked returned.");
+    setErrorMessage("");
+  }
+
   return (
     <div className="rounded-md bg-zinc-50 p-3">
       {!hideHeader && (
@@ -308,12 +403,46 @@ function WorkOrderPartsList({
         <div className="space-y-3">
           {enrichedParts.map((part, index) => {
             const primaryPurchaseOrderItem = getPrimaryPurchaseOrderItem(part);
-            const linkedPurchaseOrder = primaryPurchaseOrderItem?.purchaseOrder;
+            const returnedPurchaseOrderItem =
+              getPrimaryReturnedPurchaseOrderItem(part);
+            const displayPurchaseOrderItem =
+              primaryPurchaseOrderItem ?? returnedPurchaseOrderItem;
+            const linkedPurchaseOrder = displayPurchaseOrderItem?.purchaseOrder;
             const lifecycleBadge = getLifecycleBadge(part);
             const canCreatePoForPart = canCreatePurchaseOrder(currentProfile, part);
             const canApprove = canApprovePart(currentProfile, part);
             const shouldShowSourceBadge =
-              part.part_source !== "needs_to_buy" || !primaryPurchaseOrderItem;
+              part.part_source !== "needs_to_buy" || !displayPurchaseOrderItem;
+            const createdByProfile = getProfileById(profiles, part.created_by);
+            const approvedByProfile = getProfileById(profiles, part.approved_by);
+            const returnedByProfile = getProfileById(
+              profiles,
+              returnedPurchaseOrderItem?.returned_by
+            );
+            const returnedAttributionText = getReturnedAttributionText(
+              returnedPurchaseOrderItem,
+              returnedByProfile
+            );
+            const addedAttributionText = [
+              createdByProfile
+                ? `Added by ${formatUserFirstName(createdByProfile)}`
+                : "",
+              part.created_at ? formatDate(part.created_at) : "",
+              approvedByProfile && part.approved_at
+                ? `Approved by ${formatUserFirstName(approvedByProfile)} ${formatDate(
+                    part.approved_at
+                  )}`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" - ");
+            const partAttributionText = returnedPurchaseOrderItem
+              ? getReturnedAttributionText(
+                  returnedPurchaseOrderItem,
+                  returnedByProfile,
+                  { includeDeduction: true }
+                )
+              : addedAttributionText;
 
             return (
               <article
@@ -349,7 +478,15 @@ function WorkOrderPartsList({
                   </div>
                 </div>
 
-                {primaryPurchaseOrderItem && (
+                {returnedPurchaseOrderItem ? (
+                  <p className="mt-3 rounded-md border border-red-100 bg-red-50 p-3 text-sm font-medium text-red-800">
+                    Returned -{" "}
+                    {formatCurrency(getReturnDeduction(returnedPurchaseOrderItem))}{" "}
+                    deducted
+                    {returnedAttributionText ? ` - ${returnedAttributionText}` : ""}
+                    .
+                  </p>
+                ) : primaryPurchaseOrderItem ? (
                   <p className="mt-3 rounded-md border border-blue-100 bg-blue-50 p-3 text-sm font-medium text-blue-800">
                     PO already created
                     {linkedPurchaseOrder
@@ -362,11 +499,17 @@ function WorkOrderPartsList({
                     )}
                     .
                   </p>
-                )}
+                ) : null}
 
                 {part.notes && (
                   <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-zinc-600">
                     {part.notes}
+                  </p>
+                )}
+
+                {partAttributionText && (
+                  <p className="mt-3 text-xs font-semibold text-zinc-400">
+                    {partAttributionText}
                   </p>
                 )}
 
@@ -376,7 +519,9 @@ function WorkOrderPartsList({
                   </p>
                 )}
 
-                {(canApprove || canCreatePoForPart || primaryPurchaseOrderItem) && (
+                {(canApprove ||
+                  canCreatePoForPart ||
+                  displayPurchaseOrderItem) && (
                   <div className="mt-4 flex flex-wrap gap-2">
                     {canApprove && (
                       <>
@@ -413,7 +558,7 @@ function WorkOrderPartsList({
                       </button>
                     )}
 
-                    {primaryPurchaseOrderItem && (
+                    {displayPurchaseOrderItem && (
                       <button
                         className="min-h-9 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
                         onClick={onOpenPurchaseOrders}
@@ -422,6 +567,23 @@ function WorkOrderPartsList({
                         View PO
                       </button>
                     )}
+
+                    {canManagePartReturns &&
+                      primaryPurchaseOrderItem &&
+                      canMarkReturned(primaryPurchaseOrderItem) && (
+                        <button
+                          className="min-h-9 rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                          onClick={() =>
+                            setReturningPartContext({
+                              item: primaryPurchaseOrderItem,
+                              purchaseOrder: linkedPurchaseOrder,
+                            })
+                          }
+                          type="button"
+                        >
+                          Mark Returned
+                        </button>
+                      )}
                   </div>
                 )}
               </article>
@@ -453,6 +615,18 @@ function WorkOrderPartsList({
           partRequests={[selectedPartForPurchaseOrder]}
           vehicleId={vehicleId}
           vendors={vendors}
+        />
+      )}
+
+      {returningPartContext && canManagePartReturns && (
+        <MarkReturnedModal
+          currentProfile={currentProfile}
+          item={returningPartContext.item}
+          key={returningPartContext.item.id}
+          onClose={() => setReturningPartContext(null)}
+          onReturned={handleReturnedItemUpdated}
+          purchaseOrder={returningPartContext.purchaseOrder}
+          vehicleId={vehicleId}
         />
       )}
     </div>

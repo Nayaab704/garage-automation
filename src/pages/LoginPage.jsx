@@ -10,11 +10,13 @@ import { supabase } from "../lib/supabaseClient";
 
 const emptyForm = {
   email: "",
+  fullName: "",
   password: "",
 };
 
 function LoginPage() {
   const [formData, setFormData] = useState(emptyForm);
+  const [authMode, setAuthMode] = useState("sign-in");
   const [loadingAction, setLoadingAction] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -26,6 +28,13 @@ function LoginPage() {
       ...currentFormData,
       [name]: value,
     }));
+  }
+
+  function handleModeChange(nextMode) {
+    setAuthMode(nextMode);
+    setErrorMessage("");
+    setSuccessMessage("");
+    setLoadingAction("");
   }
 
   async function handleSignIn() {
@@ -53,6 +62,13 @@ function LoginPage() {
   }
 
   async function handleSignUp() {
+    const fullName = formData.fullName.trim();
+
+    if (!fullName) {
+      setErrorMessage("Full name is required to create an account.");
+      return;
+    }
+
     setLoadingAction("sign-up");
     setErrorMessage("");
     setSuccessMessage("");
@@ -60,6 +76,12 @@ function LoginPage() {
     try {
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
+        options: {
+          data: {
+            full_name: fullName,
+            name: fullName,
+          },
+        },
         password: formData.password,
       });
 
@@ -68,10 +90,21 @@ function LoginPage() {
         return;
       }
 
+      const profileSaved = await saveSignupProfileName(
+        data.user,
+        fullName,
+        formData.email
+      );
+      const profileNotice = profileSaved
+        ? ""
+        : " Your account was created, but the profile name could not be saved yet.";
+
       if (data.session) {
-        setSuccessMessage("Account created. Signing you in...");
+        setSuccessMessage(`Account created. Signing you in...${profileNotice}`);
       } else {
-        setSuccessMessage("Account created. Check your email to confirm it.");
+        setSuccessMessage(
+          `Account created. Check your email to confirm it.${profileNotice}`
+        );
       }
     } catch (error) {
       setErrorMessage(error.message ?? "Something went wrong.");
@@ -82,10 +115,17 @@ function LoginPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+
+    if (authMode === "sign-up") {
+      await handleSignUp();
+      return;
+    }
+
     await handleSignIn();
   }
 
   const isSubmitting = loadingAction !== "";
+  const isSignUp = authMode === "sign-up";
 
   return (
     <AppBackground>
@@ -94,14 +134,32 @@ function LoginPage() {
           <div className="mb-6">
             <BrandLogo showTagline size="large" />
             <h1 className="mt-2 text-2xl font-bold text-zinc-950">
-              Sign in to continue
+              {isSignUp ? "Create your account" : "Sign in to continue"}
             </h1>
             <p className="mt-2 text-sm text-zinc-500">
-              Use your email and password to access the garage dashboard.
+              {isSignUp
+                ? "Add your name so the workspace can greet and identify you clearly."
+                : "Use your email and password to access the garage dashboard."}
             </p>
           </div>
 
           <form className="space-y-5" onSubmit={handleSubmit}>
+            {isSignUp && (
+              <label className="block" htmlFor="signup-full-name">
+                <span className={formControlClassNames.label}>Full Name</span>
+                <input
+                  autoComplete="name"
+                  className={formControlClassNames.input}
+                  id="signup-full-name"
+                  name="fullName"
+                  onChange={handleChange}
+                  required
+                  type="text"
+                  value={formData.fullName}
+                />
+              </label>
+            )}
+
             <label className="block" htmlFor="login-email">
               <span className={formControlClassNames.label}>Email</span>
               <input
@@ -148,16 +206,24 @@ function LoginPage() {
                 disabled={isSubmitting}
                 type="submit"
               >
-                {loadingAction === "sign-in" ? "Signing In..." : "Sign In"}
+                {loadingAction === "sign-in"
+                  ? "Signing In..."
+                  : loadingAction === "sign-up"
+                    ? "Signing Up..."
+                    : isSignUp
+                      ? "Sign Up"
+                      : "Sign In"}
               </button>
 
               <button
                 className={buttonClassNames.secondary}
                 disabled={isSubmitting}
-                onClick={handleSignUp}
+                onClick={() =>
+                  handleModeChange(isSignUp ? "sign-in" : "sign-up")
+                }
                 type="button"
               >
-                {loadingAction === "sign-up" ? "Signing Up..." : "Sign Up"}
+                {isSignUp ? "Back to Sign In" : "Create Account"}
               </button>
             </div>
           </form>
@@ -165,6 +231,51 @@ function LoginPage() {
       </main>
     </AppBackground>
   );
+}
+
+async function saveSignupProfileName(user, fullName, email) {
+  if (!user?.id) {
+    return true;
+  }
+
+  try {
+    const profilePayload = {
+      auth_user_id: user.id,
+      email: email.trim(),
+      full_name: fullName,
+      is_active: false,
+      role: "technician",
+    };
+    const { error } = await supabase
+      .from("profiles")
+      .upsert(profilePayload, { onConflict: "auth_user_id" });
+
+    if (!error) {
+      return true;
+    }
+
+    const { data: updatedProfile, error: updateError } = await supabase
+      .from("profiles")
+      .update({
+        email: profilePayload.email,
+        full_name: fullName,
+        is_active: false,
+        role: "technician",
+      })
+      .eq("auth_user_id", user.id)
+      .select("id")
+      .maybeSingle();
+
+    if (updateError) {
+      console.error("Could not save signup profile name:", updateError);
+      return false;
+    }
+
+    return Boolean(updatedProfile);
+  } catch (error) {
+    console.error("Could not save signup profile name:", error);
+    return false;
+  }
 }
 
 export default LoginPage;

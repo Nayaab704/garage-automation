@@ -16,6 +16,10 @@ import ServiceWorkSection from "../components/vehicle-detail/ServiceWorkSection"
 import VehicleHeader from "../components/vehicle-detail/VehicleHeader";
 import VehiclePhotosSection from "../components/vehicle-detail/VehiclePhotosSection";
 import { logVehicleActivity } from "../lib/activityLogger";
+import {
+  applyReturnDeductionToInvestmentSummary,
+  getPurchaseOrderReturnDeduction,
+} from "../lib/partReturns";
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 import { getVehiclePrimaryPhoto } from "../lib/vehicleDisplayPhoto";
@@ -27,15 +31,71 @@ async function fetchInvestmentSummary(vehicleId, stockNumber) {
     .eq("vehicle_id", vehicleId)
     .maybeSingle();
 
-  if (byVehicleId.data || !stockNumber) {
+  if (byVehicleId.error) {
     return byVehicleId;
   }
 
-  return supabase
-    .from("vehicle_investment_summary")
-    .select("*")
-    .eq("stock_number", stockNumber)
-    .maybeSingle();
+  const summaryResponse =
+    byVehicleId.data || !stockNumber
+      ? byVehicleId
+      : await supabase
+          .from("vehicle_investment_summary")
+          .select("*")
+          .eq("stock_number", stockNumber)
+          .maybeSingle();
+
+  if (summaryResponse.error || !summaryResponse.data) {
+    return summaryResponse;
+  }
+
+  const returnDeductionResponse = await fetchVehicleReturnDeduction(vehicleId);
+
+  if (returnDeductionResponse.error) {
+    return { data: null, error: returnDeductionResponse.error };
+  }
+
+  return {
+    data: applyReturnDeductionToInvestmentSummary(
+      summaryResponse.data,
+      returnDeductionResponse.data
+    ),
+    error: null,
+  };
+}
+
+async function fetchVehicleReturnDeduction(vehicleId) {
+  const purchaseOrdersResponse = await supabase
+    .from("purchase_orders")
+    .select("id")
+    .eq("vehicle_id", vehicleId);
+
+  if (purchaseOrdersResponse.error) {
+    return { data: 0, error: purchaseOrdersResponse.error };
+  }
+
+  const purchaseOrderIds = (purchaseOrdersResponse.data ?? [])
+    .map((purchaseOrder) => purchaseOrder.id)
+    .filter(Boolean);
+
+  if (purchaseOrderIds.length === 0) {
+    return { data: 0, error: null };
+  }
+
+  const itemsResponse = await supabase
+    .from("purchase_order_items")
+    .select(
+      "id, quantity, unit_cost, shipping_cost, tax, status, return_status, returned_amount, returned_shipping_amount"
+    )
+    .in("purchase_order_id", purchaseOrderIds);
+
+  if (itemsResponse.error) {
+    return { data: 0, error: itemsResponse.error };
+  }
+
+  return {
+    data: getPurchaseOrderReturnDeduction(itemsResponse.data ?? []),
+    error: null,
+  };
 }
 
 const finalCheckColumns =
@@ -527,6 +587,20 @@ function VehicleDetailPage({
     await refreshInvestmentSummary();
   }
 
+  async function handlePurchaseOrderItemUpdated(updatedItem) {
+    if (updatedItem?.id) {
+      setPurchaseOrderItems((currentPurchaseOrderItems) =>
+        currentPurchaseOrderItems.map((purchaseOrderItem) =>
+          purchaseOrderItem.id === updatedItem.id
+            ? { ...purchaseOrderItem, ...updatedItem }
+            : purchaseOrderItem
+        )
+      );
+    }
+
+    await refreshInvestmentSummary();
+  }
+
   function handleWorkOrderPhotoAdded(photo) {
     setVehiclePhotos((currentPhotos) => upsertNewestById(currentPhotos, photo));
   }
@@ -891,6 +965,7 @@ function VehicleDetailPage({
               onPartAdded={handleWorkOrderPartAdded}
               onPartApprovalUpdated={handleWorkOrderPartApprovalUpdated}
               onPartPurchaseOrderCreated={handleWorkOrderPartPurchaseOrderCreated}
+              onPurchaseOrderItemUpdated={handlePurchaseOrderItemUpdated}
               onPhotoAdded={handleWorkOrderPhotoAdded}
               onPhotoDeleted={handleWorkOrderPhotoDeleted}
               onThirdPartyRepairAdded={handleThirdPartyRepairAdded}

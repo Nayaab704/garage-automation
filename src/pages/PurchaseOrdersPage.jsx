@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
+import MarkReturnedModal from "../components/parts/MarkReturnedModal";
 import AppIcon from "../components/ui/AppIcon";
 import ModalShell from "../components/ui/ModalShell";
 import { buttonClassNames } from "../components/ui/uiStyles";
 import DocumentsList from "../components/vehicle-detail/DocumentsList";
 import StatusDropdown from "../components/vehicle-detail/StatusDropdown";
 import { logVehicleActivity } from "../lib/activityLogger";
+import {
+  getPurchaseOrderItemNetTotal,
+  getPurchaseOrderItemSubtotal,
+  getReturnDeduction,
+  isPurchaseOrderItemReturned,
+  purchaseOrderItemReturnColumns,
+} from "../lib/partReturns";
 import { hasPermission } from "../lib/permissions";
 import {
   canCancelPurchaseOrder,
@@ -16,12 +24,13 @@ import {
   PURCHASE_ORDER_TABS,
 } from "../lib/purchaseOrderUtils";
 import { supabase } from "../lib/supabaseClient";
+import { formatUserFirstName } from "../lib/userDisplay";
 
 const purchaseOrderColumns =
-  "id, vehicle_id, vendor_id, status, ordered_by, ordered_at, received_at, notes, created_at";
+  "id, vehicle_id, vendor_id, status, ordered_by, ordered_at, received_by, received_at, notes, created_at";
 
 const purchaseOrderItemColumns =
-  "id, purchase_order_id, part_request_id, description, quantity, unit_cost, shipping_cost, tax, status, notes, created_at";
+  `id, purchase_order_id, part_request_id, description, quantity, unit_cost, shipping_cost, tax, status, notes, created_at, ${purchaseOrderItemReturnColumns}`;
 
 const partRequestColumns =
   "id, vehicle_id, repair_job_id, part_name, quantity, status, part_source, approval_status, selected_vendor_id, selected_quote_id, quoted_unit_cost, quoted_total_cost";
@@ -40,7 +49,6 @@ const purchaseOrderStatuses = [
 const purchaseOrderItemStatuses = [
   "ordered",
   "received",
-  "returned",
   "cancelled",
 ];
 
@@ -115,10 +123,6 @@ function getVehicleLabel(vehicle) {
   return vehicleName ? `${stockNumber} - ${vehicleName}` : stockNumber;
 }
 
-function getProfileName(profile) {
-  return profile?.full_name || profile?.email || "Not available";
-}
-
 function getVendorName(purchaseOrder) {
   return (
     purchaseOrder?.vendor?.name ||
@@ -128,12 +132,12 @@ function getVendorName(purchaseOrder) {
   );
 }
 
+function getItemSubtotal(item) {
+  return getPurchaseOrderItemSubtotal(item);
+}
+
 function getItemTotal(item) {
-  return (
-    numberOrZero(item.quantity) * numberOrZero(item.unit_cost) +
-    numberOrZero(item.shipping_cost) +
-    numberOrZero(item.tax)
-  );
+  return getPurchaseOrderItemNetTotal(item);
 }
 
 function getPurchaseOrderTotal(items = []) {
@@ -157,12 +161,172 @@ function getWorkOrderLabel(item) {
   return [serviceCategory, repairJob?.title].filter(Boolean).join(" - ");
 }
 
+function getLatestReturnedItem(items = []) {
+  return [...items]
+    .filter(isPurchaseOrderItemReturned)
+    .sort((left, right) => {
+      const leftDate = new Date(left.returned_at ?? left.created_at ?? 0).getTime();
+      const rightDate = new Date(right.returned_at ?? right.created_at ?? 0).getTime();
+      return rightDate - leftDate;
+    })[0] ?? null;
+}
+
+function joinTrackingParts(parts) {
+  return parts.filter(Boolean).join(" - ");
+}
+
+function isLikelyUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value ?? "")
+  );
+}
+
+function getActionFirstName(profile, profileId) {
+  if (profile) {
+    return formatUserFirstName(profile);
+  }
+
+  if (!profileId) {
+    return "";
+  }
+
+  return isLikelyUuid(profileId) ? "User" : formatUserFirstName(profileId);
+}
+
+function formatActionWithDate(actionText, dateValue) {
+  return joinTrackingParts([actionText, dateValue ? formatDate(dateValue) : ""]);
+}
+
+function getCreatedTrackingText(purchaseOrder) {
+  return purchaseOrder.created_at
+    ? `Created ${formatDate(purchaseOrder.created_at)}`
+    : "";
+}
+
+function getOrderedTrackingText(purchaseOrder, { includeDate = true } = {}) {
+  const orderedName = getActionFirstName(
+    purchaseOrder.orderedBy,
+    purchaseOrder.ordered_by
+  );
+
+  return formatActionWithDate(
+    orderedName ? `Ordered by ${orderedName}` : "Ordered",
+    includeDate ? purchaseOrder.ordered_at ?? purchaseOrder.created_at : ""
+  );
+}
+
+function getReceivedTrackingText(purchaseOrder, { includeDate = true } = {}) {
+  if (!purchaseOrder.received_at && !purchaseOrder.received_by) {
+    return "";
+  }
+
+  const receivedName = getActionFirstName(
+    purchaseOrder.receivedBy,
+    purchaseOrder.received_by
+  );
+  const receivedLabel = receivedName ? `Received by ${receivedName}` : "Received";
+  const receivedDate = purchaseOrder.received_at
+    ? formatDate(purchaseOrder.received_at)
+    : "";
+
+  return joinTrackingParts([receivedLabel, includeDate ? receivedDate : ""]);
+}
+
+function getReturnedTrackingText(
+  returnedItem,
+  { deduction = null, includeDate = true, includeDeduction = false } = {}
+) {
+  if (!returnedItem) {
+    return "";
+  }
+
+  const returnedName = getActionFirstName(
+    returnedItem.returnedBy,
+    returnedItem.returned_by
+  );
+  const returnedLabel = returnedName ? `Returned by ${returnedName}` : "Returned";
+  const returnedDate = returnedItem.returned_at
+    ? formatDate(returnedItem.returned_at)
+    : "";
+  const deductionText = includeDeduction
+    ? `${formatCurrency(deduction)} deducted`
+    : "";
+
+  return joinTrackingParts([
+    returnedLabel,
+    includeDate ? returnedDate : "",
+    deductionText,
+  ]);
+}
+
+function getCancelledTrackingText(purchaseOrder) {
+  if (purchaseOrder.status !== "cancelled") {
+    return "";
+  }
+
+  return "Cancelled";
+}
+
+function getPurchaseOrderTrackingText(purchaseOrder, activeTab) {
+  const returnedItem = getLatestReturnedItem(purchaseOrder.items);
+  const createdText = getCreatedTrackingText(purchaseOrder);
+  const orderedText = getOrderedTrackingText(purchaseOrder);
+  const receivedText = getReceivedTrackingText(purchaseOrder);
+  const returnedText = getReturnedTrackingText(returnedItem);
+  const cancelledText = getCancelledTrackingText(purchaseOrder);
+
+  if (activeTab === "all") {
+    return joinTrackingParts([
+      getOrderedTrackingText(purchaseOrder, { includeDate: false }),
+      getReceivedTrackingText(purchaseOrder, { includeDate: false }),
+      getReturnedTrackingText(returnedItem, { includeDate: false }),
+      cancelledText,
+    ]);
+  }
+
+  if (activeTab === "open") {
+    return createdText || orderedText;
+  }
+
+  if (
+    activeTab === "ordered" ||
+    ["draft", "ordered", "partial_received"].includes(purchaseOrder.status)
+  ) {
+    return orderedText || createdText;
+  }
+
+  if (activeTab === "received" || purchaseOrder.status === "received") {
+    return receivedText || orderedText || createdText;
+  }
+
+  if (activeTab === "cancelled" || purchaseOrder.status === "cancelled") {
+    return cancelledText || createdText;
+  }
+
+  if (purchaseOrder.status === "returned" || returnedItem) {
+    return returnedText || receivedText || orderedText || createdText;
+  }
+
+  return orderedText || createdText;
+}
+
 function canUploadDocumentsForProfile(profile) {
   const role = profile?.role;
 
   return (
     (role === "admin" || role === "owner" || role === "technician") &&
     (hasPermission(role, "photo:manage") || hasPermission(role, "repair:manage"))
+  );
+}
+
+function canManageReturnsForProfile(profile) {
+  return ["admin", "owner", "technician"].includes(profile?.role);
+}
+
+function canMarkItemReturned(item) {
+  return (
+    !isPurchaseOrderItemReturned(item) &&
+    ["ordered", "received"].includes(item?.status ?? "ordered")
   );
 }
 
@@ -200,15 +364,11 @@ async function fetchPurchaseOrdersData() {
   const vehicleIds = uniqueValues(
     purchaseOrders.map((purchaseOrder) => purchaseOrder.vehicle_id)
   );
-  const orderedByIds = uniqueValues(
-    purchaseOrders.map((purchaseOrder) => purchaseOrder.ordered_by)
-  );
 
   const [
     itemsResponse,
     vehicleDocumentsResponse,
     vehiclesResponse,
-    profilesResponse,
   ] = await Promise.all([
     purchaseOrderIds.length > 0
       ? supabase
@@ -229,25 +389,37 @@ async function fetchPurchaseOrdersData() {
           .select("id, stock_number, year, make, model, trim")
           .in("id", vehicleIds)
       : { data: [], error: null },
-    orderedByIds.length > 0
-      ? supabase
-          .from("profiles")
-          .select("id, full_name, email")
-          .in("id", orderedByIds)
-      : { data: [], error: null },
   ]);
 
   const firstRequiredError =
     itemsResponse.error ??
     vehicleDocumentsResponse.error ??
-    vehiclesResponse.error ??
-    profilesResponse.error;
+    vehiclesResponse.error;
 
   if (firstRequiredError) {
     return { error: firstRequiredError };
   }
 
   const purchaseOrderItems = itemsResponse.data ?? [];
+  const profileIds = uniqueValues([
+    ...purchaseOrders.flatMap((purchaseOrder) => [
+      purchaseOrder.ordered_by,
+      purchaseOrder.received_by,
+    ]),
+    ...purchaseOrderItems.map((item) => item.returned_by),
+  ]);
+  const profilesResponse =
+    profileIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", profileIds)
+      : { data: [], error: null };
+
+  if (profilesResponse.error) {
+    return { error: profilesResponse.error };
+  }
+
   const partRequestIds = uniqueValues(
     purchaseOrderItems.map((item) => item.part_request_id)
   );
@@ -467,8 +639,10 @@ function MarkReceivedModal({
 }
 
 function PurchaseOrderCard({
+  activeTab,
   canDeleteDocuments,
   canManagePurchaseOrders,
+  canManageReturns,
   canUploadDocuments,
   currentProfile,
   documents,
@@ -479,6 +653,7 @@ function PurchaseOrderCard({
   onDocumentDeleted,
   onItemStatusChange,
   onMarkReceived,
+  onMarkReturned,
   onOpenVehicle,
   onStatusChange,
   onToggleDetails,
@@ -494,6 +669,7 @@ function PurchaseOrderCard({
   const canCancel =
     canManagePurchaseOrders && canCancelPurchaseOrder(purchaseOrder);
   const workOrderLabel = getWorkOrderLabel(primaryItem);
+  const trackingText = getPurchaseOrderTrackingText(purchaseOrder, activeTab);
 
   return (
     <article className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -525,25 +701,28 @@ function PurchaseOrderCard({
             </p>
             <p className="mt-1 text-xs font-semibold text-slate-500">
               Qty {formatNumber(primaryItem?.quantity || 0)} -{" "}
-              {formatCurrency(primaryItem?.unit_cost)} each - Total{" "}
-              {formatCurrency(totalCost)}
+              {formatCurrency(primaryItem?.unit_cost)} each
             </p>
-            {(numberOrZero(primaryItem?.shipping_cost) > 0 ||
-              numberOrZero(primaryItem?.tax) > 0) && (
-              <p className="mt-1 text-xs font-semibold text-slate-500">
-                Shipping {formatCurrency(primaryItem?.shipping_cost)} - Tax{" "}
-                {formatCurrency(primaryItem?.tax)}
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              Subtotal {formatCurrency(getItemSubtotal(primaryItem))} - Shipping{" "}
+              {formatCurrency(primaryItem?.shipping_cost)} - Tax{" "}
+              {formatCurrency(primaryItem?.tax)}
+            </p>
+            {isPurchaseOrderItemReturned(primaryItem) && (
+              <p className="mt-1 text-xs font-black text-red-700">
+                Returned - {formatCurrency(getReturnDeduction(primaryItem))} deducted
               </p>
             )}
+            <p className="mt-1 text-xs font-black text-slate-700">
+              Total {formatCurrency(totalCost)}
+            </p>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-500">
-            <span>Created {formatDate(purchaseOrder.created_at)}</span>
-            {purchaseOrder.received_at && (
-              <span>Received {formatDate(purchaseOrder.received_at)}</span>
-            )}
-            <span>Ordered by {getProfileName(purchaseOrder.orderedBy)}</span>
-          </div>
+          {trackingText && (
+            <p className="mt-3 text-xs font-semibold text-slate-500">
+              {trackingText}
+            </p>
+          )}
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2 lg:w-48 lg:flex-col lg:items-stretch">
@@ -673,55 +852,91 @@ function PurchaseOrderCard({
               </div>
             ) : (
               <div className="space-y-3">
-                {purchaseOrder.items.map((item) => (
-                  <div
-                    className="rounded-2xl border border-slate-200 bg-white p-4"
-                    key={item.id}
-                  >
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div>
-                        <h5 className="font-black text-slate-950">
-                          {displayValue(item.description)}
-                        </h5>
-                        {getWorkOrderLabel(item) && (
-                          <p className="mt-1 text-sm font-semibold text-slate-500">
-                            {getWorkOrderLabel(item)}
+                {purchaseOrder.items.map((item) => {
+                  const isReturned = isPurchaseOrderItemReturned(item);
+                  const returnDeduction = getReturnDeduction(item);
+                  const returnTrackingText = getReturnedTrackingText(item);
+
+                  return (
+                    <div
+                      className="rounded-2xl border border-slate-200 bg-white p-4"
+                      key={item.id}
+                    >
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <h5 className="font-black text-slate-950">
+                            {displayValue(item.description)}
+                          </h5>
+                          {getWorkOrderLabel(item) && (
+                            <p className="mt-1 text-sm font-semibold text-slate-500">
+                              {getWorkOrderLabel(item)}
+                            </p>
+                          )}
+                          <p className="mt-2 text-sm text-slate-500">
+                            Qty {formatNumber(item.quantity)} -{" "}
+                            {formatCurrency(item.unit_cost)} each - Subtotal{" "}
+                            {formatCurrency(getItemSubtotal(item))} - Shipping{" "}
+                            {formatCurrency(item.shipping_cost)} - Tax{" "}
+                            {formatCurrency(item.tax)}
                           </p>
-                        )}
-                        <p className="mt-2 text-sm text-slate-500">
-                          Qty {formatNumber(item.quantity)} -{" "}
-                          {formatCurrency(item.unit_cost)} each - Shipping{" "}
-                          {formatCurrency(item.shipping_cost)} - Tax{" "}
-                          {formatCurrency(item.tax)}
-                        </p>
-                        <p className="mt-1 text-sm font-black text-slate-700">
-                          Total {formatCurrency(getItemTotal(item))}
-                        </p>
+                          {isReturned && (
+                            <p className="mt-1 text-sm font-black text-red-700">
+                              Returned - {formatCurrency(returnDeduction)} deducted
+                            </p>
+                          )}
+                          {isReturned && (
+                            <p className="mt-1 text-xs font-semibold text-slate-500">
+                              {returnTrackingText}
+                            </p>
+                          )}
+                          <p className="mt-1 text-sm font-black text-slate-700">
+                            Total {formatCurrency(getItemTotal(item))}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                          {isReturned ? (
+                            <Badge className="bg-red-50 text-red-700 ring-red-200">
+                              Returned
+                            </Badge>
+                          ) : canManagePurchaseOrders ? (
+                            <StatusDropdown
+                              currentStatus={item.status ?? "ordered"}
+                              isUpdating={updatingItemId === item.id}
+                              onChange={(newStatus) =>
+                                onItemStatusChange(item, newStatus, purchaseOrder)
+                              }
+                              statuses={purchaseOrderItemStatuses}
+                            />
+                          ) : (
+                            <Badge
+                              className={statusClassName(item.status ?? "ordered")}
+                            >
+                              {formatPurchaseOrderLabel(item.status ?? "ordered")}
+                            </Badge>
+                          )}
+
+                          {canManageReturns && canMarkItemReturned(item) && (
+                            <button
+                              className="inline-flex min-h-9 items-center justify-center rounded-2xl border border-red-200 bg-white px-3 py-1.5 text-xs font-black text-red-700 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={updatingItemId === item.id}
+                              onClick={() => onMarkReturned(item, purchaseOrder)}
+                              type="button"
+                            >
+                              Mark Returned
+                            </button>
+                          )}
+                        </div>
                       </div>
 
-                      {canManagePurchaseOrders ? (
-                        <StatusDropdown
-                          currentStatus={item.status ?? "ordered"}
-                          isUpdating={updatingItemId === item.id}
-                          onChange={(newStatus) =>
-                            onItemStatusChange(item, newStatus, purchaseOrder)
-                          }
-                          statuses={purchaseOrderItemStatuses}
-                        />
-                      ) : (
-                        <Badge className={statusClassName(item.status ?? "ordered")}>
-                          {formatPurchaseOrderLabel(item.status ?? "ordered")}
-                        </Badge>
+                      {item.notes && (
+                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                          {item.notes}
+                        </p>
                       )}
                     </div>
-
-                    {item.notes && (
-                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">
-                        {item.notes}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -742,6 +957,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
   const [purchaseOrderItems, setPurchaseOrderItems] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [repairJobsById, setRepairJobsById] = useState({});
+  const [returningItemContext, setReturningItemContext] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedQuotesById, setSelectedQuotesById] = useState({});
   const [serviceCategoriesById, setServiceCategoriesById] = useState({});
@@ -757,6 +973,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     currentProfile?.role,
     "purchase_order:manage"
   );
+  const canManageReturns = canManageReturnsForProfile(currentProfile);
   const canUploadDocuments = canUploadDocumentsForProfile(currentProfile);
   const canDeleteDocuments = hasPermission(currentProfile?.role, "photo:manage");
 
@@ -794,6 +1011,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
                   selectedQuote,
                 }
               : null,
+            returnedBy: profilesById[item.returned_by] ?? null,
           };
         }
       );
@@ -803,6 +1021,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
         documents: documentsByPurchaseOrderId[purchaseOrder.id] ?? [],
         items,
         orderedBy: profilesById[purchaseOrder.ordered_by] ?? null,
+        receivedBy: profilesById[purchaseOrder.received_by] ?? null,
         vehicle: vehiclesById[purchaseOrder.vehicle_id] ?? null,
         vendor: vendorsById[purchaseOrder.vendor_id] ?? null,
       };
@@ -915,14 +1134,29 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
       shouldMarkReceived && !purchaseOrder.received_at
         ? new Date().toISOString()
         : purchaseOrder.received_at;
+    const receivedBy =
+      shouldMarkReceived && currentProfile?.id
+        ? currentProfile.id
+        : purchaseOrder.received_by ?? null;
 
     setStatusErrorMessage("");
     setStatusSuccessMessage("");
     setUpdatingPurchaseOrderId(purchaseOrder.id);
+    if (shouldMarkReceived && currentProfile?.id) {
+      setProfilesById((currentProfilesById) => ({
+        ...currentProfilesById,
+        [currentProfile.id]: currentProfile,
+      }));
+    }
     setPurchaseOrders((currentPurchaseOrders) =>
       currentPurchaseOrders.map((currentPurchaseOrder) =>
         currentPurchaseOrder.id === purchaseOrder.id
-          ? { ...currentPurchaseOrder, received_at: receivedAt, status: newStatus }
+          ? {
+              ...currentPurchaseOrder,
+              received_at: receivedAt,
+              received_by: receivedBy,
+              status: newStatus,
+            }
           : currentPurchaseOrder
       )
     );
@@ -932,6 +1166,10 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
 
       if (shouldMarkReceived && !purchaseOrder.received_at) {
         purchaseOrderUpdate.received_at = receivedAt;
+      }
+
+      if (shouldMarkReceived && currentProfile?.id) {
+        purchaseOrderUpdate.received_by = currentProfile.id;
       }
 
       const { error } = await supabase
@@ -947,9 +1185,12 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
       const linkedItems = itemsByPurchaseOrderId[purchaseOrder.id] ?? [];
 
       if ((shouldMarkReceived || shouldCancelItems) && linkedItems.length > 0) {
-        const itemIds = linkedItems.map((item) => item.id).filter(Boolean);
+        const activeLinkedItems = linkedItems.filter(
+          (item) => !isPurchaseOrderItemReturned(item)
+        );
+        const itemIds = activeLinkedItems.map((item) => item.id).filter(Boolean);
         const partRequestIds = uniqueValues(
-          linkedItems.map((item) => item.part_request_id)
+          activeLinkedItems.map((item) => item.part_request_id)
         );
         const nextItemStatus = shouldMarkReceived ? "received" : "cancelled";
 
@@ -1025,6 +1266,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
             ? {
                 ...currentPurchaseOrder,
                 received_at: purchaseOrder.received_at,
+                received_by: purchaseOrder.received_by,
                 status: previousStatus,
               }
             : currentPurchaseOrder
@@ -1118,6 +1360,38 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     } finally {
       setUpdatingItemId(null);
     }
+  }
+
+  function handleOpenMarkReturned(item, purchaseOrder) {
+    if (!canManageReturns) {
+      setStatusErrorMessage("Your role cannot mark parts returned.");
+      return;
+    }
+
+    setStatusErrorMessage("");
+    setStatusSuccessMessage("");
+    setReturningItemContext({ item, purchaseOrder });
+  }
+
+  function handleReturnedItemUpdated(updatedItem) {
+    if (!updatedItem?.id) {
+      return;
+    }
+
+    if (currentProfile?.id) {
+      setProfilesById((currentProfilesById) => ({
+        ...currentProfilesById,
+        [currentProfile.id]: currentProfile,
+      }));
+    }
+
+    setPurchaseOrderItems((currentItems) =>
+      currentItems.map((item) =>
+        item.id === updatedItem.id ? { ...item, ...updatedItem } : item
+      )
+    );
+    setStatusErrorMessage("");
+    setStatusSuccessMessage("Part marked returned.");
   }
 
   function clearSearch() {
@@ -1276,8 +1550,10 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
         <section className="space-y-3">
           {filteredPurchaseOrders.map((purchaseOrder) => (
             <PurchaseOrderCard
+              activeTab={activeTab}
               canDeleteDocuments={canDeleteDocuments}
               canManagePurchaseOrders={canManagePurchaseOrders}
+              canManageReturns={canManageReturns}
               canUploadDocuments={canUploadDocuments}
               currentProfile={currentProfile}
               documents={purchaseOrder.documents}
@@ -1289,6 +1565,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
               onDocumentDeleted={handleDocumentDeleted}
               onItemStatusChange={handleItemStatusChange}
               onMarkReceived={setConfirmReceivedOrder}
+              onMarkReturned={handleOpenMarkReturned}
               onOpenVehicle={onSelectVehicle}
               onStatusChange={handlePurchaseOrderStatusChange}
               onToggleDetails={toggleDetails}
@@ -1305,6 +1582,18 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
           onClose={() => setConfirmReceivedOrder(null)}
           onConfirm={handleConfirmMarkReceived}
           purchaseOrder={confirmReceivedOrder}
+        />
+      )}
+
+      {returningItemContext && canManageReturns && (
+        <MarkReturnedModal
+          currentProfile={currentProfile}
+          item={returningItemContext.item}
+          key={returningItemContext.item.id}
+          onClose={() => setReturningItemContext(null)}
+          onReturned={handleReturnedItemUpdated}
+          purchaseOrder={returningItemContext.purchaseOrder}
+          vehicleId={returningItemContext.purchaseOrder?.vehicle_id}
         />
       )}
     </div>

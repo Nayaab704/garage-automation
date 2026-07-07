@@ -35,6 +35,12 @@ export const MAIN_NAV_ITEMS = [
     permission: "purchase_order:manage",
   },
   { icon: "users", label: "Vendors", page: "Vendors" },
+  {
+    icon: "users",
+    label: "Team",
+    page: "Team",
+    permission: "user:manage",
+  },
 ];
 
 export const MAIN_NAV_PAGES = MAIN_NAV_ITEMS.map((item) => item.page);

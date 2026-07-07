@@ -52,6 +52,13 @@ export function getPurchaseOrderBadge(status) {
     };
   }
 
+  if (status === "returned") {
+    return {
+      className: "bg-red-50 text-red-700 ring-red-200",
+      label: "Returned",
+    };
+  }
+
   if (status === "partial_received") {
     return {
       className: "bg-amber-50 text-amber-700 ring-amber-200",
