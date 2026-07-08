@@ -1,20 +1,19 @@
 import { useState } from "react";
 import {
-  formatHeroBadgeLabel,
-  getHeroBadgeClassName,
-} from "../../lib/heroBadge";
-import {
   formatVehicleStatus,
+  getVehicleStatusClassName,
+  normalizeVehicleStatus,
   vehicleStatusOptions,
 } from "../../lib/vehicleStatus";
 
 function VehicleStatusDropdown({ currentStatus, isUpdating, onChange }) {
   const [isOpen, setIsOpen] = useState(false);
+  const normalizedCurrentStatus = normalizeVehicleStatus(currentStatus);
 
   async function handleStatusChange(newStatus) {
     setIsOpen(false);
 
-    if (newStatus === currentStatus || isUpdating) {
+    if (newStatus === normalizedCurrentStatus || isUpdating) {
       return;
     }
 
@@ -26,16 +25,15 @@ function VehicleStatusDropdown({ currentStatus, isUpdating, onChange }) {
       <button
         aria-expanded={isOpen}
         aria-haspopup="menu"
-        className={getHeroBadgeClassName(
-          currentStatus,
-          "transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-        )}
+        className={`inline-flex h-7 max-w-[10.5rem] shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1 text-xs font-semibold leading-none whitespace-nowrap ring-1 ring-inset transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 ${getVehicleStatusClassName(
+          normalizedCurrentStatus
+        )}`}
         disabled={isUpdating}
         onClick={() => setIsOpen((currentValue) => !currentValue)}
         type="button"
       >
         <span className="min-w-0 truncate">
-          {formatHeroBadgeLabel(currentStatus)}
+          {formatVehicleStatus(normalizedCurrentStatus)}
         </span>
         {isUpdating ? (
           <span className="text-xs font-semibold">Saving</span>
@@ -61,7 +59,7 @@ function VehicleStatusDropdown({ currentStatus, isUpdating, onChange }) {
               type="button"
             >
               <span>{formatVehicleStatus(status)}</span>
-              {status === currentStatus && (
+              {status === normalizedCurrentStatus && (
                 <span className="text-xs font-semibold text-zinc-400">
                   Current
                 </span>

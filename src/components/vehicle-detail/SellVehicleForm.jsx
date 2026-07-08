@@ -136,21 +136,6 @@ function SellVehicleForm({
         warrantyRecord = warrantyResponse.data ?? warranty;
       }
 
-      const vehicleResponse = await supabase
-        .from("vehicles")
-        .update({ status: "sold" })
-        .eq("id", vehicle.id)
-        .select("*")
-        .single();
-
-      if (vehicleResponse.error) {
-        console.error("Could not mark vehicle sold:", vehicleResponse.error);
-        setErrorMessage(
-          "Sale was created, but the vehicle could not be marked sold. Please try again."
-        );
-        return;
-      }
-
       setSuccessMessage("Vehicle sold successfully.");
       await logVehicleActivity({
         vehicleId: vehicle.id,
@@ -166,7 +151,7 @@ function SellVehicleForm({
       onActivityLogged?.();
       await onVehicleSold({
         sale: saleResponse.data ?? sale,
-        vehicle: vehicleResponse.data ?? { ...vehicle, status: "sold" },
+        vehicle,
         warranty: warrantyRecord,
       });
       onClose();

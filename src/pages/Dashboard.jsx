@@ -142,13 +142,16 @@ function getVehicleLabel(vehicle) {
   return vehicleName ? `${stockNumber} - ${vehicleName}` : stockNumber;
 }
 
-function isSoldVehicle(vehicle) {
-  return String(vehicle.status ?? "").toLowerCase() === "sold";
+function isSoldVehicle(vehicle, soldVehicleIds = new Set()) {
+  return (
+    soldVehicleIds.has(vehicle.id) ||
+    String(vehicle.status ?? "").toLowerCase() === "sold"
+  );
 }
 
-function isActiveVehicle(vehicle) {
+function isActiveVehicle(vehicle, soldVehicleIds = new Set()) {
   const status = String(vehicle.status ?? "").toLowerCase();
-  return status !== "sold" && status !== "archived";
+  return !isSoldVehicle(vehicle, soldVehicleIds) && status !== "archived";
 }
 
 function mergeVehiclesWithSummaries(
@@ -1139,14 +1142,21 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
   const vehiclesById = useMemo(() => {
     return Object.fromEntries(vehicles.map((vehicle) => [vehicle.id, vehicle]));
   }, [vehicles]);
+  const soldVehicleIds = useMemo(() => {
+    return new Set(sales.map((sale) => sale.vehicle_id).filter(Boolean));
+  }, [sales]);
 
-  const activeVehicles = vehicles.filter(isActiveVehicle);
-  const soldVehicles = vehicles.filter(isSoldVehicle);
+  const activeVehicles = vehicles.filter((vehicle) =>
+    isActiveVehicle(vehicle, soldVehicleIds)
+  );
+  const soldVehicles = vehicles.filter((vehicle) =>
+    isSoldVehicle(vehicle, soldVehicleIds)
+  );
   const activeInvestmentRows = mergeVehiclesWithSummaries(
     vehicles,
     investmentSummaries,
     returnDeductionsByVehicleId
-  ).filter(isActiveVehicle);
+  ).filter((vehicle) => isActiveVehicle(vehicle, soldVehicleIds));
   const activeInventoryInvestment = activeInvestmentRows.reduce(
     (total, vehicle) => total + numberOrZero(vehicle.total_invested),
     0

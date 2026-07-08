@@ -280,7 +280,11 @@ function FinalCheckSection({
         return;
       }
 
-      onFinalCheckUpdated?.(data);
+      const nextChecks = finalChecks.map((check) =>
+        check.id === data.id ? data : check
+      );
+
+      await onFinalCheckUpdated?.(data, nextChecks);
       await logVehicleActivity({
         vehicleId,
         action: isChecked ? "Final check completed" : "Final check unchecked",
@@ -289,10 +293,6 @@ function FinalCheckSection({
           label: finalCheck.label,
         },
       });
-
-      const nextChecks = finalChecks.map((check) =>
-        check.id === data.id ? data : check
-      );
 
       if (!wasComplete && areFinalChecksComplete(nextChecks)) {
         await logVehicleActivity({

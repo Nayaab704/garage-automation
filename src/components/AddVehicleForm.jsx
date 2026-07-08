@@ -169,6 +169,7 @@ function buildVehiclePayload(formData) {
     title_status: getValidTitleStatus(formData.title_status),
     vehicle_origin: getValidVehicleOrigin(formData.vehicle_origin),
     purchase_price: decimalOrZero(formData.purchase_price),
+    status: "inspection",
     target_sale_price: decimalOrZero(formData.target_sale_price),
     notes: emptyToNull(formData.notes),
   };

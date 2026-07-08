@@ -1,12 +1,12 @@
 import AppIcon from "../ui/AppIcon";
 import HeroBadge from "../ui/HeroBadge";
+import VehicleStatusBadge from "../VehicleStatusBadge";
+import { normalizeVehicleStatus } from "../../lib/vehicleStatus";
 import VehicleStatusDropdown from "./VehicleStatusDropdown";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 const readyActionHiddenStatuses = new Set([
   "ready_for_sale",
-  "sold",
-  "archived",
 ]);
 
 function displayValue(value) {
@@ -156,7 +156,7 @@ function VehicleHeader({
   const thumbnailUrl = primaryPhoto?.photo_url;
   const vehicleOrigin = getVehicleOrigin(vehicle);
   const vehicleOriginLabel = formatHeroOrigin(vehicleOrigin);
-  const normalizedVehicleStatus = String(vehicle.status ?? "").toLowerCase();
+  const normalizedVehicleStatus = normalizeVehicleStatus(vehicle.status);
   const shouldShowReadyAction =
     canMarkReady && !readyActionHiddenStatuses.has(normalizedVehicleStatus);
 
@@ -242,7 +242,10 @@ function VehicleHeader({
                     onChange={onStatusChange}
                   />
                 ) : (
-                  <HeroBadge value={vehicle.status} />
+                  <VehicleStatusBadge
+                    className="h-7 max-w-[10.5rem] truncate px-2.5 text-xs"
+                    status={vehicle.status}
+                  />
                 )}
                 <HeroBadge value={vehicle.title_status ?? "unknown"} />
                 {vehicleOriginLabel && (

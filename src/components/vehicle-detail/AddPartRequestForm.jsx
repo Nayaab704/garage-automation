@@ -88,9 +88,11 @@ function AddPartRequestForm({
         notes: emptyToNull(formData.notes),
       };
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("part_requests")
-        .insert([partRequest]);
+        .insert([partRequest])
+        .select("*")
+        .single();
 
       if (error) {
         setErrorMessage(error.message);
@@ -106,7 +108,7 @@ function AddPartRequestForm({
           },
         });
         onActivityLogged?.();
-        await onPartRequestAdded();
+        await onPartRequestAdded(data ?? partRequest);
       }
     } catch (error) {
       setErrorMessage(error.message ?? "Something went wrong.");

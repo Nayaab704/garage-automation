@@ -65,15 +65,16 @@ function VehicleThumbnail({ photo, title }) {
     return (
       <img
         alt={title}
-        className="h-20 w-24 rounded-2xl object-cover sm:h-24 sm:w-32"
+        className="h-28 w-full rounded-2xl object-cover sm:h-32"
+        loading="lazy"
         src={photo.photo_url}
       />
     );
   }
 
   return (
-    <div className="flex h-20 w-24 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 sm:h-24 sm:w-32">
-      <AppIcon name="car" size={36} />
+    <div className="flex h-28 w-full items-center justify-center rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white text-slate-400 sm:h-32">
+      <AppIcon name="car" size={38} />
     </div>
   );
 }
@@ -86,24 +87,37 @@ function VehicleCard({ onSelectVehicle, photo, vehicle }) {
   const colorLabel = vehicle.color || "Color n/a";
 
   return (
-    <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:border-emerald-200 hover:shadow-md">
+    <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md">
       <button
-        className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
+        className="block h-full w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
         disabled={!vehicle.id}
         onClick={() => onSelectVehicle?.(vehicle.id)}
         type="button"
       >
-        <div className="flex gap-3 p-3 sm:gap-4">
-          <VehicleThumbnail photo={photo} title={title} />
+        <div className="grid h-full gap-3 p-3 sm:grid-cols-[8.5rem_minmax(0,1fr)] sm:gap-4">
+          <div className="min-w-0">
+            <VehicleThumbnail photo={photo} title={title} />
+          </div>
 
-          <div className="min-w-0 flex-1">
-            <p className="truncate whitespace-nowrap text-base font-black leading-tight text-slate-950 sm:text-lg">
-              {displayValue(vehicle.stock_number)}
-            </p>
-            <p className="mt-1 truncate text-sm font-medium text-slate-800 sm:text-base">
-              {title}
-              {vehicle.trim ? ` ${vehicle.trim}` : ""}
-            </p>
+          <div className="flex min-w-0 flex-col">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate whitespace-nowrap text-lg font-black leading-tight text-slate-950">
+                  {displayValue(vehicle.stock_number)}
+                </p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-800">
+                  {title}
+                  {vehicle.trim ? ` ${vehicle.trim}` : ""}
+                </p>
+              </div>
+
+              <span className="inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-50 hover:text-slate-700">
+                <span className="sr-only">Open vehicle</span>
+                <span aria-hidden="true" className="text-xl leading-none">
+                  ...
+                </span>
+              </span>
+            </div>
 
             <div className="mt-2">
               <VehicleStatusBadge
@@ -112,12 +126,12 @@ function VehicleCard({ onSelectVehicle, photo, vehicle }) {
               />
             </div>
 
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600">
+            <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 pt-3 text-sm text-slate-600">
               <span className="inline-flex items-center gap-1.5">
                 <AppIcon className="text-slate-400" name="mileage" size={15} />
                 {mileageLabel}
               </span>
-              <span className="text-slate-300">|</span>
+              <span className="text-slate-200">|</span>
               <span className="inline-flex min-w-0 items-center gap-1.5">
                 {vehicle.color && (
                   <span
@@ -129,10 +143,6 @@ function VehicleCard({ onSelectVehicle, photo, vehicle }) {
               </span>
             </div>
           </div>
-
-          <span className="mt-1 inline-flex h-10 min-w-14 shrink-0 items-center justify-center rounded-2xl border border-emerald-200 bg-white px-3 text-sm font-black text-emerald-700 shadow-sm transition hover:bg-emerald-50 sm:min-w-24 sm:px-5">
-            Open
-          </span>
         </div>
       </button>
     </article>

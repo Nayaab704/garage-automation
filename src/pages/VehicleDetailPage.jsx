@@ -23,6 +23,11 @@ import {
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 import { getVehiclePrimaryPhoto } from "../lib/vehicleDisplayPhoto";
+import {
+  getVehicleStatusAfterFinalCheckChange,
+  normalizeVehicleStatus,
+  shouldMoveToRepair,
+} from "../lib/vehicleStatus";
 
 async function fetchInvestmentSummary(vehicleId, stockNumber) {
   const byVehicleId = await supabase
@@ -103,6 +108,9 @@ const finalCheckColumns =
 
 const vehicleDocumentColumns =
   "id, vehicle_id, repair_job_id, third_party_repair_id, purchase_order_id, document_type, file_url, file_path, file_name, file_mime_type, file_size_bytes, notes, uploaded_by, created_at";
+
+const vehicleStatusUpdateFailureMessage =
+  "Vehicle status could not be updated. Please refresh and try again.";
 
 async function fetchFinalChecks(vehicleId) {
   const existingChecksResponse = await supabase
@@ -515,16 +523,150 @@ function VehicleDetailPage({
     setInvestmentSummary(response.data);
   }
 
-  function handleFinalCheckUpdated(updatedFinalCheck) {
+  async function persistVehicleStatus(
+    newStatus,
+    {
+      activityAction = "Vehicle status changed",
+      activityDetails = {},
+      enforcePermission = true,
+      failureMessage = vehicleStatusUpdateFailureMessage,
+      requireReadyChecks = true,
+    } = {}
+  ) {
+    const normalizedNewStatus = normalizeVehicleStatus(newStatus);
+
+    if (enforcePermission && !canChangeVehicleStatus) {
+      setVehicleStatusError("Your role cannot change vehicle status.");
+      return false;
+    }
+
+    if (!vehicle?.id) {
+      setVehicleStatusError("Unable to update a vehicle without an ID.");
+      return false;
+    }
+
+    const normalizedCurrentStatus = normalizeVehicleStatus(vehicle.status);
+
+    if (normalizedCurrentStatus === normalizedNewStatus) {
+      return true;
+    }
+
+    if (
+      requireReadyChecks &&
+      normalizedNewStatus === "ready_for_sale" &&
+      !areFinalChecksComplete(finalChecks)
+    ) {
+      setVehicleStatusError(
+        "Complete all final checks before marking this vehicle Ready For Sale."
+      );
+      return false;
+    }
+
+    const previousStatus = vehicle.status;
+
+    setVehicleStatusError("");
+    setIsVehicleStatusUpdating(true);
+    setVehicle((currentVehicle) =>
+      currentVehicle
+        ? { ...currentVehicle, status: normalizedNewStatus }
+        : currentVehicle
+    );
+
+    try {
+      const { error } = await supabase
+        .from("vehicles")
+        .update({ status: normalizedNewStatus })
+        .eq("id", vehicle.id);
+
+      if (error) {
+        console.error("Could not update vehicle status:", error);
+        setVehicle((currentVehicle) =>
+          currentVehicle
+            ? { ...currentVehicle, status: previousStatus }
+            : currentVehicle
+        );
+        setVehicleStatusError(failureMessage);
+        return false;
+      }
+
+      await logVehicleActivity({
+        vehicleId,
+        action: activityAction,
+        details: {
+          ...activityDetails,
+          from: normalizedCurrentStatus,
+          to: normalizedNewStatus,
+        },
+      });
+      refreshActivityTimeline();
+      return true;
+    } catch (error) {
+      console.error("Could not update vehicle status:", error);
+      setVehicle((currentVehicle) =>
+        currentVehicle
+          ? { ...currentVehicle, status: previousStatus }
+          : currentVehicle
+      );
+      setVehicleStatusError(failureMessage);
+      return false;
+    } finally {
+      setIsVehicleStatusUpdating(false);
+    }
+  }
+
+  async function moveVehicleToRepairIfNeeded(trigger) {
+    if (!shouldMoveToRepair(vehicle)) {
+      return;
+    }
+
+    await persistVehicleStatus("repair", {
+      activityAction: "Vehicle moved to Repair",
+      activityDetails: { trigger },
+      enforcePermission: false,
+      failureMessage:
+        "Work was saved, but the vehicle status could not be moved to Repair. Please refresh and try again.",
+      requireReadyChecks: false,
+    });
+  }
+
+  async function syncVehicleStatusFromFinalChecks(nextFinalChecks) {
+    const nextStatus = getVehicleStatusAfterFinalCheckChange({
+      finalChecks: nextFinalChecks,
+      finalCheckTemplates,
+      vehicle,
+    });
+
+    if (!nextStatus) {
+      return;
+    }
+
+    await persistVehicleStatus(nextStatus, {
+      activityAction: "Vehicle status updated from final checklist",
+      activityDetails: {
+        checked_count: nextFinalChecks.filter((check) => check.is_checked).length,
+      },
+      enforcePermission: false,
+      failureMessage:
+        "Final check was saved, but the vehicle status could not be updated. Please refresh and try again.",
+      requireReadyChecks: false,
+    });
+  }
+
+  async function handleFinalCheckUpdated(updatedFinalCheck, nextFinalChecks) {
     setFinalChecks((currentFinalChecks) =>
       replaceById(currentFinalChecks, updatedFinalCheck)
     );
+
+    if (nextFinalChecks) {
+      await syncVehicleStatusFromFinalChecks(nextFinalChecks);
+    }
   }
 
-  function handleWorkOrderAdded(workOrder) {
+  async function handleWorkOrderAdded(workOrder) {
     setRepairJobs((currentRepairJobs) =>
       upsertNewestById(currentRepairJobs, workOrder)
     );
+    await moveVehicleToRepairIfNeeded("work_order_added");
   }
 
   async function handleWorkOrderLaborAdded(laborLog) {
@@ -551,6 +693,8 @@ function VehicleDetailPage({
     setPartRequests((currentPartRequests) =>
       upsertNewestById(currentPartRequests, partRequest)
     );
+
+    await moveVehicleToRepairIfNeeded("part_added");
 
     if (partRequest?.part_source === "in_house") {
       await refreshInvestmentSummary();
@@ -636,6 +780,7 @@ function VehicleDetailPage({
       upsertNewestById(currentRepairs, thirdPartyRepair)
     );
 
+    await moveVehicleToRepairIfNeeded("third_party_repair_added");
     await refreshInvestmentSummary();
   }
 
@@ -784,70 +929,7 @@ function VehicleDetailPage({
   }
 
   async function handleVehicleStatusChange(newStatus) {
-    if (!canChangeVehicleStatus) {
-      setVehicleStatusError("Your role cannot change vehicle status.");
-      return;
-    }
-
-    if (!vehicle?.id) {
-      setVehicleStatusError("Unable to update a vehicle without an ID.");
-      return;
-    }
-
-    if (newStatus === vehicle.status) {
-      return;
-    }
-
-    if (newStatus === "ready_for_sale" && !areFinalChecksComplete(finalChecks)) {
-      setVehicleStatusError(
-        "Complete all final checks before marking this vehicle Ready For Sale."
-      );
-      return;
-    }
-
-    const previousStatus = vehicle.status;
-
-    setVehicleStatusError("");
-    setIsVehicleStatusUpdating(true);
-    setVehicle((currentVehicle) =>
-      currentVehicle ? { ...currentVehicle, status: newStatus } : currentVehicle
-    );
-
-    try {
-      const { error } = await supabase
-        .from("vehicles")
-        .update({ status: newStatus })
-        .eq("id", vehicle.id);
-
-      if (error) {
-        setVehicle((currentVehicle) =>
-          currentVehicle
-            ? { ...currentVehicle, status: previousStatus }
-            : currentVehicle
-        );
-        setVehicleStatusError(error.message);
-        return;
-      }
-
-      await logVehicleActivity({
-        vehicleId,
-        action: "Vehicle status changed",
-        details: {
-          from: previousStatus,
-          to: newStatus,
-        },
-      });
-      refreshActivityTimeline();
-    } catch (error) {
-      setVehicle((currentVehicle) =>
-        currentVehicle
-          ? { ...currentVehicle, status: previousStatus }
-          : currentVehicle
-      );
-      setVehicleStatusError(error.message ?? "Something went wrong.");
-    } finally {
-      setIsVehicleStatusUpdating(false);
-    }
+    await persistVehicleStatus(newStatus);
   }
 
   const isVehicleSold =
