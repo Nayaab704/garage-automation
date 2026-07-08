@@ -6,7 +6,7 @@ import { buildVehiclePrimaryPhotoMap } from "../lib/vehicleDisplayPhoto";
 import { formatVehicleStatus, vehicleStatusOptions } from "../lib/vehicleStatus";
 
 const vehicleColumns =
-  "id, stock_number, vin, year, make, model, trim, mileage, color, title_status, status, primary_photo_id";
+  "id, stock_number, vin, year, make, model, trim, mileage, color, title_status, status, primary_photo_id, created_at";
 
 const vehiclePhotoColumns =
   "id, vehicle_id, photo_url, repair_job_id, created_at";
@@ -85,7 +85,8 @@ async function fetchVehiclesWithPhotos() {
   const vehiclesResponse = await supabase
     .from("vehicles")
     .select(vehicleColumns)
-    .order("stock_number", { ascending: true });
+    .order("created_at", { ascending: false, nullsFirst: false })
+    .order("stock_number", { ascending: false });
 
   if (vehiclesResponse.error) {
     return { data: null, error: vehiclesResponse.error };
