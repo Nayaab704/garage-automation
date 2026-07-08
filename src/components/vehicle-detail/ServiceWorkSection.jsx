@@ -20,6 +20,62 @@ function isOpenWorkOrder(workOrder) {
   return !closedWorkOrderStatuses.includes(workOrder.status);
 }
 
+const categoryKeyAliases = {
+  a_c: "ac",
+  air_conditioning: "ac",
+  parts_accessories: "parts",
+  paint_cosmetic: "paint",
+  tires_wheels: "tires",
+};
+
+function normalizeCategoryKey(value) {
+  const normalizedValue = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return categoryKeyAliases[normalizedValue] ?? normalizedValue;
+}
+
+function getCategoryMatchKeys(category) {
+  return new Set(
+    [category?.slug, category?.name]
+      .map(normalizeCategoryKey)
+      .filter(Boolean)
+  );
+}
+
+function workOrderMatchesCategory(workOrder, category) {
+  if (workOrder.service_category_id) {
+    return workOrder.service_category_id === category.id;
+  }
+
+  const categoryKeys = getCategoryMatchKeys(category);
+  const workOrderKeys = [
+    workOrder.category,
+    workOrder.repair_category,
+    workOrder.serviceCategory?.slug,
+    workOrder.serviceCategory?.name,
+  ]
+    .map(normalizeCategoryKey)
+    .filter(Boolean);
+
+  return workOrderKeys.some((key) => categoryKeys.has(key));
+}
+
+function getLegacyWorkOrders(workOrders, categories) {
+  return sortWorkOrders(
+    workOrders.filter(
+      (workOrder) =>
+        !categories.some((category) =>
+          workOrderMatchesCategory(workOrder, category)
+        )
+    )
+  );
+}
+
 function getCategoryAlert(workOrders) {
   if (
     workOrders.some(
@@ -56,7 +112,7 @@ function CategoryChip({ category, isSelected, onSelect, workOrders }) {
 
   return (
     <button
-      className={`min-h-32 min-w-[8.75rem] rounded-2xl border bg-white px-4 py-4 text-center shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-w-[9.5rem] ${
+      className={`min-h-28 w-full rounded-2xl border bg-white px-3 py-3 text-center shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
         isSelected
           ? "border-blue-500 text-blue-700 shadow-[0_12px_30px_rgba(37,99,235,0.18)] ring-1 ring-blue-100"
           : "border-slate-200 text-slate-700 hover:border-blue-200 hover:shadow-md"
@@ -66,15 +122,15 @@ function CategoryChip({ category, isSelected, onSelect, workOrders }) {
     >
       <span className="flex flex-col items-center">
         <span
-          className={`mb-3 flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl transition ${
+          className={`mb-2.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition ${
             isSelected
               ? "bg-blue-50 text-blue-600"
               : "bg-slate-50 text-slate-500"
           }`}
         >
-          <AppIcon name={visual.icon} size={44} />
+          <AppIcon name={visual.icon} size={32} />
         </span>
-        <span className="block text-sm font-bold leading-5 sm:text-[15px]">
+        <span className="block text-sm font-bold leading-5">
           {category.name}
         </span>
       </span>
@@ -144,18 +200,22 @@ function ServiceWorkSection({
   const workOrdersByCategoryId = useMemo(() => {
     return activeServiceCategories.reduce((groupedWorkOrders, category) => {
       const categoryWorkOrders = repairJobs.filter(
-        (repairJob) => repairJob.service_category_id === category.id
+        (repairJob) => workOrderMatchesCategory(repairJob, category)
       );
 
       groupedWorkOrders[category.id] = sortWorkOrders(categoryWorkOrders);
       return groupedWorkOrders;
     }, {});
   }, [activeServiceCategories, repairJobs]);
+  const legacyWorkOrders = useMemo(
+    () => getLegacyWorkOrders(repairJobs, activeServiceCategories),
+    [activeServiceCategories, repairJobs]
+  );
 
   const totalWorkOrders = activeServiceCategories.reduce(
     (total, category) =>
       total + (workOrdersByCategoryId[category.id]?.length ?? 0),
-    0
+    legacyWorkOrders.length
   );
   const selectedCategory = activeServiceCategories.find(
     (category) => category.id === selectedCategoryId
@@ -208,7 +268,7 @@ function ServiceWorkSection({
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2 sm:flex-wrap">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
             {activeServiceCategories.map((category) => (
               <CategoryChip
                 category={category}
@@ -259,6 +319,50 @@ function ServiceWorkSection({
               vehiclePhotos={vehiclePhotos}
               vendors={vendors}
               workOrders={selectedWorkOrders}
+            />
+          )}
+
+          {legacyWorkOrders.length > 0 && (
+            <ServiceCategoryCard
+              canManage={false}
+              canManageDocuments={canManageDocuments}
+              canManageLabor={canManageLabor}
+              canManageParts={canManageParts}
+              canManagePhotos={canManagePhotos}
+              canManageThirdPartyRepairs={canManageThirdPartyRepairs}
+              canUploadDocuments={canUploadDocuments}
+              category={{
+                description:
+                  "Existing work orders from older or inactive categories.",
+                id: "legacy_uncategorized",
+                name: "Legacy / Uncategorized",
+              }}
+              currentProfile={currentProfile}
+              documents={documents}
+              key="legacy_uncategorized"
+              onActivityLogged={onActivityLogged}
+              onDocumentAdded={onDocumentAdded}
+              onDocumentDeleted={onDocumentDeleted}
+              onLaborAdded={onLaborAdded}
+              onLaborDeleted={onLaborDeleted}
+              onPartAdded={onPartAdded}
+              onPartApprovalUpdated={onPartApprovalUpdated}
+              onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
+              onPurchaseOrderItemUpdated={onPurchaseOrderItemUpdated}
+              onPhotoAdded={onPhotoAdded}
+              onPhotoDeleted={onPhotoDeleted}
+              onThirdPartyRepairAdded={onThirdPartyRepairAdded}
+              onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
+              partRequests={partRequests}
+              profiles={profiles}
+              purchaseOrderItems={purchaseOrderItems}
+              purchaseOrders={purchaseOrders}
+              thirdPartyRepairs={thirdPartyRepairs}
+              vehicle={vehicle}
+              vehicleId={vehicleId}
+              vehiclePhotos={vehiclePhotos}
+              vendors={vendors}
+              workOrders={legacyWorkOrders}
             />
           )}
         </div>

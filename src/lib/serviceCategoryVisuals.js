@@ -1,10 +1,15 @@
 const defaultVisual = {
   accentClassName: "border-slate-200 bg-white text-slate-600",
   icon: "toolbox",
-  shortLabel: "Other",
+  shortLabel: "Service",
 };
 
 const phaseOneServiceCategorySlugs = new Set([
+  "ac",
+  "a_c",
+  "air_conditioning",
+  "alignment",
+  "audio",
   "body",
   "body_shop",
   "electrical",
@@ -19,6 +24,11 @@ const phaseOneServiceCategorySlugs = new Set([
 ]);
 
 const phaseOneServiceCategoryNames = new Set([
+  "a/c",
+  "ac",
+  "air conditioning",
+  "alignment",
+  "audio",
   "body",
   "body shop",
   "electrical",
@@ -36,6 +46,31 @@ const phaseOneServiceCategoryNames = new Set([
 ]);
 
 export const serviceCategoryVisuals = {
+  a_c: {
+    accentClassName: "border-slate-200 bg-white text-slate-600",
+    icon: "snowflake",
+    shortLabel: "AC",
+  },
+  ac: {
+    accentClassName: "border-slate-200 bg-white text-slate-600",
+    icon: "snowflake",
+    shortLabel: "AC",
+  },
+  air_conditioning: {
+    accentClassName: "border-slate-200 bg-white text-slate-600",
+    icon: "snowflake",
+    shortLabel: "AC",
+  },
+  alignment: {
+    accentClassName: "border-slate-200 bg-white text-slate-600",
+    icon: "wheel",
+    shortLabel: "Alignment",
+  },
+  audio: {
+    accentClassName: "border-slate-200 bg-white text-slate-600",
+    icon: "volume",
+    shortLabel: "Audio",
+  },
   body: {
     accentClassName: "border-slate-200 bg-white text-slate-600",
     icon: "body-shop",
@@ -71,7 +106,6 @@ export const serviceCategoryVisuals = {
     icon: "wrench",
     shortLabel: "Mechanical",
   },
-  other: defaultVisual,
   paint: {
     accentClassName: "border-slate-200 bg-white text-slate-600",
     icon: "paint-spray",
@@ -104,13 +138,63 @@ export const serviceCategoryVisuals = {
   },
 };
 
+const preferredServiceCategoryOrder = {
+  mechanical: 10,
+  body: 20,
+  body_shop: 20,
+  paint: 30,
+  paint_cosmetic: 30,
+  glass: 40,
+  tires: 50,
+  tires_wheels: 50,
+  alignment: 60,
+  a_c: 70,
+  ac: 70,
+  air_conditioning: 70,
+  audio: 80,
+  interior: 90,
+  interior_detailing: 90,
+  electrical: 100,
+};
+
+function normalizeCategoryKey(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function getCategoryOrder(category) {
+  const slugOrder = preferredServiceCategoryOrder[
+    normalizeCategoryKey(category?.slug)
+  ];
+
+  if (slugOrder !== undefined) {
+    return slugOrder;
+  }
+
+  const nameOrder = preferredServiceCategoryOrder[
+    normalizeCategoryKey(category?.name)
+  ];
+
+  return nameOrder ?? Number.MAX_SAFE_INTEGER;
+}
+
 export function getServiceCategoryVisual(categoryOrSlug) {
   const slug =
     typeof categoryOrSlug === "string"
       ? categoryOrSlug
       : categoryOrSlug?.slug;
+  const normalizedSlug = normalizeCategoryKey(slug);
+  const normalizedName = normalizeCategoryKey(categoryOrSlug?.name);
 
-  return serviceCategoryVisuals[slug] ?? defaultVisual;
+  return (
+    serviceCategoryVisuals[normalizedSlug] ??
+    serviceCategoryVisuals[normalizedName] ??
+    defaultVisual
+  );
 }
 
 export function isPhaseOneServiceCategory(categoryOrSlug) {
@@ -118,7 +202,7 @@ export function isPhaseOneServiceCategory(categoryOrSlug) {
     typeof categoryOrSlug === "string"
       ? categoryOrSlug
       : categoryOrSlug?.slug;
-  const normalizedSlug = String(slug ?? "").trim().toLowerCase();
+  const normalizedSlug = normalizeCategoryKey(slug);
 
   if (phaseOneServiceCategorySlugs.has(normalizedSlug)) {
     return true;
@@ -128,11 +212,32 @@ export function isPhaseOneServiceCategory(categoryOrSlug) {
     .trim()
     .toLowerCase();
 
-  return phaseOneServiceCategoryNames.has(normalizedName);
+  return (
+    phaseOneServiceCategoryNames.has(normalizedName) ||
+    phaseOneServiceCategorySlugs.has(normalizeCategoryKey(normalizedName))
+  );
 }
 
 export function getPhaseOneServiceCategories(serviceCategories = []) {
-  return serviceCategories.filter((serviceCategory) =>
-    isPhaseOneServiceCategory(serviceCategory)
-  );
+  return serviceCategories
+    .filter((serviceCategory) => isPhaseOneServiceCategory(serviceCategory))
+    .sort((firstCategory, secondCategory) => {
+      const firstOrder = getCategoryOrder(firstCategory);
+      const secondOrder = getCategoryOrder(secondCategory);
+
+      if (firstOrder !== secondOrder) {
+        return firstOrder - secondOrder;
+      }
+
+      const firstSortOrder = firstCategory.sort_order ?? 0;
+      const secondSortOrder = secondCategory.sort_order ?? 0;
+
+      if (firstSortOrder !== secondSortOrder) {
+        return firstSortOrder - secondSortOrder;
+      }
+
+      return String(firstCategory.name ?? "").localeCompare(
+        String(secondCategory.name ?? "")
+      );
+    });
 }

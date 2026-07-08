@@ -146,6 +146,17 @@ const iconPaths = {
       <path d="m16 16 4 4" />
     </>
   ),
+  snowflake: (
+    <>
+      <path d="M12 3v18" />
+      <path d="m5 7 14 10" />
+      <path d="m19 7-14 10" />
+      <path d="m9 5 3 2 3-2" />
+      <path d="m9 19 3-2 3 2" />
+      <path d="m4.5 10.5 3.2 1.4-.3 3.4" />
+      <path d="m19.5 13.5-3.2-1.4.3-3.4" />
+    </>
+  ),
   scan: (
     <>
       <path d="M7 4H5.5A1.5 1.5 0 0 0 4 5.5V7" />
@@ -180,6 +191,13 @@ const iconPaths = {
       <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
       <circle cx="17" cy="9" r="2.5" />
       <path d="M15.5 15.2A4.5 4.5 0 0 1 21 19" />
+    </>
+  ),
+  volume: (
+    <>
+      <path d="M4 10v4h3l5 4V6l-5 4H4Z" />
+      <path d="M15.5 9.5a4 4 0 0 1 0 5" />
+      <path d="M18.5 7a7 7 0 0 1 0 10" />
     </>
   ),
   warning: (
@@ -219,7 +237,9 @@ const iconPaths = {
 };
 
 const aliases = {
+  ac: "snowflake",
   alert: "warning",
+  alignment: "wheel",
   body: "body-shop",
   camera: "camera",
   chart: "chart-up",
@@ -239,6 +259,9 @@ const aliases = {
   barcode: "scan",
   scan: "scan",
   search: "search",
+  audio: "volume",
+  "air-conditioning": "snowflake",
+  snowflake: "snowflake",
   spray: "paint-spray",
   status: "refresh",
   "third-party": "users",
