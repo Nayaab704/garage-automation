@@ -1,5 +1,6 @@
 import AppIcon from "../ui/AppIcon";
 import HeroBadge from "../ui/HeroBadge";
+import VehicleColorLabel from "../VehicleColorLabel";
 import VehicleStatusBadge from "../VehicleStatusBadge";
 import { normalizeVehicleStatus } from "../../lib/vehicleStatus";
 import VehicleStatusDropdown from "./VehicleStatusDropdown";
@@ -104,21 +105,55 @@ function formatHeroOrigin(origin) {
   return labels[origin] ?? "";
 }
 
+function MetadataItem({ children, label }) {
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      <span className="shrink-0 font-semibold text-slate-500">{label}:</span>
+      {children}
+    </span>
+  );
+}
+
 function MetadataRow({ vehicle }) {
   const items = [
-    { label: "Mileage", value: formatMileage(vehicle.mileage) },
-    { label: "Color", value: vehicle.color },
-    { label: "VIN", value: vehicle.vin },
-  ].filter((item) => item.value && item.value !== "Not available");
+    formatMileage(vehicle.mileage) !== "Not available"
+      ? {
+          content: (
+            <MetadataItem label="Mileage">
+              <span className="truncate font-semibold text-slate-700">
+                {formatMileage(vehicle.mileage)}
+              </span>
+            </MetadataItem>
+          ),
+          key: "mileage",
+        }
+      : null,
+    {
+      content: <VehicleColorLabel color={vehicle.color} showLabel />,
+      key: "color",
+    },
+    vehicle.vin
+      ? {
+          content: (
+            <MetadataItem label="VIN">
+              <span className="break-all font-semibold text-slate-700">
+                {vehicle.vin}
+              </span>
+            </MetadataItem>
+          ),
+          key: "vin",
+        }
+      : null,
+  ].filter(Boolean);
 
   if (items.length === 0) {
     return null;
   }
 
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-slate-500 sm:text-sm">
+    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs leading-5 sm:text-sm">
       {items.map((item, index) => (
-        <span className="inline-flex min-w-0 items-center gap-2" key={item.label}>
+        <span className="inline-flex min-w-0 items-center gap-2" key={item.key}>
           {index > 0 && (
             <>
               <span aria-hidden="true" className="text-slate-300">
@@ -126,10 +161,7 @@ function MetadataRow({ vehicle }) {
               </span>
             </>
           )}
-          <span className={item.label === "VIN" ? "break-all" : ""}>
-            <span className="font-semibold text-slate-500">{item.label}:</span>{" "}
-            {item.value}
-          </span>
+          {item.content}
         </span>
       ))}
     </div>
