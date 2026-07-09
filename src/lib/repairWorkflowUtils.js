@@ -37,7 +37,10 @@ const receivedPurchaseOrderItemStatuses = ["received", "installed"];
 const urgentPriorities = ["urgent", "critical", "high"];
 
 function normalizeSearch(value) {
-  return String(value ?? "").trim().toLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 function numberOrZero(value) {
@@ -59,6 +62,10 @@ export function formatRepairLabel(value, labels = {}) {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+function formatSearchLabel(value, labels = {}) {
+  return value ? formatRepairLabel(value, labels) : "";
 }
 
 export function getRepairVehicleName(vehicle) {
@@ -215,27 +222,59 @@ export function getRepairQueueCounts(jobs = []) {
 }
 
 export function getRepairJobSearchText(job) {
-  return [
+  const vehicle = job?.vehicle;
+
+  return normalizeSearch([
     job?.title,
     job?.notes,
     job?.category,
     job?.serviceCategory?.name,
-    job?.vehicle?.stock_number,
-    job?.vehicle?.year,
-    job?.vehicle?.make,
-    job?.vehicle?.model,
-    job?.vehicle?.trim,
-    job?.vehicle?.status,
+    job?.status,
+    job?.priority,
+    formatSearchLabel(job?.status, repairStatusLabels),
+    formatSearchLabel(job?.priority, repairPriorityLabels),
+    job?.assignedProfile?.full_name,
+    job?.assignedProfile?.email,
+    job?.createdByProfile?.full_name,
+    job?.createdByProfile?.email,
+    vehicle?.stock_number,
+    vehicle?.vin,
+    vehicle?.year,
+    vehicle?.make,
+    vehicle?.model,
+    vehicle?.trim,
+    vehicle?.color,
+    vehicle?.status,
     ...(job?.parts ?? []).flatMap((part) => [
       part.part_name,
+      part.notes,
+      part.status,
+      part.approval_status,
+      part.part_source,
+      formatSearchLabel(part.status, {}),
+      formatSearchLabel(part.approval_status, {}),
       part.selectedVendor?.name,
       part.selectedQuote?.vendor_name_snapshot,
-      part.purchaseOrderItems?.[0]?.purchaseOrder?.vendor?.name,
+      part.selectedQuote?.quote_status,
+      part.selectedQuote?.availability,
+      ...(part.purchaseOrderItems ?? []).flatMap((item) => [
+        item.description,
+        item.notes,
+        item.status,
+        item.purchaseOrder?.id,
+        item.purchaseOrder?.id ? `PO ${item.purchaseOrder.id}` : "",
+        item.purchaseOrder?.status,
+        item.purchaseOrder?.vendor?.name,
+      ]),
     ]),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
+    ...(job?.thirdPartyRepairs ?? []).flatMap((repair) => [
+      repair.service_rendered,
+      repair.status,
+      formatSearchLabel(repair.status, {}),
+      repair.notes,
+      repair.vendor?.name,
+    ]),
+  ].filter(Boolean).join(" "));
 }
 
 export function filterRepairsQueue(jobs = [], { search = "", tab = "open" } = {}) {

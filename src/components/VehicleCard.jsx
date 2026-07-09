@@ -55,7 +55,21 @@ function VehicleThumbnail({ photo, title }) {
   );
 }
 
-function VehicleCard({ onSelectVehicle, photo, vehicle }) {
+function ThirdPartyBadge() {
+  return (
+    <span className="inline-flex h-7 max-w-full items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-bold leading-none text-violet-700">
+      <AppIcon name="third-party" size={14} />
+      <span className="truncate">3rd-Party</span>
+    </span>
+  );
+}
+
+function VehicleCard({
+  hasThirdPartyRepair = false,
+  onSelectVehicle,
+  photo,
+  vehicle,
+}) {
   const title = getVehicleTitle(vehicle);
   const mileageLabel = hasDisplayValue(vehicle.mileage)
     ? `${formatNumber(vehicle.mileage)} mi`
@@ -94,11 +108,12 @@ function VehicleCard({ onSelectVehicle, photo, vehicle }) {
               </span>
             </div>
 
-            <div className="mt-2">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               <VehicleStatusBadge
                 className="max-w-full truncate px-2.5 text-xs"
                 status={vehicle.status}
               />
+              {hasThirdPartyRepair && <ThirdPartyBadge />}
             </div>
 
             <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-slate-100 pt-3 text-sm">

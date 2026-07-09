@@ -5,6 +5,7 @@ import PartsQueueEmptyState from "../components/parts/PartsQueueEmptyState";
 import PartsQueueTabs from "../components/parts/PartsQueueTabs";
 import AppIcon from "../components/ui/AppIcon";
 import ModalShell from "../components/ui/ModalShell";
+import OperationalSearchBar from "../components/ui/OperationalSearchBar";
 import { buttonClassNames } from "../components/ui/uiStyles";
 import CreatePurchaseOrderForm from "../components/vehicle-detail/CreatePurchaseOrderForm";
 import { logVehicleActivity } from "../lib/activityLogger";
@@ -22,6 +23,7 @@ import {
 } from "../lib/partsQueue";
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import {
   getVendorQuoteDisplayName,
   markQuotePurchased,
@@ -116,6 +118,8 @@ function PartsPage({
   const [updatingPartId, setUpdatingPartId] = useState(null);
   const [vendors, setVendors] = useState([]);
 
+  const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
+
   const canApproveParts = canApprovePartsForProfile(currentProfile);
   const canManageReturns = canApprovePartsForProfile(currentProfile);
   const canManagePurchaseOrders = hasPermission(
@@ -131,10 +135,10 @@ function PartsPage({
   const filteredParts = useMemo(
     () =>
       filterPartsQueueResults(partQueue, {
-        search: searchTerm,
+        search: debouncedSearchTerm,
         tab: activeTab,
       }),
-    [activeTab, partQueue, searchTerm]
+    [activeTab, debouncedSearchTerm, partQueue]
   );
 
   async function loadPartsQueue({ showLoading = true } = {}) {
@@ -528,33 +532,17 @@ function PartsPage({
           </button>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
-          <label className="relative block" htmlFor="parts-queue-search">
-            <span className="sr-only">Search parts</span>
-            <AppIcon
-              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-              name="search"
-              size={18}
-            />
-            <input
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-white py-2 pl-11 pr-4 text-sm font-semibold text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
-              id="parts-queue-search"
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search part, stock, vehicle, vendor, or work order"
-              type="search"
-              value={searchTerm}
-            />
-          </label>
-
-          {searchTerm.trim() && (
-            <button
-              className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600 shadow-sm transition hover:bg-slate-50"
-              onClick={clearSearch}
-              type="button"
-            >
-              Clear
-            </button>
-          )}
+        <div className="mt-4">
+          <OperationalSearchBar
+            id="parts-queue-search"
+            label="Search parts"
+            onChange={setSearchTerm}
+            onClear={clearSearch}
+            placeholder="Search VIN, stock, vehicle, part, vendor..."
+            resultCount={filteredParts.length}
+            totalCount={countsByTab[activeTab] ?? partQueue.length}
+            value={searchTerm}
+          />
         </div>
 
         <div className="mt-4">
@@ -587,7 +575,8 @@ function PartsPage({
       {!isLoading && !errorMessage && filteredParts.length === 0 && (
         <PartsQueueEmptyState
           activeTab={activeTab}
-          hasSearch={Boolean(searchTerm.trim())}
+          hasSearch={Boolean(debouncedSearchTerm.trim())}
+          onClearSearch={clearSearch}
         />
       )}
 

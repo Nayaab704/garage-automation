@@ -174,6 +174,7 @@ function VehicleHeader({
   canEdit = false,
   canManagePhotos = false,
   canMarkReady = false,
+  hasActiveThirdPartyRepair = false,
   isStatusUpdating,
   onEdit,
   onMarkReady,
@@ -285,6 +286,14 @@ function VehicleHeader({
                     label={vehicleOriginLabel}
                     value={vehicleOrigin || "unknown"}
                     variant="gray"
+                  />
+                )}
+                {hasActiveThirdPartyRepair && (
+                  <HeroBadge
+                    icon="third-party"
+                    label="3rd-Party"
+                    value="third_party"
+                    variant="violet"
                   />
                 )}
               </div>

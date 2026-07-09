@@ -183,6 +183,7 @@ function ServiceWorkSection({
   onPhotoAdded,
   onPhotoDeleted,
   onThirdPartyRepairAdded,
+  onThirdPartyRepairCompleted,
   onThirdPartyRepairDeleted,
   onWorkOrderAdded,
   partRequests = [],
@@ -316,6 +317,7 @@ function ServiceWorkSection({
               onPhotoAdded={onPhotoAdded}
               onPhotoDeleted={onPhotoDeleted}
               onThirdPartyRepairAdded={onThirdPartyRepairAdded}
+              onThirdPartyRepairCompleted={onThirdPartyRepairCompleted}
               onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
               partRequests={partRequests}
               profiles={profiles}
@@ -363,6 +365,7 @@ function ServiceWorkSection({
               onPhotoAdded={onPhotoAdded}
               onPhotoDeleted={onPhotoDeleted}
               onThirdPartyRepairAdded={onThirdPartyRepairAdded}
+              onThirdPartyRepairCompleted={onThirdPartyRepairCompleted}
               onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
               partRequests={partRequests}
               profiles={profiles}

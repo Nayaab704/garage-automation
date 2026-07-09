@@ -40,7 +40,10 @@ const inactivePurchaseOrderItemStatuses = ["cancelled", "returned"];
 const inactivePurchaseOrderStatuses = ["cancelled"];
 
 function normalizeSearch(value) {
-  return String(value ?? "").trim().toLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 export function formatPartLabel(value, labels = {}) {
@@ -57,6 +60,23 @@ export function formatPartLabel(value, labels = {}) {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+function formatSearchLabel(value, labels = {}) {
+  return value ? formatPartLabel(value, labels) : "";
+}
+
+function getVehicleSearchValues(vehicle) {
+  return [
+    vehicle?.stock_number,
+    vehicle?.vin,
+    vehicle?.year,
+    vehicle?.make,
+    vehicle?.model,
+    vehicle?.trim,
+    vehicle?.color,
+    vehicle?.status,
+  ];
 }
 
 export function getVehicleName(vehicle) {
@@ -478,34 +498,63 @@ export function getPartQueueSearchText(part) {
   const purchaseOrderVendor = purchaseOrderItem?.purchaseOrder?.vendor;
   const returnedItems = getReturnedPurchaseOrderItems(part);
 
-  return [
+  return normalizeSearch([
     part?.part_name,
     part?.notes,
-    vehicle?.stock_number,
-    vehicle?.year,
-    vehicle?.make,
-    vehicle?.model,
-    vehicle?.trim,
-    vehicle?.color,
+    part?.status,
+    part?.approval_status,
+    part?.part_source,
+    formatSearchLabel(part?.status, partStatusLabels),
+    formatSearchLabel(part?.approval_status, approvalLabels),
+    formatSearchLabel(part?.part_source, partSourceLabels),
+    part?.createdByProfile?.full_name,
+    part?.createdByProfile?.email,
+    part?.approvedByProfile?.full_name,
+    part?.approvedByProfile?.email,
+    ...getVehicleSearchValues(vehicle),
+    ...getVehicleSearchValues(workOrder?.vehicle),
     workOrder?.title,
     workOrder?.category,
+    workOrder?.status,
+    workOrder?.priority,
     workOrder?.serviceCategory?.name,
     latestQuote?.vendor_name_snapshot,
+    latestQuote?.display_vendor_name,
     latestQuote?.raw_part_name,
+    latestQuote?.quote_status,
+    latestQuote?.availability,
+    latestQuote?.notes,
     selectedQuote?.vendor_name_snapshot,
     selectedQuote?.display_vendor_name,
     selectedQuote?.raw_part_name,
+    selectedQuote?.quote_status,
+    selectedQuote?.availability,
+    selectedQuote?.notes,
     part?.selectedVendor?.name,
     purchaseOrderVendor?.name,
+    purchaseOrderItem?.description,
+    purchaseOrderItem?.notes,
+    purchaseOrderItem?.status,
+    purchaseOrderItem?.purchaseOrder?.id,
+    purchaseOrderItem?.purchaseOrder?.id
+      ? `PO ${purchaseOrderItem.purchaseOrder.id}`
+      : "",
+    purchaseOrderItem?.purchaseOrder?.status,
+    purchaseOrderItem?.purchaseOrder?.notes,
+    purchaseOrderItem?.purchaseOrder?.orderedByProfile?.full_name,
+    purchaseOrderItem?.purchaseOrder?.orderedByProfile?.email,
+    purchaseOrderItem?.purchaseOrder?.receivedByProfile?.full_name,
+    purchaseOrderItem?.purchaseOrder?.receivedByProfile?.email,
     ...returnedItems.flatMap((item) => [
+      item.description,
+      item.status,
       item.return_notes,
       formatReturnReason(item.return_reason),
       item.purchaseOrder?.vendor?.name,
+      item.returnedByProfile?.full_name,
+      item.returnedByProfile?.email,
     ]),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
+  ].filter(Boolean).join(" "));
 }
 
 export function filterPartsQueue(parts = [], { search = "", tab = "needs_po" } = {}) {

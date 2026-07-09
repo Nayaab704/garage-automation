@@ -23,6 +23,7 @@ import {
 import { hasPermission } from "../lib/permissions";
 import { markPurchaseOrderReceived } from "../lib/purchaseOrderReceiving";
 import { supabase } from "../lib/supabaseClient";
+import { isThirdPartyRepairActive } from "../lib/thirdPartyRepairWorkflow";
 import { getVehiclePrimaryPhoto } from "../lib/vehicleDisplayPhoto";
 import {
   getVehicleStatusAfterFinalCheckChange,
@@ -1083,6 +1084,12 @@ function VehicleDetailPage({
     await refreshInvestmentSummary();
   }
 
+  function handleThirdPartyRepairCompleted(updatedRepair) {
+    setThirdPartyRepairs((currentRepairs) =>
+      replaceById(currentRepairs, updatedRepair)
+    );
+  }
+
   async function handleThirdPartyRepairDeleted(deletedRepair) {
     if (deletedRepair?.id) {
       setThirdPartyRepairs((currentRepairs) =>
@@ -1250,6 +1257,9 @@ function VehicleDetailPage({
   const canManageDocuments = canManagePhotos;
   const canSellVehicle = hasPermission(role, "sale:manage");
   const primaryVehiclePhoto = getVehiclePrimaryPhoto(vehicle, vehiclePhotos);
+  const hasActiveThirdPartyRepair = thirdPartyRepairs.some(
+    isThirdPartyRepairActive
+  );
 
   return (
     <div className="space-y-4 text-slate-950">
@@ -1311,6 +1321,7 @@ function VehicleDetailPage({
             onQuickAddWorkOrder={() => scrollToSection(serviceWorkRef)}
             onQuickPhotos={handleHeroPhotoClick}
             onStatusChange={handleVehicleStatusChange}
+            hasActiveThirdPartyRepair={hasActiveThirdPartyRepair}
             primaryPhoto={primaryVehiclePhoto}
             vehicle={vehicle}
           />
@@ -1353,6 +1364,7 @@ function VehicleDetailPage({
               onPhotoAdded={handleWorkOrderPhotoAdded}
               onPhotoDeleted={handleWorkOrderPhotoDeleted}
               onThirdPartyRepairAdded={handleThirdPartyRepairAdded}
+              onThirdPartyRepairCompleted={handleThirdPartyRepairCompleted}
               onThirdPartyRepairDeleted={handleThirdPartyRepairDeleted}
               onWorkOrderAdded={handleWorkOrderAdded}
               partRequests={partRequests}

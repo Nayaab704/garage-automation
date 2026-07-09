@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
+import {
+  getThirdPartyRepairStatusBadge,
+  isThirdPartyRepairActive,
+  THIRD_PARTY_REPAIR_COMPLETE_STATUS,
+} from "../../lib/thirdPartyRepairWorkflow";
 import DocumentsList from "./DocumentsList";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -9,15 +14,6 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
   style: "currency",
 });
-
-const statusLabels = {
-  planned: "Planned",
-  sent_out: "Sent Out",
-  in_progress: "In Progress",
-  returned: "Returned",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
 
 function displayValue(value) {
   return value === null || value === undefined || value === ""
@@ -48,18 +44,6 @@ function formatDate(value) {
   });
 }
 
-function formatLabel(value, labels) {
-  if (labels[value]) {
-    return labels[value];
-  }
-
-  return displayValue(value)
-    .toString()
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
 function getFirstValue(record, fieldNames) {
   for (const fieldName of fieldNames) {
     const value = record[fieldName];
@@ -81,22 +65,6 @@ function getVendorName(vendor) {
 
 function getVendorById(vendors, vendorId) {
   return vendors.find((vendor) => vendor.id === vendorId);
-}
-
-function statusClassName(status) {
-  if (status === "completed" || status === "returned") {
-    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-  }
-
-  if (status === "sent_out" || status === "in_progress") {
-    return "bg-blue-50 text-blue-700 ring-blue-200";
-  }
-
-  if (status === "cancelled") {
-    return "bg-red-50 text-red-700 ring-red-200";
-  }
-
-  return "bg-zinc-100 text-zinc-700 ring-zinc-200";
 }
 
 function getTotalCost(thirdPartyRepair) {
@@ -130,13 +98,16 @@ function ThirdPartyRepairsList({
   onActivityLogged,
   onDocumentAdded,
   onDocumentDeleted,
+  onThirdPartyRepairCompleted,
   onThirdPartyRepairDeleted,
   thirdPartyRepairs = [],
   vehicleId,
   vendors = [],
 }) {
   const [deletingRepairId, setDeletingRepairId] = useState(null);
+  const [completingRepairId, setCompletingRepairId] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   async function handleDelete(thirdPartyRepair) {
     if (!canManage) {
@@ -154,6 +125,7 @@ function ThirdPartyRepairsList({
 
     setDeletingRepairId(thirdPartyRepair.id);
     setErrorMessage("");
+    setSuccessMessage("");
 
     try {
       const { error } = await supabase
@@ -184,6 +156,68 @@ function ThirdPartyRepairsList({
     }
   }
 
+  async function handleMarkComplete(thirdPartyRepair) {
+    if (!canManage) {
+      setErrorMessage("Your role cannot update third-party repairs.");
+      return;
+    }
+
+    setCompletingRepairId(thirdPartyRepair.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const completedDate = new Date().toISOString().slice(0, 10);
+      const updateValues = {
+        status: THIRD_PARTY_REPAIR_COMPLETE_STATUS,
+      };
+
+      if (!thirdPartyRepair.inbound_date) {
+        updateValues.inbound_date = completedDate;
+      }
+
+      const { data, error } = await supabase
+        .from("third_party_repairs")
+        .update(updateValues)
+        .eq("id", thirdPartyRepair.id)
+        .select("*")
+        .single();
+
+      if (error) {
+        console.error("Could not mark third-party repair complete:", error);
+        setErrorMessage(
+          "Could not mark third-party repair complete. Please try again."
+        );
+        return;
+      }
+
+      const updatedRepair = data ?? {
+        ...thirdPartyRepair,
+        ...updateValues,
+      };
+
+      await logVehicleActivity({
+        vehicleId,
+        action: "Third-party repair completed",
+        details: {
+          from: thirdPartyRepair.status,
+          service_rendered: thirdPartyRepair.service_rendered,
+          to: THIRD_PARTY_REPAIR_COMPLETE_STATUS,
+        },
+      });
+      onActivityLogged?.();
+      await onThirdPartyRepairCompleted?.(updatedRepair);
+      setSuccessMessage("Third-party repair marked complete.");
+    } catch (error) {
+      console.error("Could not mark third-party repair complete:", error);
+      setErrorMessage(
+        "Could not mark third-party repair complete. Please try again."
+      );
+    } finally {
+      setCompletingRepairId(null);
+    }
+  }
+
   return (
     <div className="rounded-md bg-zinc-50 p-3">
       {!hideHeader && (
@@ -207,6 +241,13 @@ function ThirdPartyRepairsList({
           {thirdPartyRepairs.map((thirdPartyRepair, index) => {
             const vendor = getVendorById(vendors, thirdPartyRepair.vendor_id);
             const totalCost = getTotalCost(thirdPartyRepair);
+            const badge = getThirdPartyRepairStatusBadge(
+              thirdPartyRepair.status
+            );
+            const canMarkComplete =
+              canManage && isThirdPartyRepairActive(thirdPartyRepair);
+            const isCompleting =
+              completingRepairId === thirdPartyRepair.id;
 
             return (
               <article
@@ -225,17 +266,29 @@ function ThirdPartyRepairsList({
 
                   <div className="flex flex-wrap gap-2">
                     <span
-                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusClassName(
-                        thirdPartyRepair.status
-                      )}`}
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${badge.className}`}
                     >
-                      {formatLabel(thirdPartyRepair.status, statusLabels)}
+                      {badge.label}
                     </span>
+
+                    {canMarkComplete && (
+                      <button
+                        className="min-h-9 rounded-md border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isCompleting}
+                        onClick={() => handleMarkComplete(thirdPartyRepair)}
+                        type="button"
+                      >
+                        {isCompleting ? "Completing..." : "Mark Complete"}
+                      </button>
+                    )}
 
                     {canManage && (
                       <button
                         className="min-h-9 rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={deletingRepairId === thirdPartyRepair.id}
+                        disabled={
+                          deletingRepairId === thirdPartyRepair.id ||
+                          isCompleting
+                        }
                         onClick={() => handleDelete(thirdPartyRepair)}
                         type="button"
                       >
@@ -304,6 +357,12 @@ function ThirdPartyRepairsList({
       {errorMessage && (
         <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
           {errorMessage}
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+          {successMessage}
         </div>
       )}
     </div>

@@ -56,6 +56,8 @@ function enrichPart({
   vendorsById,
 }) {
   const repairJob = repairJobsById[part.repair_job_id] ?? null;
+  const vehicle =
+    vehiclesById[part.vehicle_id] ?? vehiclesById[repairJob?.vehicle_id] ?? null;
   const purchaseOrderItems = (
     purchaseOrderItemsByPartRequestId[part.id] ?? []
   ).map((item) => {
@@ -92,6 +94,7 @@ function enrichPart({
           ...repairJob,
           serviceCategory:
             serviceCategoriesById[repairJob.service_category_id] ?? null,
+          vehicle: vehiclesById[repairJob.vehicle_id] ?? null,
         }
       : null,
     selectedQuote,
@@ -99,7 +102,7 @@ function enrichPart({
       vendorsById[part.selected_vendor_id] ??
       vendorsById[selectedQuote?.vendor_id] ??
       null,
-    vehicle: vehiclesById[part.vehicle_id] ?? null,
+    vehicle,
   };
 }
 
@@ -137,7 +140,7 @@ export async function fetchPartsQueue() {
     vehicleIds.length > 0
       ? supabase
           .from("vehicles")
-          .select("id, stock_number, vin, year, make, model, trim, color")
+          .select("id, stock_number, vin, year, make, model, trim, color, status")
           .in("id", vehicleIds)
       : { data: [], error: null },
     repairJobIds.length > 0
@@ -222,12 +225,38 @@ export async function fetchPartsQueue() {
   const vendorsById = Object.fromEntries(
     vendors.map((vendor) => [vendor.id, vendor])
   );
-  const vehiclesById = Object.fromEntries(
+  let vehiclesById = Object.fromEntries(
     (vehiclesResponse.data ?? []).map((vehicle) => [vehicle.id, vehicle])
   );
   const repairJobsById = Object.fromEntries(
     (repairJobsResponse.data ?? []).map((repairJob) => [repairJob.id, repairJob])
   );
+  const missingRepairJobVehicleIds = uniqueValues(
+    (repairJobsResponse.data ?? [])
+      .map((repairJob) => repairJob.vehicle_id)
+      .filter((vehicleId) => vehicleId && !vehiclesById[vehicleId])
+  );
+
+  if (missingRepairJobVehicleIds.length > 0) {
+    const missingVehiclesResponse = await supabase
+      .from("vehicles")
+      .select("id, stock_number, vin, year, make, model, trim, color, status")
+      .in("id", missingRepairJobVehicleIds);
+
+    if (missingVehiclesResponse.error) {
+      return { data: null, error: missingVehiclesResponse.error };
+    }
+
+    vehiclesById = {
+      ...vehiclesById,
+      ...Object.fromEntries(
+        (missingVehiclesResponse.data ?? []).map((vehicle) => [
+          vehicle.id,
+          vehicle,
+        ])
+      ),
+    };
+  }
   const serviceCategoriesById = Object.fromEntries(
     (serviceCategoriesResponse.data ?? []).map((category) => [
       category.id,

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import MarkReceivedModal from "../components/parts/MarkReceivedModal";
 import MarkReturnedModal from "../components/parts/MarkReturnedModal";
 import AppIcon from "../components/ui/AppIcon";
+import OperationalSearchBar from "../components/ui/OperationalSearchBar";
 import { buttonClassNames } from "../components/ui/uiStyles";
 import DocumentsList from "../components/vehicle-detail/DocumentsList";
 import StatusDropdown from "../components/vehicle-detail/StatusDropdown";
@@ -30,6 +31,7 @@ import {
 import { supabase } from "../lib/supabaseClient";
 import { formatUserFirstName } from "../lib/userDisplay";
 import { getWorkOrderStatusAfterPartsReceived } from "../lib/workOrderStatus";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 
 const purchaseOrderColumns =
   "id, vehicle_id, vendor_id, status, ordered_by, ordered_at, received_by, received_at, notes, created_at";
@@ -391,7 +393,7 @@ async function fetchPurchaseOrdersData() {
     vehicleIds.length > 0
       ? supabase
           .from("vehicles")
-          .select("id, stock_number, year, make, model, trim")
+          .select("id, stock_number, vin, year, make, model, trim, color, status")
           .in("id", vehicleIds)
       : { data: [], error: null },
   ]);
@@ -471,11 +473,13 @@ async function fetchPurchaseOrdersData() {
     selectedQuoteIds.length > 0
       ? supabase
           .from("vendor_part_quotes")
-          .select("id, vendor_id, vendor_name_snapshot, unit_price, total_price")
+          .select(
+            "id, vendor_id, vendor_name_snapshot, raw_part_name, quote_status, availability, notes, unit_price, total_price"
+          )
           .in("id", selectedQuoteIds)
       : { data: [], error: null },
     vendorIds.length > 0
-      ? supabase.from("vendors").select("id, name").in("id", vendorIds)
+      ? supabase.from("vendors").select("id, name, phone, email").in("id", vendorIds)
       : { data: [], error: null },
   ]);
 
@@ -489,6 +493,30 @@ async function fetchPurchaseOrdersData() {
     return { error: secondRequiredError };
   }
 
+  const repairJobs = repairJobsResponse.data ?? [];
+  const initialVehicles = vehiclesResponse.data ?? [];
+  const initialVehicleIds = new Set(initialVehicles.map((vehicle) => vehicle.id));
+  const missingVehicleIds = uniqueValues([
+    ...partRequests.map((partRequest) => partRequest.vehicle_id),
+    ...repairJobs.map((repairJob) => repairJob.vehicle_id),
+  ]).filter((vehicleId) => vehicleId && !initialVehicleIds.has(vehicleId));
+  const missingVehiclesResponse =
+    missingVehicleIds.length > 0
+      ? await supabase
+          .from("vehicles")
+          .select("id, stock_number, vin, year, make, model, trim, color, status")
+          .in("id", missingVehicleIds)
+      : { data: [], error: null };
+
+  if (missingVehiclesResponse.error) {
+    return { error: missingVehiclesResponse.error };
+  }
+
+  const vehicles = [
+    ...initialVehicles,
+    ...(missingVehiclesResponse.data ?? []),
+  ];
+
   return {
     data: {
       partRequests,
@@ -498,7 +526,7 @@ async function fetchPurchaseOrdersData() {
       purchaseOrderItems,
       purchaseOrders,
       repairJobsById: Object.fromEntries(
-        (repairJobsResponse.data ?? []).map((repairJob) => [
+        repairJobs.map((repairJob) => [
           repairJob.id,
           repairJob,
         ])
@@ -514,7 +542,7 @@ async function fetchPurchaseOrdersData() {
       ),
       vehicleDocuments: vehicleDocumentsResponse.data ?? [],
       vehiclesById: Object.fromEntries(
-        (vehiclesResponse.data ?? []).map((vehicle) => [vehicle.id, vehicle])
+        vehicles.map((vehicle) => [vehicle.id, vehicle])
       ),
       vendorsById: Object.fromEntries(
         (vendorsResponse.data ?? []).map((vendor) => [vendor.id, vendor])
@@ -566,11 +594,11 @@ function PurchaseOrderTabs({ activeTab, counts, onChange }) {
   );
 }
 
-function PurchaseOrderEmptyState({ activeTab, hasSearch }) {
+function PurchaseOrderEmptyState({ activeTab, hasSearch, onClearSearch }) {
   const message = hasSearch
     ? {
-        body: "Try a different PO, vendor, part, stock number, vehicle, or work order.",
-        title: "No matching purchase orders found.",
+        body: "Try searching by VIN, stock number, vehicle, part, or vendor.",
+        title: "No matching records found.",
       }
     : activeTab === "open"
       ? {
@@ -593,6 +621,15 @@ function PurchaseOrderEmptyState({ activeTab, hasSearch }) {
       <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
         {message.body}
       </p>
+      {hasSearch && onClearSearch && (
+        <button
+          className={`mt-4 ${buttonClassNames.secondary}`}
+          onClick={onClearSearch}
+          type="button"
+        >
+          Clear Search
+        </button>
+      )}
     </section>
   );
 }
@@ -928,6 +965,8 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
   const [vehiclesById, setVehiclesById] = useState({});
   const [vendorsById, setVendorsById] = useState({});
 
+  const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
+
   const canManagePurchaseOrders = hasPermission(
     currentProfile?.role,
     "purchase_order:manage"
@@ -953,18 +992,22 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
           const partRequest = partRequestsById[item.part_request_id] ?? null;
           const repairJob = repairJobsById[partRequest?.repair_job_id] ?? null;
           const selectedQuote = selectedQuotesById[partRequest?.selected_quote_id] ?? null;
+          const partRequestVehicle = vehiclesById[partRequest?.vehicle_id] ?? null;
+          const repairJobVehicle = vehiclesById[repairJob?.vehicle_id] ?? null;
 
           return {
             ...item,
             partRequest: partRequest
               ? {
                   ...partRequest,
+                  vehicle: partRequestVehicle,
                   repairJob: repairJob
                     ? {
                         ...repairJob,
                         serviceCategory:
                           serviceCategoriesById[repairJob.service_category_id] ??
                           null,
+                        vehicle: repairJobVehicle,
                       }
                     : null,
                   selectedQuote,
@@ -974,6 +1017,12 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
           };
         }
       );
+      const itemPartRequestVehicle = items.find(
+        (item) => item.partRequest?.vehicle
+      )?.partRequest.vehicle;
+      const itemRepairJobVehicle = items.find(
+        (item) => item.partRequest?.repairJob?.vehicle
+      )?.partRequest.repairJob.vehicle;
 
       return {
         ...purchaseOrder,
@@ -981,7 +1030,11 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
         items,
         orderedBy: profilesById[purchaseOrder.ordered_by] ?? null,
         receivedBy: profilesById[purchaseOrder.received_by] ?? null,
-        vehicle: vehiclesById[purchaseOrder.vehicle_id] ?? null,
+        vehicle:
+          vehiclesById[purchaseOrder.vehicle_id] ??
+          itemPartRequestVehicle ??
+          itemRepairJobVehicle ??
+          null,
         vendor: vendorsById[purchaseOrder.vendor_id] ?? null,
       };
     });
@@ -1006,10 +1059,10 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
   const filteredPurchaseOrders = useMemo(
     () =>
       filterPurchaseOrders(enrichedPurchaseOrders, {
-        search: searchTerm,
+        search: debouncedSearchTerm,
         tab: activeTab,
       }),
-    [activeTab, enrichedPurchaseOrders, searchTerm]
+    [activeTab, debouncedSearchTerm, enrichedPurchaseOrders]
   );
 
   async function persistAutomaticRepairJobStatus(
@@ -1684,33 +1737,17 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
-          <label className="relative block" htmlFor="purchase-order-search">
-            <span className="sr-only">Search purchase orders</span>
-            <AppIcon
-              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-              name="search"
-              size={18}
-            />
-            <input
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-white py-2 pl-11 pr-4 text-sm font-semibold text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
-              id="purchase-order-search"
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search PO, vendor, part, stock, vehicle, or work order"
-              type="search"
-              value={searchTerm}
-            />
-          </label>
-
-          {searchTerm.trim() && (
-            <button
-              className={buttonClassNames.secondary}
-              onClick={clearSearch}
-              type="button"
-            >
-              Clear
-            </button>
-          )}
+        <div className="mt-4">
+          <OperationalSearchBar
+            id="purchase-order-search"
+            label="Search purchase orders"
+            onChange={setSearchTerm}
+            onClear={clearSearch}
+            placeholder="Search VIN, stock, PO, vendor, part..."
+            resultCount={filteredPurchaseOrders.length}
+            totalCount={countsByTab[activeTab] ?? enrichedPurchaseOrders.length}
+            value={searchTerm}
+          />
         </div>
 
         <div className="mt-4">
@@ -1751,7 +1788,8 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
       {!isLoading && !errorMessage && filteredPurchaseOrders.length === 0 && (
         <PurchaseOrderEmptyState
           activeTab={activeTab}
-          hasSearch={Boolean(searchTerm.trim())}
+          hasSearch={Boolean(debouncedSearchTerm.trim())}
+          onClearSearch={clearSearch}
         />
       )}
 

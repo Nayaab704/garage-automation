@@ -5,28 +5,16 @@ import ModalShell from "../ui/ModalShell";
 import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
+import { THIRD_PARTY_REPAIR_IN_PROGRESS_STATUS } from "../../lib/thirdPartyRepairWorkflow";
 
 const emptyForm = {
   vendor_id: "",
   service_rendered: "",
-  status: "planned",
   outbound_date: "",
-  inbound_date: "",
   repair_cost: "",
   transit_cost: "",
   notes: "",
 };
-
-const statusOptions = [
-  { value: "planned", label: "Planned" },
-  { value: "sent_out", label: "Sent Out" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "returned", label: "Returned" },
-  { value: "completed", label: "Completed" },
-  { value: "cancelled", label: "Cancelled" },
-];
-
-const allowedStatuses = statusOptions.map((option) => option.value);
 
 function emptyToNull(value) {
   const trimmedValue = String(value ?? "").trim();
@@ -55,10 +43,6 @@ function getVendorName(vendor) {
     getFirstValue(vendor, ["name", "vendor_name", "company_name"]) ??
     "Unnamed Vendor"
   );
-}
-
-function getValidStatus(status) {
-  return allowedStatuses.includes(status) ? status : "planned";
 }
 
 function getWorkOrderTitle(workOrder) {
@@ -117,9 +101,8 @@ function AddThirdPartyRepairForm({
         repair_job_id: workOrder.id,
         vendor_id: formData.vendor_id || null,
         service_rendered: serviceRendered,
-        status: getValidStatus(formData.status),
+        status: THIRD_PARTY_REPAIR_IN_PROGRESS_STATUS,
         outbound_date: emptyToNull(formData.outbound_date),
-        inbound_date: emptyToNull(formData.inbound_date),
         repair_cost: numberOrZero(formData.repair_cost),
         transit_cost: numberOrZero(formData.transit_cost),
         notes: emptyToNull(formData.notes),
@@ -177,96 +160,55 @@ function AddThirdPartyRepairForm({
       title="Add Third-Party Repair"
     >
       <form className="space-y-5" onSubmit={handleSubmit}>
-          <fieldset className="space-y-4">
-            <legend className="text-sm font-black text-slate-950">
-              Vendor / Status
-            </legend>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block" htmlFor="third-party-vendor">
-              <span className={formControlClassNames.label}>Vendor</span>
-              <select
-                className={formControlClassNames.select}
-                id="third-party-vendor"
-                name="vendor_id"
-                onChange={handleChange}
-                value={formData.vendor_id}
-              >
-                <option value="">No vendor assigned</option>
-                {vendors.map((vendor) => (
-                  <option key={vendor.id} value={vendor.id}>
-                    {getVendorName(vendor)}
-                  </option>
-                ))}
-              </select>
-            </label>
+        <fieldset className="space-y-4">
+          <legend className="text-sm font-black text-slate-950">Vendor</legend>
+          <label className="block" htmlFor="third-party-vendor">
+            <span className={formControlClassNames.label}>Vendor</span>
+            <select
+              className={formControlClassNames.select}
+              id="third-party-vendor"
+              name="vendor_id"
+              onChange={handleChange}
+              value={formData.vendor_id}
+            >
+              <option value="">No vendor assigned</option>
+              {vendors.map((vendor) => (
+                <option key={vendor.id} value={vendor.id}>
+                  {getVendorName(vendor)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </fieldset>
 
-            <label className="block" htmlFor="third-party-status">
-              <span className={formControlClassNames.label}>Status</span>
-              <select
-                className={formControlClassNames.select}
-                id="third-party-status"
-                name="status"
-                onChange={handleChange}
-                value={formData.status}
-              >
-                {statusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          </fieldset>
+        <label className="block" htmlFor="third-party-service">
+          <span className={formControlClassNames.label}>Service Rendered</span>
+          <input
+            className={formControlClassNames.input}
+            id="third-party-service"
+            name="service_rendered"
+            onChange={handleChange}
+            required
+            type="text"
+            value={formData.service_rendered}
+          />
+        </label>
 
-          <label className="block" htmlFor="third-party-service">
-            <span className={formControlClassNames.label}>
-              Service Rendered
-            </span>
+        <fieldset className="space-y-4 rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
+          <legend className="px-1 text-sm font-black text-slate-950">
+            Dates / Costs
+          </legend>
+          <label className="block" htmlFor="third-party-outbound-date">
+            <span className={formControlClassNames.label}>Outbound Date</span>
             <input
               className={formControlClassNames.input}
-              id="third-party-service"
-              name="service_rendered"
+              id="third-party-outbound-date"
+              name="outbound_date"
               onChange={handleChange}
-              required
-              type="text"
-              value={formData.service_rendered}
+              type="date"
+              value={formData.outbound_date}
             />
           </label>
-
-          <fieldset className="space-y-4 rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
-            <legend className="px-1 text-sm font-black text-slate-950">
-              Dates / Costs
-            </legend>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block" htmlFor="third-party-outbound-date">
-              <span className={formControlClassNames.label}>
-                Outbound Date
-              </span>
-              <input
-                className={formControlClassNames.input}
-                id="third-party-outbound-date"
-                name="outbound_date"
-                onChange={handleChange}
-                type="date"
-                value={formData.outbound_date}
-              />
-            </label>
-
-            <label className="block" htmlFor="third-party-inbound-date">
-              <span className={formControlClassNames.label}>
-                Inbound Date
-              </span>
-              <input
-                className={formControlClassNames.input}
-                id="third-party-inbound-date"
-                name="inbound_date"
-                onChange={handleChange}
-                type="date"
-                value={formData.inbound_date}
-              />
-            </label>
-          </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block" htmlFor="third-party-repair-cost">
@@ -301,30 +243,30 @@ function AddThirdPartyRepairForm({
               />
             </label>
           </div>
-          </fieldset>
+        </fieldset>
 
-          <label className="block" htmlFor="third-party-notes">
-            <span className={formControlClassNames.label}>Notes</span>
-            <textarea
-              className={formControlClassNames.textarea}
-              id="third-party-notes"
-              name="notes"
-              onChange={handleChange}
-              value={formData.notes}
-            />
-          </label>
-
-          <FormMessage tone="error">{errorMessage}</FormMessage>
-
-          <FormMessage tone="success">{successMessage}</FormMessage>
-
-          <FormActions
-            isSubmitting={isSubmitting}
-            onCancel={onClose}
-            submitLabel="Add Third-Party Repair"
-            submittingLabel="Saving..."
+        <label className="block" htmlFor="third-party-notes">
+          <span className={formControlClassNames.label}>Notes</span>
+          <textarea
+            className={formControlClassNames.textarea}
+            id="third-party-notes"
+            name="notes"
+            onChange={handleChange}
+            value={formData.notes}
           />
-        </form>
+        </label>
+
+        <FormMessage tone="error">{errorMessage}</FormMessage>
+
+        <FormMessage tone="success">{successMessage}</FormMessage>
+
+        <FormActions
+          isSubmitting={isSubmitting}
+          onCancel={onClose}
+          submitLabel="Add Third-Party Repair"
+          submittingLabel="Saving..."
+        />
+      </form>
     </ModalShell>
   );
 }

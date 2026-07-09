@@ -15,6 +15,8 @@ const vehicleColumns =
 const vehiclePhotoColumns =
   "id, vehicle_id, photo_url, repair_job_id, created_at";
 
+const thirdPartyRepairVehicleColumns = "vehicle_id";
+
 const titleStatusOptions = [
   { value: "clean", label: "Clean Title" },
   { value: "salvage", label: "Salvage" },
@@ -80,7 +82,7 @@ const activeStatusQueryValues = activeVehicleWorkflowStatuses.flatMap(
   (status) => workflowStatusQueryValues[status] ?? [status]
 );
 
-function getActiveFilterCount(searchText, titleStatusFilter) {
+function getActiveFilterCount(searchText, titleStatusFilter, hasThirdPartyFilter) {
   let count = 0;
 
   if (searchText.trim()) {
@@ -88,6 +90,10 @@ function getActiveFilterCount(searchText, titleStatusFilter) {
   }
 
   if (titleStatusFilter !== "all") {
+    count += 1;
+  }
+
+  if (hasThirdPartyFilter) {
     count += 1;
   }
 
@@ -119,6 +125,7 @@ function applyVehicleQueryFilters(query, {
   activeStatusFilter,
   activeTab,
   searchText,
+  thirdPartyVehicleIds = null,
   titleStatusFilter,
 }) {
   const workflowStatuses = getWorkflowStatusesForQuery(
@@ -130,6 +137,10 @@ function applyVehicleQueryFilters(query, {
 
   if (titleStatusFilter !== "all") {
     filteredQuery = filteredQuery.eq("title_status", titleStatusFilter);
+  }
+
+  if (Array.isArray(thirdPartyVehicleIds)) {
+    filteredQuery = filteredQuery.in("id", thirdPartyVehicleIds);
   }
 
   if (searchPattern) {
@@ -146,6 +157,49 @@ function applyVehicleQueryFilters(query, {
   }
 
   return filteredQuery;
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+async function fetchThirdPartyRepairVehicleIds() {
+  const response = await supabase
+    .from("third_party_repairs")
+    .select(thirdPartyRepairVehicleColumns);
+
+  if (response.error) {
+    return { data: [], error: response.error };
+  }
+
+  return {
+    data: uniqueValues((response.data ?? []).map((record) => record.vehicle_id)),
+    error: null,
+  };
+}
+
+async function fetchThirdPartyRepairVehicleMap(vehicleIds) {
+  if (vehicleIds.length === 0) {
+    return { data: {}, error: null };
+  }
+
+  const response = await supabase
+    .from("third_party_repairs")
+    .select(thirdPartyRepairVehicleColumns)
+    .in("vehicle_id", vehicleIds);
+
+  if (response.error) {
+    return { data: {}, error: response.error };
+  }
+
+  return {
+    data: Object.fromEntries(
+      uniqueValues((response.data ?? []).map((record) => record.vehicle_id)).map(
+        (vehicleId) => [vehicleId, true]
+      )
+    ),
+    error: null,
+  };
 }
 
 async function fetchVehicleCount(activeTab, activeStatusFilter) {
@@ -199,12 +253,37 @@ async function fetchVehicleCounts() {
 async function fetchVehiclesWithPhotos({
   activeStatusFilter,
   activeTab,
+  hasThirdPartyFilter = false,
   page = 0,
   searchText = "",
   titleStatusFilter = "all",
 }) {
   const from = page * VEHICLES_PAGE_SIZE;
   const to = from + VEHICLES_PAGE_SIZE - 1;
+  let thirdPartyVehicleIds = null;
+
+  if (hasThirdPartyFilter) {
+    const thirdPartyVehicleIdsResponse = await fetchThirdPartyRepairVehicleIds();
+
+    if (thirdPartyVehicleIdsResponse.error) {
+      return { data: null, error: thirdPartyVehicleIdsResponse.error };
+    }
+
+    thirdPartyVehicleIds = thirdPartyVehicleIdsResponse.data;
+
+    if (thirdPartyVehicleIds.length === 0) {
+      return {
+        data: {
+          count: 0,
+          thirdPartyVehiclesByVehicleId: {},
+          vehiclePhotosByVehicleId: {},
+          vehicles: [],
+        },
+        error: null,
+      };
+    }
+  }
+
   const baseQuery = supabase
     .from("vehicles")
     .select(vehicleColumns, { count: "exact" });
@@ -212,6 +291,7 @@ async function fetchVehiclesWithPhotos({
     activeStatusFilter,
     activeTab,
     searchText,
+    thirdPartyVehicleIds,
     titleStatusFilter,
   })
     .order("created_at", { ascending: false, nullsFirst: false })
@@ -223,33 +303,37 @@ async function fetchVehiclesWithPhotos({
   }
 
   const vehicles = vehiclesResponse.data ?? [];
+  const vehicleIds = uniqueValues(vehicles.map((vehicle) => vehicle.id));
   const primaryPhotoIds = [
     ...new Set(vehicles.map((vehicle) => vehicle.primary_photo_id).filter(Boolean)),
   ];
-
-  if (primaryPhotoIds.length === 0) {
-    return {
-      data: {
-        count: vehiclesResponse.count ?? vehicles.length,
-        vehiclePhotosByVehicleId: {},
-        vehicles,
-      },
-      error: null,
-    };
-  }
-
-  const photosResponse = await supabase
-    .from("vehicle_photos")
-    .select(vehiclePhotoColumns)
-    .in("id", primaryPhotoIds);
+  const [photosResponse, thirdPartyVehicleMapResponse] = await Promise.all([
+    primaryPhotoIds.length > 0
+      ? supabase
+          .from("vehicle_photos")
+          .select(vehiclePhotoColumns)
+          .in("id", primaryPhotoIds)
+      : { data: [], error: null },
+    fetchThirdPartyRepairVehicleMap(vehicleIds),
+  ]);
 
   if (photosResponse.error) {
     console.error("Could not load vehicle photos:", photosResponse.error);
   }
 
+  if (thirdPartyVehicleMapResponse.error) {
+    console.error(
+      "Could not load third-party repair vehicle badges:",
+      thirdPartyVehicleMapResponse.error
+    );
+  }
+
   return {
     data: {
       count: vehiclesResponse.count ?? vehicles.length,
+      thirdPartyVehiclesByVehicleId: thirdPartyVehicleMapResponse.error
+        ? {}
+        : thirdPartyVehicleMapResponse.data,
       vehiclePhotosByVehicleId: photosResponse.error
         ? {}
         : buildVehiclePrimaryPhotoMap(vehicles, photosResponse.data ?? []),
@@ -376,11 +460,14 @@ function getEmptyStateMessage({ activeStatusFilter, activeTab, hasFilters }) {
 function VehiclesPage({ onSelectVehicle }) {
   const [vehicles, setVehicles] = useState([]);
   const [vehiclePhotosByVehicleId, setVehiclePhotosByVehicleId] = useState({});
+  const [thirdPartyVehiclesByVehicleId, setThirdPartyVehiclesByVehicleId] =
+    useState({});
   const [activeTab, setActiveTab] = useState("active");
   const [activeStatusFilter, setActiveStatusFilter] = useState("all_active");
   const [searchText, setSearchText] = useState("");
   const [debouncedSearchText, setDebouncedSearchText] = useState("");
   const [titleStatusFilter, setTitleStatusFilter] = useState("all");
+  const [hasThirdPartyFilter, setHasThirdPartyFilter] = useState(false);
   const [areFiltersOpen, setAreFiltersOpen] = useState(false);
   const [counts, setCounts] = useState({
     active: 0,
@@ -450,6 +537,7 @@ function VehiclesPage({ onSelectVehicle }) {
         const { data, error } = await fetchVehiclesWithPhotos({
           activeStatusFilter,
           activeTab,
+          hasThirdPartyFilter,
           page: 0,
           searchText: debouncedSearchText,
           titleStatusFilter,
@@ -464,11 +552,13 @@ function VehiclesPage({ onSelectVehicle }) {
           setErrorMessage("Could not load vehicles.");
           setVehicles([]);
           setVehiclePhotosByVehicleId({});
+          setThirdPartyVehiclesByVehicleId({});
           return;
         }
 
         setVehicles(data.vehicles);
         setVehiclePhotosByVehicleId(data.vehiclePhotosByVehicleId);
+        setThirdPartyVehiclesByVehicleId(data.thirdPartyVehiclesByVehicleId);
         setTotalCount(data.count);
       } catch (error) {
         if (isMounted) {
@@ -476,6 +566,7 @@ function VehiclesPage({ onSelectVehicle }) {
           setErrorMessage("Could not load vehicles.");
           setVehicles([]);
           setVehiclePhotosByVehicleId({});
+          setThirdPartyVehiclesByVehicleId({});
         }
       } finally {
         if (isMounted) {
@@ -489,16 +580,28 @@ function VehiclesPage({ onSelectVehicle }) {
     return () => {
       isMounted = false;
     };
-  }, [activeStatusFilter, activeTab, debouncedSearchText, titleStatusFilter]);
+  }, [
+    activeStatusFilter,
+    activeTab,
+    debouncedSearchText,
+    hasThirdPartyFilter,
+    titleStatusFilter,
+  ]);
 
   function clearFilters() {
     setSearchText("");
     setActiveStatusFilter("all_active");
+    setHasThirdPartyFilter(false);
     setTitleStatusFilter("all");
   }
 
   function handleTitleStatusFilterChange(event) {
     setTitleStatusFilter(event.target.value);
+    setAreFiltersOpen(false);
+  }
+
+  function handleThirdPartyFilterChange(event) {
+    setHasThirdPartyFilter(event.target.checked);
     setAreFiltersOpen(false);
   }
 
@@ -520,6 +623,7 @@ function VehiclesPage({ onSelectVehicle }) {
         fetchVehiclesWithPhotos({
           activeStatusFilter,
           activeTab,
+          hasThirdPartyFilter,
           page: 0,
           searchText: debouncedSearchText,
           titleStatusFilter,
@@ -536,6 +640,9 @@ function VehiclesPage({ onSelectVehicle }) {
       setCounts(nextCounts);
       setVehicles(dataResponse.data.vehicles);
       setVehiclePhotosByVehicleId(dataResponse.data.vehiclePhotosByVehicleId);
+      setThirdPartyVehiclesByVehicleId(
+        dataResponse.data.thirdPartyVehiclesByVehicleId
+      );
       setTotalCount(dataResponse.data.count);
       setPage(0);
     } catch (error) {
@@ -559,6 +666,7 @@ function VehiclesPage({ onSelectVehicle }) {
       const { data, error } = await fetchVehiclesWithPhotos({
         activeStatusFilter,
         activeTab,
+        hasThirdPartyFilter,
         page: nextPage,
         searchText: debouncedSearchText,
         titleStatusFilter,
@@ -585,6 +693,10 @@ function VehiclesPage({ onSelectVehicle }) {
         ...currentPhotos,
         ...data.vehiclePhotosByVehicleId,
       }));
+      setThirdPartyVehiclesByVehicleId((currentThirdPartyVehicles) => ({
+        ...currentThirdPartyVehicles,
+        ...data.thirdPartyVehiclesByVehicleId,
+      }));
       setTotalCount(data.count);
       setPage(nextPage);
     } catch (error) {
@@ -597,7 +709,8 @@ function VehiclesPage({ onSelectVehicle }) {
 
   const activeFilterCount = getActiveFilterCount(
     searchText,
-    titleStatusFilter
+    titleStatusFilter,
+    hasThirdPartyFilter
   );
   const hasActiveFilters = activeFilterCount > 0;
   const hasMoreVehicles = vehicles.length < totalCount;
@@ -716,6 +829,17 @@ function VehiclesPage({ onSelectVehicle }) {
                 </option>
               ))}
             </FilterSelect>
+
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-violet-200 hover:bg-violet-50">
+              <input
+                checked={hasThirdPartyFilter}
+                className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-200"
+                onChange={handleThirdPartyFilterChange}
+                type="checkbox"
+              />
+              <AppIcon className="text-violet-600" name="third-party" size={17} />
+              <span>Has 3rd-Party Repair</span>
+            </label>
           </div>
         )}
 
@@ -820,6 +944,9 @@ function VehiclesPage({ onSelectVehicle }) {
               <VehicleCard
                 key={vehicle.id}
                 onSelectVehicle={onSelectVehicle}
+                hasThirdPartyRepair={
+                  thirdPartyVehiclesByVehicleId[vehicle.id] === true
+                }
                 photo={vehiclePhotosByVehicleId[vehicle.id]}
                 vehicle={{
                   ...vehicle,

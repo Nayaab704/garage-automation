@@ -14,6 +14,11 @@ import {
   isRepairJobWaitingParts,
 } from "../lib/repairWorkflowUtils";
 import { supabase } from "../lib/supabaseClient";
+import {
+  isThirdPartyRepairActive,
+  normalizeThirdPartyRepairStatus,
+  thirdPartyRepairStatusLabels,
+} from "../lib/thirdPartyRepairWorkflow";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -51,17 +56,7 @@ const purchaseOrderStatusLabels = {
   received: "Received",
 };
 
-const thirdPartyStatusLabels = {
-  cancelled: "Cancelled",
-  completed: "Completed",
-  in_progress: "In Progress",
-  planned: "Planned",
-  returned: "Returned",
-  sent_out: "Sent Out",
-};
-
 const openPurchaseOrderStatuses = ["ordered", "partial_received"];
-const thirdPartyOutStatuses = ["sent_out", "in_progress"];
 
 function numberOrZero(value) {
   const numberValue = Number(value);
@@ -437,9 +432,7 @@ function getAttentionMetrics({
     },
     {
       actionPage: "Repairs",
-      count: thirdPartyRepairs.filter((thirdPartyRepair) =>
-        thirdPartyOutStatuses.includes(thirdPartyRepair.status)
-      ).length,
+      count: thirdPartyRepairs.filter(isThirdPartyRepairActive).length,
       icon: "third-party",
       key: "third_party_out",
       label: "Third-Party Repairs Out",
@@ -595,18 +588,20 @@ function buildAttentionQueue({
     });
 
   thirdPartyRepairs
-    .filter((thirdPartyRepair) =>
-      thirdPartyOutStatuses.includes(thirdPartyRepair.status)
-    )
+    .filter(isThirdPartyRepairActive)
     .forEach((thirdPartyRepair) => {
+      const normalizedStatus = normalizeThirdPartyRepairStatus(
+        thirdPartyRepair.status
+      );
+
       queueItems.push({
         actionText: "View Vehicle",
         createdAt:
           thirdPartyRepair.outbound_date ?? thirdPartyRepair.created_at,
-        priority: thirdPartyRepair.status === "sent_out" ? 65 : 55,
+        priority: 55,
         reason: "Outside repair is still active",
-        status: thirdPartyRepair.status,
-        statusLabels: thirdPartyStatusLabels,
+        status: normalizedStatus,
+        statusLabels: thirdPartyRepairStatusLabels,
         title: thirdPartyRepair.service_rendered || "Third-party repair",
         type: "Third-Party Repair",
         vehicle: vehiclesById[thirdPartyRepair.vehicle_id],

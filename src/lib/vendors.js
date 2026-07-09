@@ -285,7 +285,7 @@ export async function fetchVendorsWithStats() {
       vehicleIds.length > 0
         ? supabase
             .from("vehicles")
-            .select("id, stock_number, year, make, model, trim")
+            .select("id, stock_number, vin, year, make, model, trim, color, status")
             .in("id", vehicleIds)
         : { data: [], error: null },
       repairJobIds.length > 0

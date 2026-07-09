@@ -419,6 +419,7 @@ function WorkOrderCard({
   onPhotoAdded,
   onPhotoDeleted,
   onThirdPartyRepairAdded,
+  onThirdPartyRepairCompleted,
   onThirdPartyRepairDeleted,
   parts,
   photos,
@@ -689,6 +690,7 @@ function WorkOrderCard({
                 onActivityLogged={onActivityLogged}
                 onDocumentAdded={onDocumentAdded}
                 onDocumentDeleted={onDocumentDeleted}
+                onThirdPartyRepairCompleted={onThirdPartyRepairCompleted}
                 onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
                 thirdPartyRepairs={thirdPartyRepairs}
                 vehicleId={vehicleId}

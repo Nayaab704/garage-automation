@@ -78,6 +78,7 @@ function ServiceCategoryCard({
   onPhotoAdded,
   onPhotoDeleted,
   onThirdPartyRepairAdded,
+  onThirdPartyRepairCompleted,
   onThirdPartyRepairDeleted,
   partRequests = [],
   profiles = [],
@@ -188,6 +189,7 @@ function ServiceCategoryCard({
                 onPhotoAdded={onPhotoAdded}
                 onPhotoDeleted={onPhotoDeleted}
                 onThirdPartyRepairAdded={onThirdPartyRepairAdded}
+                onThirdPartyRepairCompleted={onThirdPartyRepairCompleted}
                 onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
                 onToggle={() =>
                   setOpenWorkOrderId((currentId) =>

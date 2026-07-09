@@ -28,6 +28,7 @@ const badgeLabels = {
   salvage: "Salvage",
   sold: "Sold",
   unavailable: "Unavailable",
+  third_party: "3rd-Party",
   unknown: "Unknown",
   urgent: "Urgent",
   waiting_for_parts: "Waiting Parts",
@@ -89,6 +90,7 @@ const variantClassNames = {
   gray: "border-slate-200 bg-slate-100 text-slate-700",
   green: "border-emerald-200 bg-emerald-50 text-emerald-700",
   red: "border-red-200 bg-red-50 text-red-700",
+  violet: "border-violet-200 bg-violet-50 text-violet-700",
 };
 
 function normalizeBadgeValue(value) {

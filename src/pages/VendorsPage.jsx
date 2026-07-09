@@ -3,6 +3,7 @@ import AddVendorForm from "../components/vendors/AddVendorForm";
 import EditVendorForm from "../components/vendors/EditVendorForm";
 import AppIcon from "../components/ui/AppIcon";
 import ModalShell from "../components/ui/ModalShell";
+import OperationalSearchBar from "../components/ui/OperationalSearchBar";
 import { buttonClassNames, formControlClassNames } from "../components/ui/uiStyles";
 import { supabase } from "../lib/supabaseClient";
 import {
@@ -10,6 +11,7 @@ import {
   withEmptyVendorStats,
 } from "../lib/vendors";
 import { formatUserFirstName } from "../lib/userDisplay";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 
 const vendorTypeOptions = [
   { value: "all", label: "All Types" },
@@ -156,44 +158,74 @@ function getWorkOrderLabel(entry) {
   return [serviceCategory, entry.repairJob?.title].filter(Boolean).join(" - ");
 }
 
-function vendorMatchesSearch(vendor, searchTerm) {
-  const normalizedSearch = searchTerm.trim().toLowerCase();
-
-  if (!normalizedSearch) {
-    return true;
-  }
-
-  return [
-    vendor.name,
-    vendor.phone,
-    vendor.email,
-    vendor.vendor_type,
-    ...vendor.history.map((entry) => entry.partName),
-  ].some((value) =>
-    String(value ?? "")
-      .toLowerCase()
-      .includes(normalizedSearch)
-  );
+function normalizeSearch(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
-function historyMatchesSearch(entry, searchTerm) {
-  const normalizedSearch = searchTerm.trim().toLowerCase();
-
-  if (!normalizedSearch) {
-    return true;
-  }
+function getVendorHistorySearchValues(entry) {
+  const vehicle = entry.vehicle;
+  const snapshot = entry.vehicleSnapshot;
 
   return [
     entry.partName,
     entry.quoteStatus,
+    getHistoryStatusLabel(entry.quoteStatus),
     entry.availability,
+    availabilityLabels[entry.availability],
+    entry.notes,
+    entry.source,
     getVehicleSnapshotLabel(entry),
     getWorkOrderLabel(entry),
-  ].some((value) =>
-    String(value ?? "")
-      .toLowerCase()
-      .includes(normalizedSearch)
-  );
+    vehicle?.stock_number,
+    vehicle?.vin,
+    vehicle?.year,
+    vehicle?.make,
+    vehicle?.model,
+    vehicle?.trim,
+    vehicle?.color,
+    vehicle?.status,
+    snapshot?.stockNumber,
+    snapshot?.year,
+    snapshot?.make,
+    snapshot?.model,
+    snapshot?.trim,
+    entry.createdByProfile?.full_name,
+    entry.createdByProfile?.email,
+  ];
+}
+
+function vendorMatchesSearch(vendor, searchTerm) {
+  const normalizedSearch = normalizeSearch(searchTerm);
+
+  if (!normalizedSearch) {
+    return true;
+  }
+
+  return normalizeSearch([
+    vendor.name,
+    vendor.phone,
+    vendor.email,
+    vendor.address,
+    vendor.notes,
+    vendor.vendor_type,
+    getVendorTypeLabel(vendor.vendor_type),
+    ...(vendor.history ?? []).flatMap(getVendorHistorySearchValues),
+  ].filter(Boolean).join(" ")).includes(normalizedSearch);
+}
+
+function historyMatchesSearch(entry, searchTerm) {
+  const normalizedSearch = normalizeSearch(searchTerm);
+
+  if (!normalizedSearch) {
+    return true;
+  }
+
+  return normalizeSearch(
+    getVendorHistorySearchValues(entry).filter(Boolean).join(" ")
+  ).includes(normalizedSearch);
 }
 
 function getDeleteErrorMessage(error) {
@@ -221,20 +253,29 @@ function VendorStatsCard({ label, value }) {
   );
 }
 
-function VendorEmptyState({ hasSearch }) {
+function VendorEmptyState({ hasSearch, onClearSearch }) {
   return (
     <section className="rounded-3xl border border-dashed border-slate-300 bg-white/90 p-8 text-center shadow-sm">
       <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
         <AppIcon name="users" size={24} />
       </div>
       <h3 className="mt-4 text-lg font-black text-slate-950">
-        {hasSearch ? "No matching vendors found." : "No vendors added yet."}
+        {hasSearch ? "No matching records found." : "No vendors added yet."}
       </h3>
       <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
         {hasSearch
-          ? "Try another vendor name, contact detail, or part name."
+          ? "Try searching by VIN, stock number, vehicle, part, or vendor."
           : "Add vendors so part quotes and purchase orders can be tracked."}
       </p>
+      {hasSearch && onClearSearch && (
+        <button
+          className={`mt-4 ${buttonClassNames.secondary}`}
+          onClick={onClearSearch}
+          type="button"
+        >
+          Clear Search
+        </button>
+      )}
     </section>
   );
 }
@@ -398,12 +439,13 @@ function VendorHistoryItem({ entry }) {
 
 function VendorHistoryModal({ onClose, vendor }) {
   const [historySearchTerm, setHistorySearchTerm] = useState("");
+  const debouncedHistorySearchTerm = useDebouncedValue(historySearchTerm, 300);
   const filteredHistory = useMemo(
     () =>
       vendor.history.filter((entry) =>
-        historyMatchesSearch(entry, historySearchTerm)
+        historyMatchesSearch(entry, debouncedHistorySearchTerm)
       ),
-    [historySearchTerm, vendor.history]
+    [debouncedHistorySearchTerm, vendor.history]
   );
 
   return (
@@ -449,12 +491,12 @@ function VendorHistoryModal({ onClose, vendor }) {
         {filteredHistory.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
             <p className="font-black text-slate-950">
-              {historySearchTerm.trim()
+              {debouncedHistorySearchTerm.trim()
                 ? "No matching history found."
                 : "No price history yet."}
             </p>
             <p className="mt-2 text-sm text-slate-500">
-              {historySearchTerm.trim()
+              {debouncedHistorySearchTerm.trim()
                 ? "Try a different part name, vehicle, or status."
                 : "Quotes and purchases for this vendor will appear here."}
             </p>
@@ -482,6 +524,8 @@ function VendorsPage({ currentProfile }) {
   const [selectedVendorId, setSelectedVendorId] = useState(null);
   const [selectedVendorType, setSelectedVendorType] = useState("all");
   const [vendors, setVendors] = useState([]);
+
+  const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
 
   const canManageVendors =
     currentProfile?.role === "admin" || currentProfile?.role === "owner";
@@ -511,9 +555,18 @@ function VendorsPage({ currentProfile }) {
         selectedVendorType === "all" ||
         vendor.vendor_type === selectedVendorType;
 
-      return matchesType && vendorMatchesSearch(vendor, searchTerm);
+      return matchesType && vendorMatchesSearch(vendor, debouncedSearchTerm);
     });
-  }, [searchTerm, selectedVendorType, vendors]);
+  }, [debouncedSearchTerm, selectedVendorType, vendors]);
+
+  const vendorTypeResultCount = useMemo(() => {
+    if (selectedVendorType === "all") {
+      return vendors.length;
+    }
+
+    return vendors.filter((vendor) => vendor.vendor_type === selectedVendorType)
+      .length;
+  }, [selectedVendorType, vendors]);
 
   const selectedVendor = useMemo(
     () => vendors.find((vendor) => vendor.id === selectedVendorId) ?? null,
@@ -650,47 +703,34 @@ function VendorsPage({ currentProfile }) {
           )}
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_220px_auto] sm:items-end">
-          <label className="relative block" htmlFor="vendor-search">
-            <span className="sr-only">Search vendors</span>
-            <AppIcon
-              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-              name="search"
-              size={18}
-            />
-            <input
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-white py-2 pl-11 pr-4 text-sm font-semibold text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
-              id="vendor-search"
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search vendor, contact, or part"
-              type="search"
-              value={searchTerm}
-            />
-          </label>
-
-          <label className="block" htmlFor="vendor-type-filter">
-            <span className={formControlClassNames.label}>Type</span>
-            <select
-              className={formControlClassNames.select}
-              id="vendor-type-filter"
-              onChange={(event) => setSelectedVendorType(event.target.value)}
-              value={selectedVendorType}
-            >
-              {vendorTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <button
-            className={buttonClassNames.secondary}
-            onClick={clearFilters}
-            type="button"
+        <div className="mt-4">
+          <OperationalSearchBar
+            activeFilterCount={selectedVendorType === "all" ? 0 : 1}
+            id="vendor-search"
+            label="Search vendors"
+            onChange={setSearchTerm}
+            onClear={clearFilters}
+            placeholder="Search vendor, part, vehicle, VIN..."
+            resultCount={filteredVendors.length}
+            totalCount={vendorTypeResultCount}
+            value={searchTerm}
           >
-            Clear
-          </button>
+            <label className="block w-full sm:w-56" htmlFor="vendor-type-filter">
+              <span className={formControlClassNames.label}>Type</span>
+              <select
+                className={formControlClassNames.select}
+                id="vendor-type-filter"
+                onChange={(event) => setSelectedVendorType(event.target.value)}
+                value={selectedVendorType}
+              >
+                {vendorTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </OperationalSearchBar>
         </div>
       </section>
 
@@ -732,7 +772,12 @@ function VendorsPage({ currentProfile }) {
       )}
 
       {!isLoading && !errorMessage && filteredVendors.length === 0 && (
-        <VendorEmptyState hasSearch={Boolean(searchTerm.trim())} />
+        <VendorEmptyState
+          hasSearch={
+            Boolean(debouncedSearchTerm.trim()) || selectedVendorType !== "all"
+          }
+          onClearSearch={clearFilters}
+        />
       )}
 
       {!isLoading && !errorMessage && filteredVendors.length > 0 && (

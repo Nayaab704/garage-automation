@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import AppIcon from "../components/ui/AppIcon";
+import OperationalSearchBar from "../components/ui/OperationalSearchBar";
 import PriorityBadge from "../components/ui/PriorityBadge";
 import StatusBadge from "../components/ui/StatusBadge";
 import { buttonClassNames } from "../components/ui/uiStyles";
@@ -21,6 +22,7 @@ import {
   REPAIR_QUEUE_TABS,
 } from "../lib/repairWorkflowUtils";
 import { supabase } from "../lib/supabaseClient";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import {
   getWorkOrderStatusAfterPartAdded,
   getWorkOrderStatusAfterWorkStarted,
@@ -103,11 +105,11 @@ function RepairsQueueTabs({ activeTab, counts = {}, onChange }) {
   );
 }
 
-function RepairJobEmptyState({ activeTab, hasSearch }) {
+function RepairJobEmptyState({ activeTab, hasSearch, onClearSearch }) {
   const message = hasSearch
     ? {
-        body: "Try a different stock number, vehicle, work order, service category, part, or vendor.",
-        title: "No matching work orders found.",
+        body: "Try searching by VIN, stock number, vehicle, part, or vendor.",
+        title: "No matching records found.",
       }
     : activeTab === "waiting_parts"
       ? {
@@ -140,6 +142,15 @@ function RepairJobEmptyState({ activeTab, hasSearch }) {
       <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
         {message.body}
       </p>
+      {hasSearch && onClearSearch && (
+        <button
+          className={`mt-4 ${buttonClassNames.secondary}`}
+          onClick={onClearSearch}
+          type="button"
+        >
+          Clear Search
+        </button>
+      )}
     </section>
   );
 }
@@ -358,6 +369,8 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
   const [statusErrorMessage, setStatusErrorMessage] = useState("");
   const [statusSuccessMessage, setStatusSuccessMessage] = useState("");
   const [updatingStatusId, setUpdatingStatusId] = useState(null);
+
+  const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
   const [vendors, setVendors] = useState([]);
 
   const role = currentProfile?.role;
@@ -371,11 +384,15 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
   const filteredJobs = useMemo(
     () =>
       filterRepairsQueueResults(jobs, {
-        search: searchTerm,
+        search: debouncedSearchTerm,
         tab: activeTab,
       }),
-    [activeTab, jobs, searchTerm]
+    [activeTab, debouncedSearchTerm, jobs]
   );
+
+  function clearSearch() {
+    setSearchTerm("");
+  }
 
   async function loadRepairsQueue({ showLoading = true } = {}) {
     if (showLoading) {
@@ -665,22 +682,16 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
         </div>
 
         <div className="mt-4">
-          <label className="relative block" htmlFor="repairs-queue-search">
-            <span className="sr-only">Search work orders</span>
-            <AppIcon
-              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-              name="search"
-              size={18}
-            />
-            <input
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-white py-2 pl-11 pr-4 text-sm font-semibold text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
-              id="repairs-queue-search"
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search work order, stock, vehicle, service, part, or vendor"
-              type="search"
-              value={searchTerm}
-            />
-          </label>
+          <OperationalSearchBar
+            id="repairs-queue-search"
+            label="Search work orders"
+            onChange={setSearchTerm}
+            onClear={clearSearch}
+            placeholder="Search VIN, stock, vehicle, work order..."
+            resultCount={filteredJobs.length}
+            totalCount={countsByTab[activeTab] ?? jobs.length}
+            value={searchTerm}
+          />
         </div>
 
         <div className="mt-4">
@@ -719,7 +730,8 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
       {!isLoading && !errorMessage && filteredJobs.length === 0 && (
         <RepairJobEmptyState
           activeTab={activeTab}
-          hasSearch={Boolean(searchTerm.trim())}
+          hasSearch={Boolean(debouncedSearchTerm.trim())}
+          onClearSearch={clearSearch}
         />
       )}
 

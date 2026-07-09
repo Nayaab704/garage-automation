@@ -111,7 +111,7 @@ export async function fetchRepairsQueue() {
     vehicleIds.length > 0
       ? supabase
           .from("vehicles")
-          .select("id, stock_number, vin, year, make, model, trim, status")
+          .select("id, stock_number, vin, year, make, model, trim, color, status")
           .in("id", vehicleIds)
       : { data: [], error: null },
     supabase
@@ -263,7 +263,12 @@ export async function fetchRepairsQueue() {
       parts: partsByRepairJobId[job.id] ?? [],
       photos: photosByRepairJobId[job.id] ?? [],
       serviceCategory,
-      thirdPartyRepairs: thirdPartyRepairsByRepairJobId[job.id] ?? [],
+      thirdPartyRepairs: (thirdPartyRepairsByRepairJobId[job.id] ?? []).map(
+        (repair) => ({
+          ...repair,
+          vendor: vendorsById[repair.vendor_id] ?? null,
+        })
+      ),
       vehicle: vehiclesById[job.vehicle_id] ?? null,
     };
   });

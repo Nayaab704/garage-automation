@@ -18,7 +18,10 @@ export const purchaseOrderStatusLabels = {
 const closedStatuses = ["received", "cancelled"];
 
 function normalizeSearch(value) {
-  return String(value ?? "").trim().toLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 export function formatPurchaseOrderLabel(value, labels = purchaseOrderStatusLabels) {
@@ -35,6 +38,23 @@ export function formatPurchaseOrderLabel(value, labels = purchaseOrderStatusLabe
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+function formatSearchLabel(value, labels = purchaseOrderStatusLabels) {
+  return value ? formatPurchaseOrderLabel(value, labels) : "";
+}
+
+function getVehicleSearchValues(vehicle) {
+  return [
+    vehicle?.stock_number,
+    vehicle?.vin,
+    vehicle?.year,
+    vehicle?.make,
+    vehicle?.model,
+    vehicle?.trim,
+    vehicle?.color,
+    vehicle?.status,
+  ];
 }
 
 export function getPurchaseOrderBadge(status) {
@@ -112,27 +132,51 @@ export function getPurchaseOrderSearchText(purchaseOrder) {
   const vehicle = purchaseOrder?.vehicle;
   const vendor = purchaseOrder?.vendor;
   const items = purchaseOrder?.items ?? [];
+  const purchaseOrderId = purchaseOrder?.id;
+  const shortPurchaseOrderId = String(purchaseOrderId ?? "")
+    .slice(0, 8)
+    .toUpperCase();
 
-  return [
-    purchaseOrder?.id,
+  return normalizeSearch([
+    purchaseOrderId,
+    shortPurchaseOrderId,
+    shortPurchaseOrderId ? `PO ${shortPurchaseOrderId}` : "",
     purchaseOrder?.status,
-    vehicle?.stock_number,
-    vehicle?.year,
-    vehicle?.make,
-    vehicle?.model,
-    vehicle?.trim,
+    purchaseOrder?.notes,
+    formatSearchLabel(purchaseOrder?.status),
+    purchaseOrder?.orderedBy?.full_name,
+    purchaseOrder?.orderedBy?.email,
+    purchaseOrder?.receivedBy?.full_name,
+    purchaseOrder?.receivedBy?.email,
+    ...getVehicleSearchValues(vehicle),
     vendor?.name,
+    vendor?.phone,
+    vendor?.email,
     ...items.flatMap((item) => [
       item.description,
+      item.notes,
+      item.status,
+      formatSearchLabel(item.status, {}),
+      item.return_reason,
+      item.return_notes,
+      item.returnedBy?.full_name,
+      item.returnedBy?.email,
       item.partRequest?.part_name,
+      item.partRequest?.status,
+      item.partRequest?.part_source,
+      item.partRequest?.approval_status,
+      ...getVehicleSearchValues(item.partRequest?.vehicle),
+      item.partRequest?.selectedQuote?.vendor_name_snapshot,
+      item.partRequest?.selectedQuote?.raw_part_name,
+      item.partRequest?.selectedQuote?.quote_status,
+      item.partRequest?.selectedQuote?.availability,
       item.partRequest?.repairJob?.title,
       item.partRequest?.repairJob?.category,
+      item.partRequest?.repairJob?.status,
+      ...getVehicleSearchValues(item.partRequest?.repairJob?.vehicle),
       item.partRequest?.repairJob?.serviceCategory?.name,
     ]),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
+  ].filter(Boolean).join(" "));
 }
 
 export function filterPurchaseOrders(
