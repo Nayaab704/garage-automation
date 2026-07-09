@@ -164,6 +164,7 @@ function ServiceWorkSection({
   canManageParts = false,
   canManagePhotos = false,
   canManageDocuments = false,
+  canManagePurchaseOrders = false,
   canManageThirdPartyRepairs = false,
   canUploadDocuments = false,
   currentProfile,
@@ -177,6 +178,7 @@ function ServiceWorkSection({
   onPartAdded,
   onPartApprovalUpdated,
   onPartPurchaseOrderCreated,
+  onPurchaseOrderReceived,
   onPurchaseOrderItemUpdated,
   onPhotoAdded,
   onPhotoDeleted,
@@ -292,6 +294,7 @@ function ServiceWorkSection({
               canManageParts={canManageParts}
               canManagePhotos={canManagePhotos}
               canManageDocuments={canManageDocuments}
+              canManagePurchaseOrders={canManagePurchaseOrders}
               canManageThirdPartyRepairs={canManageThirdPartyRepairs}
               canUploadDocuments={canUploadDocuments}
               category={selectedCategory}
@@ -308,6 +311,7 @@ function ServiceWorkSection({
               onPartAdded={onPartAdded}
               onPartApprovalUpdated={onPartApprovalUpdated}
               onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
+              onPurchaseOrderReceived={onPurchaseOrderReceived}
               onPurchaseOrderItemUpdated={onPurchaseOrderItemUpdated}
               onPhotoAdded={onPhotoAdded}
               onPhotoDeleted={onPhotoDeleted}
@@ -334,6 +338,7 @@ function ServiceWorkSection({
               canManageLabor={canManageLabor}
               canManageParts={canManageParts}
               canManagePhotos={canManagePhotos}
+              canManagePurchaseOrders={canManagePurchaseOrders}
               canManageThirdPartyRepairs={canManageThirdPartyRepairs}
               canUploadDocuments={canUploadDocuments}
               category={{
@@ -353,6 +358,7 @@ function ServiceWorkSection({
               onPartAdded={onPartAdded}
               onPartApprovalUpdated={onPartApprovalUpdated}
               onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
+              onPurchaseOrderReceived={onPurchaseOrderReceived}
               onPurchaseOrderItemUpdated={onPurchaseOrderItemUpdated}
               onPhotoAdded={onPhotoAdded}
               onPhotoDeleted={onPhotoDeleted}

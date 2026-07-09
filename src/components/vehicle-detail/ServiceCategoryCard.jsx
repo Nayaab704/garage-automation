@@ -57,6 +57,7 @@ function ServiceCategoryCard({
   canManageParts = false,
   canManagePhotos = false,
   canManageDocuments = false,
+  canManagePurchaseOrders = false,
   canManageThirdPartyRepairs = false,
   canUploadDocuments = false,
   category,
@@ -72,6 +73,7 @@ function ServiceCategoryCard({
   onPartAdded,
   onPartApprovalUpdated,
   onPartPurchaseOrderCreated,
+  onPurchaseOrderReceived,
   onPurchaseOrderItemUpdated,
   onPhotoAdded,
   onPhotoDeleted,
@@ -160,6 +162,7 @@ function ServiceCategoryCard({
 
             return (
               <WorkOrderCard
+                canManagePurchaseOrders={canManagePurchaseOrders}
                 canManageLabor={canManageLabor}
                 canManageParts={canManageParts}
                 canManagePhotos={canManagePhotos}
@@ -180,6 +183,7 @@ function ServiceCategoryCard({
                 onPartAdded={onPartAdded}
                 onPartApprovalUpdated={onPartApprovalUpdated}
                 onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
+                onPurchaseOrderReceived={onPurchaseOrderReceived}
                 onPurchaseOrderItemUpdated={onPurchaseOrderItemUpdated}
                 onPhotoAdded={onPhotoAdded}
                 onPhotoDeleted={onPhotoDeleted}

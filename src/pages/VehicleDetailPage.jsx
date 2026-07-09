@@ -21,6 +21,7 @@ import {
   getPurchaseOrderReturnDeduction,
 } from "../lib/partReturns";
 import { hasPermission } from "../lib/permissions";
+import { markPurchaseOrderReceived } from "../lib/purchaseOrderReceiving";
 import { supabase } from "../lib/supabaseClient";
 import { getVehiclePrimaryPhoto } from "../lib/vehicleDisplayPhoto";
 import {
@@ -911,6 +912,124 @@ function VehicleDetailPage({
     await refreshInvestmentSummary();
   }
 
+  async function handlePurchaseOrderReceived(purchaseOrder, linkedItems = []) {
+    if (!hasPermission(currentProfile?.role, "purchase_order:manage")) {
+      throw new Error("Your role cannot update purchase orders.");
+    }
+
+    const previousStatus = purchaseOrder?.status ?? null;
+    const { data, error } = await markPurchaseOrderReceived({
+      currentProfile,
+      linkedItems,
+      purchaseOrder,
+    });
+
+    if (error) {
+      console.error("Could not mark purchase order received:", error);
+      throw error;
+    }
+
+    const receivedPurchaseOrder = data.purchaseOrder;
+    const receivedItemIds = data.itemIds ?? [];
+    const receivedPartRequestIds = data.partRequestIds ?? [];
+    const purchaseOrderItemsById = Object.fromEntries(
+      (data.purchaseOrderItems ?? [])
+        .filter((item) => item?.id)
+        .map((item) => [item.id, item])
+    );
+    const nextPurchaseOrderItems = purchaseOrderItems.map(
+      (purchaseOrderItem) =>
+        purchaseOrderItemsById[purchaseOrderItem.id]
+          ? {
+              ...purchaseOrderItem,
+              ...purchaseOrderItemsById[purchaseOrderItem.id],
+            }
+          : receivedItemIds.includes(purchaseOrderItem.id)
+            ? { ...purchaseOrderItem, status: "received" }
+            : purchaseOrderItem
+    );
+    const knownPurchaseOrderItemIds = new Set(
+      nextPurchaseOrderItems.map((item) => item.id).filter(Boolean)
+    );
+    const mergedPurchaseOrderItems = [
+      ...nextPurchaseOrderItems,
+      ...(data.purchaseOrderItems ?? []).filter(
+        (item) => item?.id && !knownPurchaseOrderItemIds.has(item.id)
+      ),
+    ];
+    const partRequestsById = Object.fromEntries(
+      (data.partRequests ?? [])
+        .filter((partRequest) => partRequest?.id)
+        .map((partRequest) => [partRequest.id, partRequest])
+    );
+    const nextPartRequests = partRequests.map((partRequest) =>
+      partRequestsById[partRequest.id]
+        ? { ...partRequest, ...partRequestsById[partRequest.id] }
+        : receivedPartRequestIds.includes(partRequest.id)
+          ? { ...partRequest, status: "received" }
+          : partRequest
+    );
+    const affectedRepairJobIds = [
+      ...new Set(
+        nextPartRequests
+          .filter((partRequest) => receivedPartRequestIds.includes(partRequest.id))
+          .map((partRequest) => partRequest.repair_job_id)
+          .filter(Boolean)
+      ),
+    ];
+
+    setPurchaseOrders((currentPurchaseOrders) =>
+      currentPurchaseOrders.some(
+        (currentPurchaseOrder) =>
+          currentPurchaseOrder.id === receivedPurchaseOrder.id
+      )
+        ? currentPurchaseOrders.map((currentPurchaseOrder) =>
+            currentPurchaseOrder.id === receivedPurchaseOrder.id
+              ? { ...currentPurchaseOrder, ...receivedPurchaseOrder }
+              : currentPurchaseOrder
+          )
+        : [receivedPurchaseOrder, ...currentPurchaseOrders]
+    );
+    setPurchaseOrderItems(mergedPurchaseOrderItems);
+    setPartRequests(nextPartRequests);
+
+    await Promise.all(
+      affectedRepairJobIds.map((repairJobId) => {
+        const workOrder = repairJobs.find(
+          (currentWorkOrder) => currentWorkOrder.id === repairJobId
+        );
+        const workOrderPartRequests = nextPartRequests.filter(
+          (partRequest) => partRequest.repair_job_id === repairJobId
+        );
+
+        return persistWorkOrderStatusIfNeeded(
+          repairJobId,
+          getWorkOrderStatusAfterPartsReceived(workOrder?.status, {
+            partRequests: workOrderPartRequests,
+            purchaseOrderItems: mergedPurchaseOrderItems,
+          }),
+          {
+            purchase_order_id: purchaseOrder.id,
+            trigger: "purchase_order_received",
+          }
+        );
+      })
+    );
+
+    await logVehicleActivity({
+      vehicleId,
+      action: "Purchase order status changed",
+      details: {
+        from: previousStatus,
+        to: "received",
+      },
+    });
+    refreshActivityTimeline();
+    await refreshInvestmentSummary();
+
+    return data;
+  }
+
   function handleWorkOrderPhotoAdded(photo) {
     setVehiclePhotos((currentPhotos) => upsertNewestById(currentPhotos, photo));
   }
@@ -1121,6 +1240,7 @@ function VehicleDetailPage({
   const canManageExtraCosts = hasPermission(role, "extra_cost:manage");
   const canManageLabor = hasPermission(role, "labor:manage");
   const canManagePartRequests = hasPermission(role, "part_request:manage");
+  const canManagePurchaseOrders = hasPermission(role, "purchase_order:manage");
   const canManagePhotos = hasPermission(role, "photo:manage");
   const canManageRepairJobs = hasPermission(role, "repair:manage");
   const canManageWorkOrderParts = canManageRepairJobs || canManagePartRequests;
@@ -1214,6 +1334,7 @@ function VehicleDetailPage({
               canManageParts={canManageWorkOrderParts}
               canManagePhotos={canManagePhotos}
               canManageDocuments={canManageDocuments}
+              canManagePurchaseOrders={canManagePurchaseOrders}
               canManageThirdPartyRepairs={canManageRepairJobs}
               canUploadDocuments={canUploadDocuments}
               currentProfile={currentProfile}
@@ -1227,6 +1348,7 @@ function VehicleDetailPage({
               onPartAdded={handleWorkOrderPartAdded}
               onPartApprovalUpdated={handleWorkOrderPartApprovalUpdated}
               onPartPurchaseOrderCreated={handleWorkOrderPartPurchaseOrderCreated}
+              onPurchaseOrderReceived={handlePurchaseOrderReceived}
               onPurchaseOrderItemUpdated={handlePurchaseOrderItemUpdated}
               onPhotoAdded={handleWorkOrderPhotoAdded}
               onPhotoDeleted={handleWorkOrderPhotoDeleted}

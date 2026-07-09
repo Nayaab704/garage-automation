@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import MarkReceivedModal from "../components/parts/MarkReceivedModal";
 import MarkReturnedModal from "../components/parts/MarkReturnedModal";
 import AppIcon from "../components/ui/AppIcon";
-import ModalShell from "../components/ui/ModalShell";
 import { buttonClassNames } from "../components/ui/uiStyles";
 import DocumentsList from "../components/vehicle-detail/DocumentsList";
 import StatusDropdown from "../components/vehicle-detail/StatusDropdown";
@@ -23,6 +23,10 @@ import {
   getPurchaseOrderCounts,
   PURCHASE_ORDER_TABS,
 } from "../lib/purchaseOrderUtils";
+import {
+  getPurchaseOrderReceivedValues,
+  markPurchaseOrderReceived,
+} from "../lib/purchaseOrderReceiving";
 import { supabase } from "../lib/supabaseClient";
 import { formatUserFirstName } from "../lib/userDisplay";
 import { getWorkOrderStatusAfterPartsReceived } from "../lib/workOrderStatus";
@@ -593,52 +597,6 @@ function PurchaseOrderEmptyState({ activeTab, hasSearch }) {
   );
 }
 
-function MarkReceivedModal({
-  isSubmitting,
-  onClose,
-  onConfirm,
-  purchaseOrder,
-}) {
-  return (
-    <ModalShell
-      description="This updates the purchase order, linked items, and linked part request status."
-      isCloseDisabled={isSubmitting}
-      onClose={onClose}
-      title="Mark this part as received?"
-    >
-      <div className="space-y-4">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm font-black text-slate-950">
-            {getPurchaseOrderLabel(purchaseOrder)}
-          </p>
-          <p className="mt-1 text-sm text-slate-600">
-            {getVendorName(purchaseOrder)}
-          </p>
-        </div>
-
-        <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
-          <button
-            className={`w-full sm:w-auto ${buttonClassNames.secondary}`}
-            disabled={isSubmitting}
-            onClick={onClose}
-            type="button"
-          >
-            Cancel
-          </button>
-          <button
-            className={`w-full sm:w-auto ${buttonClassNames.primary}`}
-            disabled={isSubmitting}
-            onClick={onConfirm}
-            type="button"
-          >
-            {isSubmitting ? "Marking received..." : "Mark Received"}
-          </button>
-        </div>
-      </div>
-    </ModalShell>
-  );
-}
-
 function PurchaseOrderCard({
   activeTab,
   canDeleteDocuments,
@@ -1133,6 +1091,143 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     );
   }
 
+  async function handleMarkPurchaseOrderReceived(
+    purchaseOrder,
+    { successMessage = "" } = {}
+  ) {
+    if (!canManagePurchaseOrders) {
+      setStatusErrorMessage("Your role cannot update purchase orders.");
+      return false;
+    }
+
+    const previousStatus = purchaseOrder.status;
+    const receivedValues = getPurchaseOrderReceivedValues(
+      purchaseOrder,
+      currentProfile
+    );
+    const linkedItems = itemsByPurchaseOrderId[purchaseOrder.id] ?? [];
+
+    setStatusErrorMessage("");
+    setStatusSuccessMessage("");
+    setUpdatingPurchaseOrderId(purchaseOrder.id);
+
+    if (currentProfile?.id) {
+      setProfilesById((currentProfilesById) => ({
+        ...currentProfilesById,
+        [currentProfile.id]: currentProfile,
+      }));
+    }
+
+    setPurchaseOrders((currentPurchaseOrders) =>
+      currentPurchaseOrders.map((currentPurchaseOrder) =>
+        currentPurchaseOrder.id === purchaseOrder.id
+          ? { ...currentPurchaseOrder, ...receivedValues }
+          : currentPurchaseOrder
+      )
+    );
+
+    try {
+      const { data, error } = await markPurchaseOrderReceived({
+        currentProfile,
+        linkedItems,
+        purchaseOrder,
+      });
+
+      if (error) {
+        console.error("Could not mark purchase order received:", error);
+        throw error;
+      }
+
+      const purchaseOrderItemsById = Object.fromEntries(
+        (data.purchaseOrderItems ?? []).map((item) => [item.id, item])
+      );
+      const nextPurchaseOrderItems = purchaseOrderItems.map((item) =>
+        purchaseOrderItemsById[item.id]
+          ? { ...item, ...purchaseOrderItemsById[item.id] }
+          : data.itemIds.includes(item.id)
+            ? { ...item, status: "received" }
+            : item
+      );
+      const nextPartRequestsById = { ...partRequestsById };
+
+      for (const partRequest of data.partRequests ?? []) {
+        if (partRequest?.id) {
+          nextPartRequestsById[partRequest.id] = {
+            ...nextPartRequestsById[partRequest.id],
+            ...partRequest,
+          };
+        }
+      }
+
+      for (const partRequestId of data.partRequestIds) {
+        if (nextPartRequestsById[partRequestId]) {
+          nextPartRequestsById[partRequestId] = {
+            ...nextPartRequestsById[partRequestId],
+            status: "received",
+          };
+        }
+      }
+
+      setPurchaseOrders((currentPurchaseOrders) =>
+        currentPurchaseOrders.map((currentPurchaseOrder) =>
+          currentPurchaseOrder.id === purchaseOrder.id
+            ? { ...currentPurchaseOrder, ...data.purchaseOrder }
+            : currentPurchaseOrder
+        )
+      );
+      setPurchaseOrderItems(nextPurchaseOrderItems);
+      setPartRequestsById(nextPartRequestsById);
+
+      await syncRepairJobStatusesAfterPartsReceived(
+        data.partRequestIds.map(
+          (partRequestId) => nextPartRequestsById[partRequestId]?.repair_job_id
+        ),
+        {
+          nextPartRequestsById,
+          nextPurchaseOrderItems,
+          triggerDetails: {
+            purchase_order_id: purchaseOrder.id,
+            trigger: "purchase_order_received",
+          },
+        }
+      );
+
+      await logVehicleActivity({
+        vehicleId: purchaseOrder.vehicle_id,
+        action: "Purchase order status changed",
+        details: {
+          from: previousStatus,
+          to: "received",
+        },
+      });
+
+      setStatusSuccessMessage(
+        successMessage || "Purchase order marked received."
+      );
+      return true;
+    } catch (error) {
+      setPurchaseOrders((currentPurchaseOrders) =>
+        currentPurchaseOrders.map((currentPurchaseOrder) =>
+          currentPurchaseOrder.id === purchaseOrder.id
+            ? {
+                ...currentPurchaseOrder,
+                received_at: purchaseOrder.received_at,
+                received_by: purchaseOrder.received_by,
+                status: previousStatus,
+              }
+            : currentPurchaseOrder
+        )
+      );
+      console.error("Could not mark purchase order received:", error);
+      setStatusErrorMessage(
+        "Could not mark this purchase order as received. Please try again."
+      );
+      return false;
+    } finally {
+      setUpdatingPurchaseOrderId(null);
+    }
+  }
+
   useEffect(() => {
     let isMounted = true;
 
@@ -1202,6 +1297,10 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     if (!purchaseOrderStatuses.includes(newStatus)) {
       setStatusErrorMessage("That purchase order status is not allowed.");
       return false;
+    }
+
+    if (newStatus === "received") {
+      return handleMarkPurchaseOrderReceived(purchaseOrder, { successMessage });
     }
 
     const previousStatus = purchaseOrder.status;
@@ -1692,6 +1791,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
           onClose={() => setConfirmReceivedOrder(null)}
           onConfirm={handleConfirmMarkReceived}
           purchaseOrder={confirmReceivedOrder}
+          subtitle={getVendorName(confirmReceivedOrder)}
         />
       )}
 

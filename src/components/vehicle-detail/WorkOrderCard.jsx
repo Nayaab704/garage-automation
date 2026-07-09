@@ -1,6 +1,7 @@
 import { useState } from "react";
 import ActionTile from "../ui/ActionTile";
 import AppIcon from "../ui/AppIcon";
+import MarkReceivedModal from "../parts/MarkReceivedModal";
 import PriorityBadge from "../ui/PriorityBadge";
 import StatusBadge from "../ui/StatusBadge";
 import AddThirdPartyRepairForm from "./AddThirdPartyRepairForm";
@@ -12,6 +13,12 @@ import WorkOrderLaborList from "./WorkOrderLaborList";
 import WorkOrderPartsList from "./WorkOrderPartsList";
 import WorkOrderPhotosList from "./WorkOrderPhotosList";
 import { getPurchaseOrderItemNetTotal } from "../../lib/partReturns";
+import { getReceivablePurchaseOrderItems } from "../../lib/purchaseOrderReceiving";
+import {
+  canMarkPurchaseOrderReceived,
+  getPurchaseOrderBadge,
+} from "../../lib/purchaseOrderUtils";
+import { formatUserFirstName } from "../../lib/userDisplay";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -49,18 +56,6 @@ function formatDate(value) {
   });
 }
 
-function formatStatusLabel(status) {
-  if (!status) {
-    return "Not available";
-  }
-
-  return String(status)
-    .split("_")
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
 function getProfileName(profiles, profileId) {
   const profile = profiles.find((profileRecord) => profileRecord.id === profileId);
 
@@ -69,6 +64,18 @@ function getProfileName(profiles, profileId) {
   }
 
   return profile.full_name || profile.email || null;
+}
+
+function getProfileById(profiles, profileId, currentProfile) {
+  if (!profileId) {
+    return null;
+  }
+
+  if (currentProfile?.id === profileId) {
+    return currentProfile;
+  }
+
+  return profiles.find((profile) => profile.id === profileId) ?? null;
 }
 
 function getLaborHours(laborLogs) {
@@ -108,6 +115,32 @@ function getPurchaseOrderTotal(items) {
   return items.reduce((total, item) => {
     return total + getPurchaseOrderItemNetTotal(item);
   }, 0);
+}
+
+function getReceivedAttributionText(purchaseOrder, profiles, currentProfile) {
+  if (!purchaseOrder?.received_at && !purchaseOrder?.received_by) {
+    return "";
+  }
+
+  const receivedByProfile = getProfileById(
+    profiles,
+    purchaseOrder.received_by,
+    currentProfile
+  );
+  const receivedName = receivedByProfile
+    ? formatUserFirstName(receivedByProfile)
+    : purchaseOrder.received_by
+      ? "User"
+      : "";
+  const receivedLabel = receivedName
+    ? `Received by ${receivedName}`
+    : "Received";
+  const receivedDate =
+    purchaseOrder.received_at && formatDate(purchaseOrder.received_at) !== "Not available"
+      ? formatDate(purchaseOrder.received_at)
+      : "";
+
+  return [receivedLabel, receivedDate].filter(Boolean).join(" - ");
 }
 
 function hasPartsNeedingAttention(parts) {
@@ -190,7 +223,57 @@ function SectionAccordion({
   );
 }
 
-function PurchaseOrdersList({ purchaseOrderItems, purchaseOrders, vendors }) {
+function PurchaseOrdersList({
+  canManagePurchaseOrders,
+  currentProfile,
+  onPurchaseOrderReceived,
+  profiles,
+  purchaseOrderItems,
+  purchaseOrders,
+  vendors,
+}) {
+  const [confirmReceivedOrder, setConfirmReceivedOrder] = useState(null);
+  const [receivingPurchaseOrderId, setReceivingPurchaseOrderId] = useState(null);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  async function handleConfirmMarkReceived() {
+    if (!confirmReceivedOrder) {
+      return;
+    }
+
+    const linkedItems = purchaseOrderItems.filter(
+      (item) => item.purchase_order_id === confirmReceivedOrder.id
+    );
+
+    setReceivingPurchaseOrderId(confirmReceivedOrder.id);
+    setSuccessMessage("");
+    setErrorMessage("");
+
+    try {
+      if (!onPurchaseOrderReceived) {
+        throw new Error("Missing purchase order receive handler.");
+      }
+
+      const result = await onPurchaseOrderReceived?.(
+        confirmReceivedOrder,
+        linkedItems
+      );
+
+      if (result === false) {
+        throw new Error("Could not mark purchase order received.");
+      }
+
+      setConfirmReceivedOrder(null);
+      setSuccessMessage("Purchase order marked received.");
+    } catch (error) {
+      console.error("Could not mark purchase order received:", error);
+      setErrorMessage("Could not mark purchase order received. Please try again.");
+    } finally {
+      setReceivingPurchaseOrderId(null);
+    }
+  }
+
   if (purchaseOrders.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-zinc-200 bg-white p-3 text-sm text-zinc-500">
@@ -201,10 +284,36 @@ function PurchaseOrdersList({ purchaseOrderItems, purchaseOrders, vendors }) {
 
   return (
     <div className="space-y-3">
+      {errorMessage && (
+        <p className="rounded-md border border-red-100 bg-red-50 p-3 text-sm font-semibold text-red-700">
+          {errorMessage}
+        </p>
+      )}
+
+      {successMessage && (
+        <p className="rounded-md border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
+          {successMessage}
+        </p>
+      )}
+
       {purchaseOrders.map((purchaseOrder) => {
         const items = purchaseOrderItems.filter(
           (item) => item.purchase_order_id === purchaseOrder.id
         );
+        const badge = getPurchaseOrderBadge(purchaseOrder.status);
+        const receivableItems = getReceivablePurchaseOrderItems(items);
+        const hasReturnedItems = receivableItems.length < items.length;
+        const canReceive =
+          canManagePurchaseOrders &&
+          canMarkPurchaseOrderReceived(purchaseOrder) &&
+          receivableItems.length > 0 &&
+          !hasReturnedItems;
+        const receivedAttributionText = getReceivedAttributionText(
+          purchaseOrder,
+          profiles,
+          currentProfile
+        );
+        const isReceiving = receivingPurchaseOrderId === purchaseOrder.id;
 
         return (
           <article
@@ -219,10 +328,38 @@ function PurchaseOrdersList({ purchaseOrderItems, purchaseOrders, vendors }) {
                 <p className="mt-1 text-sm text-zinc-500">
                   Ordered {formatDate(purchaseOrder.ordered_at ?? purchaseOrder.created_at)}
                 </p>
+                {receivedAttributionText && (
+                  <p className="mt-1 text-xs font-semibold text-emerald-700">
+                    {receivedAttributionText}
+                  </p>
+                )}
               </div>
-              <span className="w-fit rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-200">
-                {formatStatusLabel(purchaseOrder.status)}
-              </span>
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                <span
+                  className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${badge.className}`}
+                >
+                  {badge.label}
+                </span>
+                {hasReturnedItems && purchaseOrder.status !== "returned" && (
+                  <span className="w-fit rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 ring-1 ring-inset ring-red-200">
+                    Returned item
+                  </span>
+                )}
+                {canReceive && (
+                  <button
+                    className="inline-flex min-h-8 items-center justify-center rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={isReceiving}
+                    onClick={() => {
+                      setConfirmReceivedOrder(purchaseOrder);
+                      setErrorMessage("");
+                      setSuccessMessage("");
+                    }}
+                    type="button"
+                  >
+                    {isReceiving ? "Marking..." : "Mark Received"}
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2 text-sm text-zinc-600">
@@ -241,11 +378,22 @@ function PurchaseOrdersList({ purchaseOrderItems, purchaseOrders, vendors }) {
           </article>
         );
       })}
+
+      {confirmReceivedOrder && (
+        <MarkReceivedModal
+          isSubmitting={receivingPurchaseOrderId === confirmReceivedOrder.id}
+          onClose={() => setConfirmReceivedOrder(null)}
+          onConfirm={handleConfirmMarkReceived}
+          purchaseOrder={confirmReceivedOrder}
+          subtitle={getVendorName(vendors, confirmReceivedOrder.vendor_id)}
+        />
+      )}
     </div>
   );
 }
 
 function WorkOrderCard({
+  canManagePurchaseOrders = false,
   canManageLabor,
   canManageParts,
   canManagePhotos,
@@ -266,6 +414,7 @@ function WorkOrderCard({
   onPartAdded,
   onPartApprovalUpdated,
   onPartPurchaseOrderCreated,
+  onPurchaseOrderReceived,
   onPurchaseOrderItemUpdated,
   onPhotoAdded,
   onPhotoDeleted,
@@ -513,6 +662,10 @@ function WorkOrderCard({
               title="Purchase Orders"
             >
               <PurchaseOrdersList
+                canManagePurchaseOrders={canManagePurchaseOrders}
+                currentProfile={currentProfile}
+                onPurchaseOrderReceived={onPurchaseOrderReceived}
+                profiles={profiles}
                 purchaseOrderItems={linkedPurchaseOrderItems}
                 purchaseOrders={linkedPurchaseOrders}
                 vendors={vendors}
