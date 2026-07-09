@@ -1,8 +1,14 @@
 import {
   filterPartsQueue,
   getPartQueueCounts,
+  getPartQueueSearchText,
 } from "./partWorkflowUtils";
 import { purchaseOrderItemReturnColumns } from "./partReturns";
+import {
+  buildVehicleSearchIndex,
+  getVehicleContext,
+  getVehicleSearchText,
+} from "./searchText";
 import { getVendorQuoteDisplayName } from "./vendorPriceMemory";
 import { supabase } from "./supabaseClient";
 
@@ -56,8 +62,10 @@ function enrichPart({
   vendorsById,
 }) {
   const repairJob = repairJobsById[part.repair_job_id] ?? null;
-  const vehicle =
-    vehiclesById[part.vehicle_id] ?? vehiclesById[repairJob?.vehicle_id] ?? null;
+  const repairJobVehicle = vehiclesById[repairJob?.vehicle_id] ?? null;
+  const vehicle = vehiclesById[part.vehicle_id] ?? repairJobVehicle ?? null;
+  const vehicleContext = getVehicleContext(vehicle);
+  const repairJobVehicleContext = getVehicleContext(repairJobVehicle);
   const purchaseOrderItems = (
     purchaseOrderItemsByPartRequestId[part.id] ?? []
   ).map((item) => {
@@ -82,7 +90,7 @@ function enrichPart({
     ? quotesById[part.selected_quote_id] ?? null
     : null;
 
-  return {
+  const enrichedPart = {
     ...part,
     approvedByProfile: profilesById[part.approved_by] ?? null,
     createdByProfile: profilesById[part.created_by] ?? null,
@@ -94,7 +102,10 @@ function enrichPart({
           ...repairJob,
           serviceCategory:
             serviceCategoriesById[repairJob.service_category_id] ?? null,
-          vehicle: vehiclesById[repairJob.vehicle_id] ?? null,
+          vehicle: repairJobVehicle,
+          vehicleContext: repairJobVehicleContext,
+          vehicleSearchText: getVehicleSearchText(repairJobVehicleContext),
+          vehicleVin: repairJobVehicleContext?.vin ?? "",
         }
       : null,
     selectedQuote,
@@ -102,7 +113,16 @@ function enrichPart({
       vendorsById[part.selected_vendor_id] ??
       vendorsById[selectedQuote?.vendor_id] ??
       null,
+    vehicle_id: part.vehicle_id ?? repairJob?.vehicle_id ?? null,
     vehicle,
+    vehicleContext,
+    vehicleSearchText: getVehicleSearchText(vehicleContext),
+    vehicleVin: vehicleContext?.vin ?? "",
+  };
+
+  return {
+    ...enrichedPart,
+    searchText: getPartQueueSearchText(enrichedPart),
   };
 }
 
@@ -118,7 +138,6 @@ export async function fetchPartsQueue() {
 
   const partRequests = partRequestsResponse.data ?? [];
   const partRequestIds = uniqueValues(partRequests.map((part) => part.id));
-  const vehicleIds = uniqueValues(partRequests.map((part) => part.vehicle_id));
   const repairJobIds = uniqueValues(partRequests.map((part) => part.repair_job_id));
   const profileIds = uniqueValues(
     partRequests.flatMap((part) => [part.created_by, part.approved_by])
@@ -137,12 +156,9 @@ export async function fetchPartsQueue() {
     linkedVendorQuotesResponse,
     selectedVendorQuotesResponse,
   ] = await Promise.all([
-    vehicleIds.length > 0
-      ? supabase
-          .from("vehicles")
-          .select("id, stock_number, vin, year, make, model, trim, color, status")
-          .in("id", vehicleIds)
-      : { data: [], error: null },
+    supabase
+      .from("vehicles")
+      .select("id, stock_number, vin, year, make, model, trim, color, status"),
     repairJobIds.length > 0
       ? supabase
           .from("repair_jobs")
@@ -352,6 +368,7 @@ export async function fetchPartsQueue() {
     data: {
       counts: getPartQueueCounts(parts),
       parts,
+      vehicleSearchIndex: buildVehicleSearchIndex(vehiclesResponse.data ?? []),
       vendors,
     },
     error: null,

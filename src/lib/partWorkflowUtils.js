@@ -3,6 +3,13 @@ import {
   getReturnedPurchaseOrderItems,
   isPurchaseOrderItemReturned,
 } from "./partReturns";
+import {
+  buildSearchText,
+  findMatchingVehicles,
+  getVehicleSearchValues,
+  matchesSearchText,
+  normalizeSearchText,
+} from "./searchText";
 
 export const PART_QUEUE_TABS = [
   { key: "needs_po", label: "Needs PO" },
@@ -40,10 +47,7 @@ const inactivePurchaseOrderItemStatuses = ["cancelled", "returned"];
 const inactivePurchaseOrderStatuses = ["cancelled"];
 
 function normalizeSearch(value) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
+  return normalizeSearchText(value);
 }
 
 export function formatPartLabel(value, labels = {}) {
@@ -66,17 +70,65 @@ function formatSearchLabel(value, labels = {}) {
   return value ? formatPartLabel(value, labels) : "";
 }
 
-function getVehicleSearchValues(vehicle) {
+function getVehicleNameSearchValues(vehicle) {
+  return [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function getPartVehicleIds(part) {
   return [
-    vehicle?.stock_number,
-    vehicle?.vin,
-    vehicle?.year,
-    vehicle?.make,
-    vehicle?.model,
-    vehicle?.trim,
-    vehicle?.color,
-    vehicle?.status,
-  ];
+    part?.vehicle_id,
+    part?.vehicle?.id,
+    part?.vehicleContext?.id,
+    part?.repairJob?.vehicle_id,
+    part?.repairJob?.vehicle?.id,
+    part?.repairJob?.vehicleContext?.id,
+    part?.repair_job?.vehicle_id,
+    part?.repair_jobs?.vehicle_id,
+  ]
+    .filter(Boolean)
+    .map(String);
+}
+
+function getPartVehicleMatchText(part) {
+  return buildSearchText([
+    part?.searchText,
+    part?.vehicleSearchText,
+    part?.vehicleLabel,
+    part?.vehicleDisplay,
+    ...getVehicleSearchValues(part?.vehicleContext),
+    ...getVehicleSearchValues(part?.vehicle),
+    ...getVehicleSearchValues(part?.vehicles),
+    part?.repairJob?.vehicleSearchText,
+    ...getVehicleSearchValues(part?.repairJob?.vehicleContext),
+    ...getVehicleSearchValues(part?.repairJob?.vehicle),
+    ...getVehicleSearchValues(part?.repair_jobs?.vehicle),
+  ]);
+}
+
+function doesPartMatchVehicle(part, matchedVehicles = []) {
+  if (matchedVehicles.length === 0) {
+    return false;
+  }
+
+  const partVehicleIds = new Set(getPartVehicleIds(part));
+  const partVehicleText = getPartVehicleMatchText(part);
+
+  return matchedVehicles.some((vehicle) => {
+    const vehicleName = buildSearchText([
+      getVehicleNameSearchValues(vehicle),
+      vehicle?.color,
+    ]);
+
+    return (
+      (vehicle?.id && partVehicleIds.has(String(vehicle.id))) ||
+      (vehicle?.stock_number &&
+        partVehicleText.includes(normalizeSearch(vehicle.stock_number))) ||
+      (vehicle?.vin && partVehicleText.includes(normalizeSearch(vehicle.vin))) ||
+      (vehicleName && partVehicleText.includes(vehicleName))
+    );
+  });
 }
 
 export function getVehicleName(vehicle) {
@@ -498,7 +550,7 @@ export function getPartQueueSearchText(part) {
   const purchaseOrderVendor = purchaseOrderItem?.purchaseOrder?.vendor;
   const returnedItems = getReturnedPurchaseOrderItems(part);
 
-  return normalizeSearch([
+  return buildSearchText([
     part?.part_name,
     part?.notes,
     part?.status,
@@ -511,8 +563,17 @@ export function getPartQueueSearchText(part) {
     part?.createdByProfile?.email,
     part?.approvedByProfile?.full_name,
     part?.approvedByProfile?.email,
+    part?.vehicleVin,
+    part?.vehicle_vin,
+    part?.vehicleSearchText,
+    ...getVehicleSearchValues(part?.vehicleContext),
     ...getVehicleSearchValues(vehicle),
+    ...getVehicleSearchValues(part?.vehicles),
+    ...getVehicleSearchValues(workOrder?.vehicleContext),
     ...getVehicleSearchValues(workOrder?.vehicle),
+    ...getVehicleSearchValues(workOrder?.vehicles),
+    workOrder?.vehicleVin,
+    workOrder?.vehicleSearchText,
     workOrder?.title,
     workOrder?.category,
     workOrder?.status,
@@ -554,11 +615,15 @@ export function getPartQueueSearchText(part) {
       item.returnedByProfile?.full_name,
       item.returnedByProfile?.email,
     ]),
-  ].filter(Boolean).join(" "));
+  ]);
 }
 
-export function filterPartsQueue(parts = [], { search = "", tab = "needs_po" } = {}) {
+export function filterPartsQueue(
+  parts = [],
+  { search = "", tab = "needs_po", vehicleSearchIndex = [] } = {}
+) {
   const normalizedSearch = normalizeSearch(search);
+  const matchedVehicles = findMatchingVehicles(vehicleSearchIndex, search);
 
   return parts.filter((part) => {
     if (!partMatchesQueueTab(part, tab)) {
@@ -569,6 +634,9 @@ export function filterPartsQueue(parts = [], { search = "", tab = "needs_po" } =
       return true;
     }
 
-    return getPartQueueSearchText(part).includes(normalizedSearch);
+    return (
+      matchesSearchText(part.searchText || getPartQueueSearchText(part), search) ||
+      doesPartMatchVehicle(part, matchedVehicles)
+    );
   });
 }

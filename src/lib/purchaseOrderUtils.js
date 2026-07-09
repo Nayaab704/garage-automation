@@ -1,3 +1,11 @@
+import {
+  buildSearchText,
+  findMatchingVehicles,
+  getVehicleSearchValues,
+  matchesSearchText,
+  normalizeSearchText,
+} from "./searchText";
+
 export const PURCHASE_ORDER_TABS = [
   { key: "open", label: "Open" },
   { key: "ordered", label: "Ordered" },
@@ -18,10 +26,7 @@ export const purchaseOrderStatusLabels = {
 const closedStatuses = ["received", "cancelled"];
 
 function normalizeSearch(value) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
+  return normalizeSearchText(value);
 }
 
 export function formatPurchaseOrderLabel(value, labels = purchaseOrderStatusLabels) {
@@ -44,17 +49,91 @@ function formatSearchLabel(value, labels = purchaseOrderStatusLabels) {
   return value ? formatPurchaseOrderLabel(value, labels) : "";
 }
 
-function getVehicleSearchValues(vehicle) {
+function getVehicleNameSearchValues(vehicle) {
+  return [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function getPurchaseOrderVehicleIds(purchaseOrder) {
   return [
-    vehicle?.stock_number,
-    vehicle?.vin,
-    vehicle?.year,
-    vehicle?.make,
-    vehicle?.model,
-    vehicle?.trim,
-    vehicle?.color,
-    vehicle?.status,
-  ];
+    purchaseOrder?.vehicle_id,
+    purchaseOrder?.vehicle?.id,
+    purchaseOrder?.vehicleContext?.id,
+    ...(purchaseOrder?.vehicleContexts ?? []).map((vehicle) => vehicle.id),
+    ...(purchaseOrder?.items ?? []).flatMap((item) => [
+      item.vehicle_id,
+      item.vehicle?.id,
+      item.vehicleContext?.id,
+      item.partRequest?.vehicle_id,
+      item.partRequest?.vehicle?.id,
+      item.partRequest?.vehicleContext?.id,
+      item.partRequest?.repairJob?.vehicle_id,
+      item.partRequest?.repairJob?.vehicle?.id,
+      item.partRequest?.repairJob?.vehicleContext?.id,
+      item.part_request?.vehicle_id,
+      item.part_request?.repair_job?.vehicle_id,
+      item.part_request?.repair_jobs?.vehicle_id,
+    ]),
+  ]
+    .filter(Boolean)
+    .map(String);
+}
+
+function getPurchaseOrderVehicleMatchText(purchaseOrder) {
+  return buildSearchText([
+    purchaseOrder?.searchText,
+    purchaseOrder?.vehicleSearchText,
+    purchaseOrder?.vehicleLabel,
+    purchaseOrder?.vehicleDisplay,
+    ...getVehicleSearchValues(purchaseOrder?.vehicleContext),
+    ...getVehicleSearchValues(purchaseOrder?.vehicle),
+    ...(purchaseOrder?.vehicleContexts ?? []).flatMap(getVehicleSearchValues),
+    ...(purchaseOrder?.items ?? []).flatMap((item) => [
+      item.vehicleSearchText,
+      item.vehicleLabel,
+      item.vehicleDisplay,
+      ...getVehicleSearchValues(item.vehicleContext),
+      ...getVehicleSearchValues(item.vehicle),
+      item.partRequest?.vehicleSearchText,
+      ...getVehicleSearchValues(item.partRequest?.vehicleContext),
+      ...getVehicleSearchValues(item.partRequest?.vehicle),
+      item.partRequest?.repairJob?.vehicleSearchText,
+      ...getVehicleSearchValues(item.partRequest?.repairJob?.vehicleContext),
+      ...getVehicleSearchValues(item.partRequest?.repairJob?.vehicle),
+    ]),
+  ]);
+}
+
+function doesPurchaseOrderMatchVehicle(purchaseOrder, matchedVehicles = []) {
+  if (matchedVehicles.length === 0) {
+    return false;
+  }
+
+  const purchaseOrderVehicleIds = new Set(
+    getPurchaseOrderVehicleIds(purchaseOrder)
+  );
+  const purchaseOrderVehicleText = getPurchaseOrderVehicleMatchText(
+    purchaseOrder
+  );
+
+  return matchedVehicles.some((vehicle) => {
+    const vehicleName = buildSearchText([
+      getVehicleNameSearchValues(vehicle),
+      vehicle?.color,
+    ]);
+
+    return (
+      (vehicle?.id && purchaseOrderVehicleIds.has(String(vehicle.id))) ||
+      (vehicle?.stock_number &&
+        purchaseOrderVehicleText.includes(
+          normalizeSearch(vehicle.stock_number)
+        )) ||
+      (vehicle?.vin &&
+        purchaseOrderVehicleText.includes(normalizeSearch(vehicle.vin))) ||
+      (vehicleName && purchaseOrderVehicleText.includes(vehicleName))
+    );
+  });
 }
 
 export function getPurchaseOrderBadge(status) {
@@ -137,7 +216,7 @@ export function getPurchaseOrderSearchText(purchaseOrder) {
     .slice(0, 8)
     .toUpperCase();
 
-  return normalizeSearch([
+  return buildSearchText([
     purchaseOrderId,
     shortPurchaseOrderId,
     shortPurchaseOrderId ? `PO ${shortPurchaseOrderId}` : "",
@@ -148,7 +227,14 @@ export function getPurchaseOrderSearchText(purchaseOrder) {
     purchaseOrder?.orderedBy?.email,
     purchaseOrder?.receivedBy?.full_name,
     purchaseOrder?.receivedBy?.email,
+    purchaseOrder?.vehicleVin,
+    purchaseOrder?.vehicle_vin,
+    ...(purchaseOrder?.vehicleVins ?? []),
+    purchaseOrder?.vehicleSearchText,
+    ...getVehicleSearchValues(purchaseOrder?.vehicleContext),
     ...getVehicleSearchValues(vehicle),
+    ...getVehicleSearchValues(purchaseOrder?.vehicles),
+    ...(purchaseOrder?.vehicleContexts ?? []).flatMap(getVehicleSearchValues),
     vendor?.name,
     vendor?.phone,
     vendor?.email,
@@ -161,11 +247,21 @@ export function getPurchaseOrderSearchText(purchaseOrder) {
       item.return_notes,
       item.returnedBy?.full_name,
       item.returnedBy?.email,
+      item.vehicleVin,
+      item.vehicle_vin,
+      item.vehicleSearchText,
+      ...getVehicleSearchValues(item.vehicleContext),
+      ...getVehicleSearchValues(item.vehicle),
+      ...getVehicleSearchValues(item.vehicles),
       item.partRequest?.part_name,
       item.partRequest?.status,
       item.partRequest?.part_source,
       item.partRequest?.approval_status,
+      item.partRequest?.vehicleVin,
+      item.partRequest?.vehicleSearchText,
+      ...getVehicleSearchValues(item.partRequest?.vehicleContext),
       ...getVehicleSearchValues(item.partRequest?.vehicle),
+      ...getVehicleSearchValues(item.partRequest?.vehicles),
       item.partRequest?.selectedQuote?.vendor_name_snapshot,
       item.partRequest?.selectedQuote?.raw_part_name,
       item.partRequest?.selectedQuote?.quote_status,
@@ -173,17 +269,22 @@ export function getPurchaseOrderSearchText(purchaseOrder) {
       item.partRequest?.repairJob?.title,
       item.partRequest?.repairJob?.category,
       item.partRequest?.repairJob?.status,
+      item.partRequest?.repairJob?.vehicleVin,
+      item.partRequest?.repairJob?.vehicleSearchText,
+      ...getVehicleSearchValues(item.partRequest?.repairJob?.vehicleContext),
       ...getVehicleSearchValues(item.partRequest?.repairJob?.vehicle),
+      ...getVehicleSearchValues(item.partRequest?.repairJob?.vehicles),
       item.partRequest?.repairJob?.serviceCategory?.name,
     ]),
-  ].filter(Boolean).join(" "));
+  ]);
 }
 
 export function filterPurchaseOrders(
   purchaseOrders = [],
-  { search = "", tab = "open" } = {}
+  { search = "", tab = "open", vehicleSearchIndex = [] } = {}
 ) {
   const normalizedSearch = normalizeSearch(search);
+  const matchedVehicles = findMatchingVehicles(vehicleSearchIndex, search);
 
   return purchaseOrders.filter((purchaseOrder) => {
     if (!purchaseOrderMatchesTab(purchaseOrder, tab)) {
@@ -194,7 +295,10 @@ export function filterPurchaseOrders(
       return true;
     }
 
-    return getPurchaseOrderSearchText(purchaseOrder).includes(normalizedSearch);
+    return matchesSearchText(
+      purchaseOrder.searchText || getPurchaseOrderSearchText(purchaseOrder),
+      search
+    ) || doesPurchaseOrderMatchVehicle(purchaseOrder, matchedVehicles);
   });
 }
 

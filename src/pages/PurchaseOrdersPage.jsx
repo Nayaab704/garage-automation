@@ -20,10 +20,17 @@ import {
   canMarkPurchaseOrderReceived,
   filterPurchaseOrders,
   formatPurchaseOrderLabel,
+  getPurchaseOrderSearchText,
   getPurchaseOrderBadge,
   getPurchaseOrderCounts,
   PURCHASE_ORDER_TABS,
 } from "../lib/purchaseOrderUtils";
+import {
+  buildVehicleSearchIndex,
+  getVehicleContext,
+  getVehicleSearchText,
+  uniqueVehicleContexts,
+} from "../lib/searchText";
 import {
   getPurchaseOrderReceivedValues,
   markPurchaseOrderReceived,
@@ -368,10 +375,6 @@ async function fetchPurchaseOrdersData() {
   const purchaseOrderIds = uniqueValues(
     purchaseOrders.map((purchaseOrder) => purchaseOrder.id)
   );
-  const vehicleIds = uniqueValues(
-    purchaseOrders.map((purchaseOrder) => purchaseOrder.vehicle_id)
-  );
-
   const [
     itemsResponse,
     vehicleDocumentsResponse,
@@ -390,12 +393,9 @@ async function fetchPurchaseOrdersData() {
           .in("purchase_order_id", purchaseOrderIds)
           .order("created_at", { ascending: false })
       : { data: [], error: null },
-    vehicleIds.length > 0
-      ? supabase
-          .from("vehicles")
-          .select("id, stock_number, vin, year, make, model, trim, color, status")
-          .in("id", vehicleIds)
-      : { data: [], error: null },
+    supabase
+      .from("vehicles")
+      .select("id, stock_number, vin, year, make, model, trim, color, status"),
   ]);
 
   const firstRequiredError =
@@ -541,6 +541,7 @@ async function fetchPurchaseOrdersData() {
         ])
       ),
       vehicleDocuments: vehicleDocumentsResponse.data ?? [],
+      vehicleSearchIndex: buildVehicleSearchIndex(vehicles),
       vehiclesById: Object.fromEntries(
         vehicles.map((vehicle) => [vehicle.id, vehicle])
       ),
@@ -985,6 +986,11 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     [vehicleDocuments]
   );
 
+  const vehicleSearchIndex = useMemo(
+    () => buildVehicleSearchIndex(Object.values(vehiclesById)),
+    [vehiclesById]
+  );
+
   const enrichedPurchaseOrders = useMemo(() => {
     return purchaseOrders.map((purchaseOrder) => {
       const items = (itemsByPurchaseOrderId[purchaseOrder.id] ?? []).map(
@@ -994,13 +1000,24 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
           const selectedQuote = selectedQuotesById[partRequest?.selected_quote_id] ?? null;
           const partRequestVehicle = vehiclesById[partRequest?.vehicle_id] ?? null;
           const repairJobVehicle = vehiclesById[repairJob?.vehicle_id] ?? null;
+          const itemVehicle = partRequestVehicle ?? repairJobVehicle ?? null;
+          const itemVehicleContext = getVehicleContext(itemVehicle);
+          const partRequestVehicleContext = getVehicleContext(partRequestVehicle);
+          const repairJobVehicleContext = getVehicleContext(repairJobVehicle);
 
           return {
             ...item,
+            vehicle: itemVehicle,
+            vehicleContext: itemVehicleContext,
+            vehicleSearchText: getVehicleSearchText(itemVehicleContext),
+            vehicleVin: itemVehicleContext?.vin ?? "",
             partRequest: partRequest
               ? {
                   ...partRequest,
                   vehicle: partRequestVehicle,
+                  vehicleContext: partRequestVehicleContext,
+                  vehicleSearchText: getVehicleSearchText(partRequestVehicleContext),
+                  vehicleVin: partRequestVehicleContext?.vin ?? "",
                   repairJob: repairJob
                     ? {
                         ...repairJob,
@@ -1008,6 +1025,11 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
                           serviceCategoriesById[repairJob.service_category_id] ??
                           null,
                         vehicle: repairJobVehicle,
+                        vehicleContext: repairJobVehicleContext,
+                        vehicleSearchText: getVehicleSearchText(
+                          repairJobVehicleContext
+                        ),
+                        vehicleVin: repairJobVehicleContext?.vin ?? "",
                       }
                     : null,
                   selectedQuote,
@@ -1017,25 +1039,39 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
           };
         }
       );
-      const itemPartRequestVehicle = items.find(
-        (item) => item.partRequest?.vehicle
-      )?.partRequest.vehicle;
-      const itemRepairJobVehicle = items.find(
-        (item) => item.partRequest?.repairJob?.vehicle
-      )?.partRequest.repairJob.vehicle;
+      const topLevelVehicle = vehiclesById[purchaseOrder.vehicle_id] ?? null;
+      const relatedVehicleContexts = uniqueVehicleContexts([
+        topLevelVehicle,
+        ...items.flatMap((item) => [
+          item.vehicle,
+          item.partRequest?.vehicle,
+          item.partRequest?.repairJob?.vehicle,
+        ]),
+      ]);
 
-      return {
+      const enrichedPurchaseOrder = {
         ...purchaseOrder,
         documents: documentsByPurchaseOrderId[purchaseOrder.id] ?? [],
         items,
         orderedBy: profilesById[purchaseOrder.ordered_by] ?? null,
         receivedBy: profilesById[purchaseOrder.received_by] ?? null,
-        vehicle:
-          vehiclesById[purchaseOrder.vehicle_id] ??
-          itemPartRequestVehicle ??
-          itemRepairJobVehicle ??
-          null,
+        vehicle: topLevelVehicle ?? relatedVehicleContexts[0] ?? null,
+        vehicleContext: getVehicleContext(topLevelVehicle ?? relatedVehicleContexts[0]),
+        vehicleContexts: relatedVehicleContexts,
+        vehicleSearchText: relatedVehicleContexts
+          .map(getVehicleSearchText)
+          .join(" "),
+        vehicleVins: relatedVehicleContexts
+          .map((vehicle) => vehicle.vin)
+          .filter(Boolean),
+        vehicleVin: getVehicleContext(topLevelVehicle ?? relatedVehicleContexts[0])
+          ?.vin ?? "",
         vendor: vendorsById[purchaseOrder.vendor_id] ?? null,
+      };
+
+      return {
+        ...enrichedPurchaseOrder,
+        searchText: getPurchaseOrderSearchText(enrichedPurchaseOrder),
       };
     });
   }, [
@@ -1061,8 +1097,9 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
       filterPurchaseOrders(enrichedPurchaseOrders, {
         search: debouncedSearchTerm,
         tab: activeTab,
+        vehicleSearchIndex,
       }),
-    [activeTab, debouncedSearchTerm, enrichedPurchaseOrders]
+    [activeTab, debouncedSearchTerm, enrichedPurchaseOrders, vehicleSearchIndex]
   );
 
   async function persistAutomaticRepairJobStatus(

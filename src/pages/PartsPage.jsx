@@ -116,6 +116,7 @@ function PartsPage({
   const [successMessage, setSuccessMessage] = useState("");
   const [undoReturnPart, setUndoReturnPart] = useState(null);
   const [updatingPartId, setUpdatingPartId] = useState(null);
+  const [vehicleSearchIndex, setVehicleSearchIndex] = useState([]);
   const [vendors, setVendors] = useState([]);
 
   const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
@@ -137,8 +138,9 @@ function PartsPage({
       filterPartsQueueResults(partQueue, {
         search: debouncedSearchTerm,
         tab: activeTab,
+        vehicleSearchIndex,
       }),
-    [activeTab, debouncedSearchTerm, partQueue]
+    [activeTab, debouncedSearchTerm, partQueue, vehicleSearchIndex]
   );
 
   async function loadPartsQueue({ showLoading = true } = {}) {
@@ -158,6 +160,7 @@ function PartsPage({
       }
 
       setPartQueue(data.parts);
+      setVehicleSearchIndex(data.vehicleSearchIndex ?? []);
       setVendors(data.vendors);
     } catch (error) {
       console.error("Could not load parts queue:", error);
@@ -190,6 +193,7 @@ function PartsPage({
         }
 
         setPartQueue(data.parts);
+        setVehicleSearchIndex(data.vehicleSearchIndex ?? []);
         setVendors(data.vendors);
       } catch (error) {
         if (isMounted) {
@@ -512,28 +516,31 @@ function PartsPage({
   }
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-2xl font-black text-slate-950">Parts Queue</h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+    <div className="min-w-0 space-y-4 overflow-x-hidden">
+      <section className="min-w-0 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm sm:p-4">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-xl font-black text-slate-950 sm:text-2xl">
+              Parts Queue
+            </h2>
+            <p className="mt-0.5 max-w-2xl text-xs font-semibold leading-5 text-slate-500 sm:text-sm">
               Track parts that need purchase orders, review, ordering, or receiving.
             </p>
           </div>
           <button
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
             disabled={isLoading}
             onClick={() => loadPartsQueue()}
             type="button"
           >
-            <AppIcon name="refresh" size={16} />
+            <AppIcon name="refresh" size={15} />
             Refresh
           </button>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-3 min-w-0">
           <OperationalSearchBar
+            dense
             id="parts-queue-search"
             label="Search parts"
             onChange={setSearchTerm}
@@ -545,7 +552,7 @@ function PartsPage({
           />
         </div>
 
-        <div className="mt-4">
+        <div className="mt-3 min-w-0">
           <PartsQueueTabs
             activeTab={activeTab}
             counts={countsByTab}
@@ -581,7 +588,7 @@ function PartsPage({
       )}
 
       {!isLoading && !errorMessage && filteredParts.length > 0 && (
-        <section className="space-y-3">
+        <section className="min-w-0 space-y-2.5">
           {filteredParts.map((part) => (
             <PartsQueueCard
               canApproveParts={canApproveParts}
