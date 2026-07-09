@@ -136,6 +136,66 @@ function doesPurchaseOrderMatchVehicle(purchaseOrder, matchedVehicles = []) {
   });
 }
 
+function getPurchaseOrderVendorIds(purchaseOrder) {
+  return [
+    purchaseOrder?.vendor_id,
+    purchaseOrder?.vendor?.id,
+    ...(purchaseOrder?.items ?? []).flatMap((item) => [
+      item.partRequest?.selected_vendor_id,
+      item.partRequest?.selectedVendor?.id,
+      item.partRequest?.selectedQuote?.vendor_id,
+    ]),
+  ]
+    .filter(Boolean)
+    .map(String);
+}
+
+function getPurchaseOrderVendorNames(purchaseOrder) {
+  return [
+    purchaseOrder?.vendor?.name,
+    ...(purchaseOrder?.items ?? []).flatMap((item) => [
+      item.partRequest?.selectedVendor?.name,
+      item.partRequest?.selectedQuote?.vendor_name_snapshot,
+      item.partRequest?.selectedQuote?.display_vendor_name,
+    ]),
+  ]
+    .filter(Boolean)
+    .map((name) => normalizeSearch(name));
+}
+
+function purchaseOrderMatchesVendorFilter(purchaseOrder, vendorId, vendorName) {
+  const normalizedVendorId = String(vendorId ?? "").trim();
+  const normalizedVendorName = normalizeSearch(vendorName);
+
+  if (!normalizedVendorId && !normalizedVendorName) {
+    return true;
+  }
+
+  if (
+    normalizedVendorId &&
+    getPurchaseOrderVendorIds(purchaseOrder).includes(normalizedVendorId)
+  ) {
+    return true;
+  }
+
+  return (
+    normalizedVendorName &&
+    getPurchaseOrderVendorNames(purchaseOrder).some(
+      (name) => name === normalizedVendorName
+    )
+  );
+}
+
+function purchaseOrderMatchesVehicleFilter(purchaseOrder, vehicleId) {
+  const normalizedVehicleId = String(vehicleId ?? "").trim();
+
+  if (!normalizedVehicleId) {
+    return true;
+  }
+
+  return getPurchaseOrderVehicleIds(purchaseOrder).includes(normalizedVehicleId);
+}
+
 export function getPurchaseOrderBadge(status) {
   if (status === "received") {
     return {
@@ -279,13 +339,28 @@ export function getPurchaseOrderSearchText(purchaseOrder) {
 
 export function filterPurchaseOrders(
   purchaseOrders = [],
-  { search = "", tab = "ordered", vehicleSearchIndex = [] } = {}
+  {
+    search = "",
+    tab = "ordered",
+    vehicleId = "",
+    vehicleSearchIndex = [],
+    vendorId = "",
+    vendorName = "",
+  } = {}
 ) {
   const normalizedSearch = normalizeSearch(search);
   const matchedVehicles = findMatchingVehicles(vehicleSearchIndex, search);
 
   return purchaseOrders.filter((purchaseOrder) => {
     if (!purchaseOrderMatchesTab(purchaseOrder, tab)) {
+      return false;
+    }
+
+    if (!purchaseOrderMatchesVendorFilter(purchaseOrder, vendorId, vendorName)) {
+      return false;
+    }
+
+    if (!purchaseOrderMatchesVehicleFilter(purchaseOrder, vehicleId)) {
       return false;
     }
 

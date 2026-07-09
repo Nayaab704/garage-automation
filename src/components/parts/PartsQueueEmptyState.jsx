@@ -27,13 +27,22 @@ const emptyMessages = {
   },
 };
 
-function PartsQueueEmptyState({ activeTab, hasSearch, onClearSearch }) {
-  const message = hasSearch
+function PartsQueueEmptyState({
+  activeTab,
+  hasFilters = false,
+  hasSearch,
+  onClearSearch,
+}) {
+  const hasQuery = hasSearch || hasFilters;
+  const message = hasQuery
     ? {
-        body: "Try searching by VIN, stock number, vehicle, part, or vendor.",
+        body: hasFilters
+          ? "Try clearing filters or selecting another vendor/vehicle."
+          : "Try searching by VIN, stock number, vehicle, part, or vendor.",
         title: "No matching records found.",
       }
     : emptyMessages[activeTab] ?? emptyMessages.all;
+  const clearLabel = hasFilters ? "Clear Filters" : "Clear Search";
 
   return (
     <section className="rounded-3xl border border-dashed border-slate-300 bg-white/90 p-8 text-center shadow-sm">
@@ -46,13 +55,13 @@ function PartsQueueEmptyState({ activeTab, hasSearch, onClearSearch }) {
       <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
         {message.body}
       </p>
-      {hasSearch && onClearSearch && (
+      {hasQuery && onClearSearch && (
         <button
           className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200"
           onClick={onClearSearch}
           type="button"
         >
-          Clear Search
+          {clearLabel}
         </button>
       )}
     </section>

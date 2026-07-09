@@ -4,6 +4,7 @@ import PartsQueueCard from "../components/parts/PartsQueueCard";
 import PartsQueueEmptyState from "../components/parts/PartsQueueEmptyState";
 import PartsQueueTabs from "../components/parts/PartsQueueTabs";
 import AppIcon from "../components/ui/AppIcon";
+import CompactRecordFilters from "../components/ui/CompactRecordFilters";
 import ModalShell from "../components/ui/ModalShell";
 import OperationalSearchBar from "../components/ui/OperationalSearchBar";
 import { buttonClassNames } from "../components/ui/uiStyles";
@@ -21,6 +22,12 @@ import {
   fetchPartsQueue,
   filterPartsQueueResults,
 } from "../lib/partsQueue";
+import {
+  getActiveFilterCount,
+  getOptionById,
+  getPartsVehicleFilterOptions,
+  getPartsVendorFilterOptions,
+} from "../lib/operationalFilterOptions";
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 import useDebouncedValue from "../hooks/useDebouncedValue";
@@ -111,6 +118,8 @@ function PartsPage({
   const [partQueue, setPartQueue] = useState([]);
   const [priceHistoryPart, setPriceHistoryPart] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedVehicleFilterId, setSelectedVehicleFilterId] = useState("");
+  const [selectedVendorFilterId, setSelectedVendorFilterId] = useState("");
   const [selectedPartForPurchaseOrder, setSelectedPartForPurchaseOrder] =
     useState(null);
   const [successMessage, setSuccessMessage] = useState("");
@@ -132,15 +141,46 @@ function PartsPage({
     () => getPartQueueCounts(partQueue),
     [partQueue]
   );
+  const vendorFilterOptions = useMemo(
+    () => getPartsVendorFilterOptions(partQueue, vendors),
+    [partQueue, vendors]
+  );
+  const vehicleFilterOptions = useMemo(
+    () => getPartsVehicleFilterOptions(partQueue),
+    [partQueue]
+  );
+  const selectedVendorFilter = useMemo(
+    () => getOptionById(vendorFilterOptions, selectedVendorFilterId),
+    [selectedVendorFilterId, vendorFilterOptions]
+  );
+  const selectedVehicleFilter = useMemo(
+    () => getOptionById(vehicleFilterOptions, selectedVehicleFilterId),
+    [selectedVehicleFilterId, vehicleFilterOptions]
+  );
+  const activeFilterCount = getActiveFilterCount([
+    selectedVendorFilter?.id,
+    selectedVehicleFilter?.id,
+  ]);
+  const hasActiveFilters = activeFilterCount > 0;
 
   const filteredParts = useMemo(
     () =>
       filterPartsQueueResults(partQueue, {
         search: debouncedSearchTerm,
         tab: activeTab,
+        vehicleId: selectedVehicleFilter?.vehicleId ?? "",
         vehicleSearchIndex,
+        vendorId: selectedVendorFilter?.vendorId ?? "",
+        vendorName: selectedVendorFilter?.label ?? "",
       }),
-    [activeTab, debouncedSearchTerm, partQueue, vehicleSearchIndex]
+    [
+      activeTab,
+      debouncedSearchTerm,
+      partQueue,
+      selectedVehicleFilter,
+      selectedVendorFilter,
+      vehicleSearchIndex,
+    ]
   );
 
   async function loadPartsQueue({ showLoading = true } = {}) {
@@ -513,6 +553,8 @@ function PartsPage({
 
   function clearSearch() {
     setSearchTerm("");
+    setSelectedVehicleFilterId("");
+    setSelectedVendorFilterId("");
   }
 
   return (
@@ -540,6 +582,8 @@ function PartsPage({
 
         <div className="mt-3 min-w-0">
           <OperationalSearchBar
+            activeFilterCount={activeFilterCount}
+            clearLabel={hasActiveFilters ? "Clear Filters" : "Clear Search"}
             dense
             id="parts-queue-search"
             label="Search parts"
@@ -549,7 +593,16 @@ function PartsPage({
             resultCount={filteredParts.length}
             totalCount={countsByTab[activeTab] ?? partQueue.length}
             value={searchTerm}
-          />
+          >
+            <CompactRecordFilters
+              onVehicleChange={setSelectedVehicleFilterId}
+              onVendorChange={setSelectedVendorFilterId}
+              selectedVehicleId={selectedVehicleFilterId}
+              selectedVendorId={selectedVendorFilterId}
+              vehicleOptions={vehicleFilterOptions}
+              vendorOptions={vendorFilterOptions}
+            />
+          </OperationalSearchBar>
         </div>
 
         <div className="mt-3 min-w-0">
@@ -582,6 +635,7 @@ function PartsPage({
       {!isLoading && !errorMessage && filteredParts.length === 0 && (
         <PartsQueueEmptyState
           activeTab={activeTab}
+          hasFilters={hasActiveFilters}
           hasSearch={Boolean(debouncedSearchTerm.trim())}
           onClearSearch={clearSearch}
         />

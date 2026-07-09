@@ -2,11 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import MarkReceivedModal from "../components/parts/MarkReceivedModal";
 import MarkReturnedModal from "../components/parts/MarkReturnedModal";
 import AppIcon from "../components/ui/AppIcon";
+import CompactRecordFilters from "../components/ui/CompactRecordFilters";
 import OperationalSearchBar from "../components/ui/OperationalSearchBar";
 import { buttonClassNames } from "../components/ui/uiStyles";
 import DocumentsList from "../components/vehicle-detail/DocumentsList";
 import StatusDropdown from "../components/vehicle-detail/StatusDropdown";
 import { logVehicleActivity } from "../lib/activityLogger";
+import {
+  getActiveFilterCount,
+  getOptionById,
+  getPurchaseOrderVehicleFilterOptions,
+  getPurchaseOrderVendorFilterOptions,
+} from "../lib/operationalFilterOptions";
 import {
   getPurchaseOrderItemNetTotal,
   getPurchaseOrderItemSubtotal,
@@ -623,10 +630,18 @@ function PurchaseOrderTabs({ activeTab, counts, onChange }) {
   );
 }
 
-function PurchaseOrderEmptyState({ activeTab, hasSearch, onClearSearch }) {
-  const message = hasSearch
+function PurchaseOrderEmptyState({
+  activeTab,
+  hasFilters = false,
+  hasSearch,
+  onClearSearch,
+}) {
+  const hasQuery = hasSearch || hasFilters;
+  const message = hasQuery
     ? {
-        body: "Try searching by VIN, stock number, vehicle, part, or vendor.",
+        body: hasFilters
+          ? "Try clearing filters or selecting another vendor/vehicle."
+          : "Try searching by VIN, stock number, vehicle, part, or vendor.",
         title: "No matching records found.",
       }
     : activeTab === "ordered"
@@ -638,6 +653,7 @@ function PurchaseOrderEmptyState({ activeTab, hasSearch, onClearSearch }) {
           body: "Purchase orders matching this filter will appear here.",
           title: "No purchase orders found.",
         };
+  const clearLabel = hasFilters ? "Clear Filters" : "Clear Search";
 
   return (
     <section className="rounded-3xl border border-dashed border-slate-300 bg-white/90 p-8 text-center shadow-sm">
@@ -650,13 +666,13 @@ function PurchaseOrderEmptyState({ activeTab, hasSearch, onClearSearch }) {
       <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
         {message.body}
       </p>
-      {hasSearch && onClearSearch && (
+      {hasQuery && onClearSearch && (
         <button
           className={`mt-4 ${buttonClassNames.secondary}`}
           onClick={onClearSearch}
           type="button"
         >
-          Clear Search
+          {clearLabel}
         </button>
       )}
     </section>
@@ -1053,6 +1069,8 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
   const [repairJobsById, setRepairJobsById] = useState({});
   const [returningItemContext, setReturningItemContext] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedVehicleFilterId, setSelectedVehicleFilterId] = useState("");
+  const [selectedVendorFilterId, setSelectedVendorFilterId] = useState("");
   const [selectedQuotesById, setSelectedQuotesById] = useState({});
   const [serviceCategoriesById, setServiceCategoriesById] = useState({});
   const [statusErrorMessage, setStatusErrorMessage] = useState("");
@@ -1189,15 +1207,47 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     () => getPurchaseOrderCounts(enrichedPurchaseOrders),
     [enrichedPurchaseOrders]
   );
+  const vendorFilterOptions = useMemo(
+    () =>
+      getPurchaseOrderVendorFilterOptions(enrichedPurchaseOrders, vendorsById),
+    [enrichedPurchaseOrders, vendorsById]
+  );
+  const vehicleFilterOptions = useMemo(
+    () => getPurchaseOrderVehicleFilterOptions(enrichedPurchaseOrders),
+    [enrichedPurchaseOrders]
+  );
+  const selectedVendorFilter = useMemo(
+    () => getOptionById(vendorFilterOptions, selectedVendorFilterId),
+    [selectedVendorFilterId, vendorFilterOptions]
+  );
+  const selectedVehicleFilter = useMemo(
+    () => getOptionById(vehicleFilterOptions, selectedVehicleFilterId),
+    [selectedVehicleFilterId, vehicleFilterOptions]
+  );
+  const activeFilterCount = getActiveFilterCount([
+    selectedVendorFilter?.id,
+    selectedVehicleFilter?.id,
+  ]);
+  const hasActiveFilters = activeFilterCount > 0;
 
   const filteredPurchaseOrders = useMemo(
     () =>
       filterPurchaseOrders(enrichedPurchaseOrders, {
         search: debouncedSearchTerm,
         tab: activeTab,
+        vehicleId: selectedVehicleFilter?.vehicleId ?? "",
         vehicleSearchIndex,
+        vendorId: selectedVendorFilter?.vendorId ?? "",
+        vendorName: selectedVendorFilter?.label ?? "",
       }),
-    [activeTab, debouncedSearchTerm, enrichedPurchaseOrders, vehicleSearchIndex]
+    [
+      activeTab,
+      debouncedSearchTerm,
+      enrichedPurchaseOrders,
+      selectedVehicleFilter,
+      selectedVendorFilter,
+      vehicleSearchIndex,
+    ]
   );
 
   async function persistAutomaticRepairJobStatus(
@@ -1805,6 +1855,8 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
 
   function clearSearch() {
     setSearchTerm("");
+    setSelectedVehicleFilterId("");
+    setSelectedVendorFilterId("");
   }
 
   function toggleDetails(purchaseOrderId) {
@@ -1886,6 +1938,8 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
 
         <div className="mt-3 min-w-0">
           <OperationalSearchBar
+            activeFilterCount={activeFilterCount}
+            clearLabel={hasActiveFilters ? "Clear Filters" : "Clear Search"}
             dense
             id="purchase-order-search"
             label="Search purchase orders"
@@ -1895,7 +1949,16 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
             resultCount={filteredPurchaseOrders.length}
             totalCount={countsByTab[activeTab] ?? enrichedPurchaseOrders.length}
             value={searchTerm}
-          />
+          >
+            <CompactRecordFilters
+              onVehicleChange={setSelectedVehicleFilterId}
+              onVendorChange={setSelectedVendorFilterId}
+              selectedVehicleId={selectedVehicleFilterId}
+              selectedVendorId={selectedVendorFilterId}
+              vehicleOptions={vehicleFilterOptions}
+              vendorOptions={vendorFilterOptions}
+            />
+          </OperationalSearchBar>
         </div>
 
         <div className="mt-3 min-w-0">
@@ -1936,6 +1999,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
       {!isLoading && !errorMessage && filteredPurchaseOrders.length === 0 && (
         <PurchaseOrderEmptyState
           activeTab={activeTab}
+          hasFilters={hasActiveFilters}
           hasSearch={Boolean(debouncedSearchTerm.trim())}
           onClearSearch={clearSearch}
         />

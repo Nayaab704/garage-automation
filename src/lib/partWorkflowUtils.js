@@ -130,6 +130,72 @@ function doesPartMatchVehicle(part, matchedVehicles = []) {
   });
 }
 
+function getPartVendorIds(part) {
+  return [
+    part?.selected_vendor_id,
+    part?.selectedVendor?.id,
+    part?.selectedQuote?.vendor_id,
+    part?.latestQuote?.vendor_id,
+    ...(part?.quotes ?? []).map((quote) => quote.vendor_id),
+    ...(part?.purchaseOrderItems ?? []).flatMap((item) => [
+      item.purchaseOrder?.vendor_id,
+      item.purchaseOrder?.vendor?.id,
+    ]),
+  ]
+    .filter(Boolean)
+    .map(String);
+}
+
+function getPartVendorNames(part) {
+  return [
+    part?.selectedVendor?.name,
+    part?.selectedQuote?.vendor_name_snapshot,
+    part?.selectedQuote?.display_vendor_name,
+    part?.latestQuote?.vendor_name_snapshot,
+    part?.latestQuote?.display_vendor_name,
+    ...(part?.quotes ?? []).flatMap((quote) => [
+      quote.vendor_name_snapshot,
+      quote.display_vendor_name,
+    ]),
+    ...(part?.purchaseOrderItems ?? []).map(
+      (item) => item.purchaseOrder?.vendor?.name
+    ),
+  ]
+    .filter(Boolean)
+    .map((name) => normalizeSearch(name));
+}
+
+function partMatchesVendorFilter(part, vendorId, vendorName) {
+  const normalizedVendorId = String(vendorId ?? "").trim();
+  const normalizedVendorName = normalizeSearch(vendorName);
+
+  if (!normalizedVendorId && !normalizedVendorName) {
+    return true;
+  }
+
+  if (
+    normalizedVendorId &&
+    getPartVendorIds(part).includes(normalizedVendorId)
+  ) {
+    return true;
+  }
+
+  return (
+    normalizedVendorName &&
+    getPartVendorNames(part).some((name) => name === normalizedVendorName)
+  );
+}
+
+function partMatchesVehicleFilter(part, vehicleId) {
+  const normalizedVehicleId = String(vehicleId ?? "").trim();
+
+  if (!normalizedVehicleId) {
+    return true;
+  }
+
+  return getPartVehicleIds(part).includes(normalizedVehicleId);
+}
+
 export function getVehicleName(vehicle) {
   if (!vehicle) {
     return "";
@@ -619,13 +685,28 @@ export function getPartQueueSearchText(part) {
 
 export function filterPartsQueue(
   parts = [],
-  { search = "", tab = "needs_po", vehicleSearchIndex = [] } = {}
+  {
+    search = "",
+    tab = "needs_po",
+    vehicleId = "",
+    vehicleSearchIndex = [],
+    vendorId = "",
+    vendorName = "",
+  } = {}
 ) {
   const normalizedSearch = normalizeSearch(search);
   const matchedVehicles = findMatchingVehicles(vehicleSearchIndex, search);
 
   return parts.filter((part) => {
     if (!partMatchesQueueTab(part, tab)) {
+      return false;
+    }
+
+    if (!partMatchesVendorFilter(part, vendorId, vendorName)) {
+      return false;
+    }
+
+    if (!partMatchesVehicleFilter(part, vehicleId)) {
       return false;
     }
 

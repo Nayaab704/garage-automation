@@ -23,6 +23,7 @@ function OperationalSearchBar({
   activeFilterCount = 0,
   children,
   className = "",
+  clearLabel = "",
   dense = false,
   id,
   label = "Search records",
@@ -52,6 +53,7 @@ function OperationalSearchBar({
   const clearButtonClassName = dense
     ? "inline-flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-black text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
     : buttonClassNames.secondary;
+  const clearButtonLabel = clearLabel || (hasFilters ? "Clear Filters" : "Clear Search");
   const toolsClassName = dense
     ? "flex flex-wrap items-center gap-2 lg:justify-end"
     : "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between lg:justify-end";
@@ -93,7 +95,7 @@ function OperationalSearchBar({
               onClick={onClear}
               type="button"
             >
-              Clear Search
+              {clearButtonLabel}
             </button>
           )}
         </div>
