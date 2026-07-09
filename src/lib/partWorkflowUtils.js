@@ -265,6 +265,115 @@ export function getPartQueueStatus(part) {
   return "all";
 }
 
+function getPartLifecycleBadge(part) {
+  if (isPartReturned(part)) {
+    return {
+      key: "status-returned",
+      kind: "status",
+      label: "Returned",
+      value: "returned",
+    };
+  }
+
+  if (isPartReceived(part)) {
+    return {
+      key: "status-received",
+      kind: "status",
+      label: "Received",
+      value: "received",
+    };
+  }
+
+  if (getPrimaryPurchaseOrderItem(part)) {
+    return {
+      key: "status-po-created",
+      kind: "status",
+      label: "PO Created",
+      value: "po_created",
+    };
+  }
+
+  if (isPartOrdered(part)) {
+    return {
+      key: "status-ordered",
+      kind: "status",
+      label: "Ordered",
+      value: "ordered",
+    };
+  }
+
+  if (isPartNeedsPo(part)) {
+    return {
+      key: "status-needs-po",
+      kind: "status",
+      label: "Needs to Buy",
+      value: "needs_po",
+    };
+  }
+
+  return {
+    key: `status-${part?.status ?? "tracked"}`,
+    kind: "status",
+    label: formatPartLabel(part?.status, partStatusLabels),
+    value: part?.status ?? "tracked",
+  };
+}
+
+export function getRequiredPartBadges(part) {
+  const lifecycleBadge = getPartLifecycleBadge(part);
+
+  if (lifecycleBadge.value === "returned") {
+    return [lifecycleBadge];
+  }
+
+  if (
+    lifecycleBadge.value === "needs_po" &&
+    part?.part_source === "needs_to_buy" &&
+    part?.approval_status === "pending"
+  ) {
+    return [
+      {
+        key: "approval-pending",
+        kind: "approval",
+        label: formatPartLabel(part.approval_status, approvalLabels),
+        value: part.approval_status,
+      },
+    ];
+  }
+
+  const badges = [lifecycleBadge];
+  const lifecycleStatesThatHideSource = new Set([
+    "ordered",
+    "po_created",
+    "received",
+  ]);
+  const sourceLabel = formatPartLabel(part?.part_source, partSourceLabels);
+
+  if (
+    part?.part_source &&
+    !lifecycleStatesThatHideSource.has(lifecycleBadge.value) &&
+    sourceLabel !== lifecycleBadge.label
+  ) {
+    badges.push({
+      key: `source-${part.part_source}`,
+      kind: "source",
+      label: sourceLabel,
+      value: part.part_source,
+    });
+  }
+
+  if (part?.approval_status) {
+    badges.push({
+      key: `approval-${part.approval_status}`,
+      kind: "approval",
+      label: formatPartLabel(part.approval_status, approvalLabels),
+      value: part.approval_status,
+    });
+  }
+
+  return badges;
+}
+
 export function partMatchesQueueTab(part, tabKey) {
   if (tabKey === "all") {
     return true;

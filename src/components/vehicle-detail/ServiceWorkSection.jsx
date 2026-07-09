@@ -4,6 +4,7 @@ import {
   getPhaseOneServiceCategories,
   getServiceCategoryVisual,
 } from "../../lib/serviceCategoryVisuals";
+import { isWorkOrderStatusWaitingForParts } from "../../lib/workOrderStatus";
 import AddWorkOrderForm from "./AddWorkOrderForm";
 import ServiceCategoryCard from "./ServiceCategoryCard";
 
@@ -96,7 +97,11 @@ function getCategoryAlert(workOrders) {
     };
   }
 
-  if (workOrders.some((workOrder) => workOrder.status === "waiting_parts")) {
+  if (
+    workOrders.some((workOrder) =>
+      isWorkOrderStatusWaitingForParts(workOrder.status)
+    )
+  ) {
     return {
       className: "bg-amber-50 text-amber-700 ring-amber-200",
       label: "Waiting",

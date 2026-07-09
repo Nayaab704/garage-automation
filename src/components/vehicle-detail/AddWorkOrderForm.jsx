@@ -6,11 +6,11 @@ import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { isPhaseOneServiceCategory } from "../../lib/serviceCategoryVisuals";
 import { supabase } from "../../lib/supabaseClient";
+import { defaultWorkOrderStatus } from "../../lib/workOrderStatus";
 
 const emptyForm = {
   title: "",
   priority: "medium",
-  status: "needed",
   notes: "",
 };
 
@@ -21,18 +21,7 @@ const priorityOptions = [
   { value: "urgent", label: "Urgent" },
 ];
 
-const statusOptions = [
-  { value: "needed", label: "Needed" },
-  { value: "approved", label: "Approved" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "waiting_parts", label: "Waiting Parts" },
-  { value: "blocked", label: "Blocked" },
-  { value: "completed", label: "Completed" },
-  { value: "cancelled", label: "Cancelled" },
-];
-
 const allowedPriorities = priorityOptions.map((option) => option.value);
-const allowedStatuses = statusOptions.map((option) => option.value);
 
 function emptyToNull(value) {
   const trimmedValue = String(value ?? "").trim();
@@ -56,10 +45,6 @@ function getCompatibilityCategory(category) {
 
 function getValidPriority(value) {
   return allowedPriorities.includes(value) ? value : "medium";
-}
-
-function getValidStatus(value) {
-  return allowedStatuses.includes(value) ? value : "needed";
 }
 
 function AddWorkOrderForm({
@@ -119,7 +104,7 @@ function AddWorkOrderForm({
         category: getCompatibilityCategory(category),
         title,
         priority: getValidPriority(formData.priority),
-        status: getValidStatus(formData.status),
+        status: defaultWorkOrderStatus,
         notes: emptyToNull(formData.notes),
         created_by: currentProfile?.id ?? null,
         assigned_to:
@@ -171,77 +156,58 @@ function AddWorkOrderForm({
       title="Add Work Order"
     >
       <form className="space-y-5" onSubmit={handleSubmit}>
-          <label className="block" htmlFor="work-order-title">
-            <span className={formControlClassNames.label}>Title</span>
-            <input
-              className={formControlClassNames.input}
-              id="work-order-title"
-              name="title"
-              onChange={handleChange}
-              required
-              type="text"
-              value={formData.title}
-            />
-          </label>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block" htmlFor="work-order-priority">
-              <span className={formControlClassNames.label}>Priority</span>
-              <select
-                className={formControlClassNames.select}
-                id="work-order-priority"
-                name="priority"
-                onChange={handleChange}
-                value={formData.priority}
-              >
-                {priorityOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block" htmlFor="work-order-status">
-              <span className={formControlClassNames.label}>Status</span>
-              <select
-                className={formControlClassNames.select}
-                id="work-order-status"
-                name="status"
-                onChange={handleChange}
-                value={formData.status}
-              >
-                {statusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <label className="block" htmlFor="work-order-notes">
-            <span className={formControlClassNames.label}>Notes</span>
-            <textarea
-              className={formControlClassNames.textarea}
-              id="work-order-notes"
-              name="notes"
-              onChange={handleChange}
-              value={formData.notes}
-            />
-          </label>
-
-          <FormMessage tone="error">{errorMessage}</FormMessage>
-
-          <FormMessage tone="success">{successMessage}</FormMessage>
-
-          <FormActions
-            isSubmitting={isSubmitting}
-            onCancel={onClose}
-            submitLabel="Add Work Order"
-            submittingLabel="Saving..."
+        <label className="block" htmlFor="work-order-title">
+          <span className={formControlClassNames.label}>Title</span>
+          <input
+            className={formControlClassNames.input}
+            id="work-order-title"
+            name="title"
+            onChange={handleChange}
+            required
+            type="text"
+            value={formData.title}
           />
-        </form>
+        </label>
+
+        <label className="block" htmlFor="work-order-priority">
+          <span className={formControlClassNames.label}>Priority</span>
+          <select
+            className={formControlClassNames.select}
+            id="work-order-priority"
+            name="priority"
+            onChange={handleChange}
+            value={formData.priority}
+          >
+            {priorityOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block" htmlFor="work-order-notes">
+          <span className={formControlClassNames.label}>Notes</span>
+          <textarea
+            className={formControlClassNames.textarea}
+            id="work-order-notes"
+            name="notes"
+            onChange={handleChange}
+            value={formData.notes}
+          />
+        </label>
+
+        <FormMessage tone="error">{errorMessage}</FormMessage>
+
+        <FormMessage tone="success">{successMessage}</FormMessage>
+
+        <FormActions
+          isSubmitting={isSubmitting}
+          onCancel={onClose}
+          submitLabel="Add Work Order"
+          submittingLabel="Saving..."
+        />
+      </form>
     </ModalShell>
   );
 }

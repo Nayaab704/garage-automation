@@ -349,6 +349,7 @@ export async function createVendorPartQuote(payload = {}) {
 }
 
 export async function markQuotePurchased({
+  partName = "",
   purchaseOrderId = null,
   purchaseOrderItemId = null,
   quoteId,
@@ -358,13 +359,22 @@ export async function markQuotePurchased({
   }
 
   try {
+    const rawPartName = emptyToNull(partName);
+    const normalizedPartName = normalizePartName(rawPartName);
+    const updatePayload = {
+      purchase_order_id: purchaseOrderId,
+      purchase_order_item_id: purchaseOrderItemId,
+      quote_status: "purchased",
+    };
+
+    if (rawPartName && normalizedPartName) {
+      updatePayload.normalized_part_name = normalizedPartName;
+      updatePayload.raw_part_name = rawPartName;
+    }
+
     const { data, error } = await supabase
       .from("vendor_part_quotes")
-      .update({
-        purchase_order_id: purchaseOrderId,
-        purchase_order_item_id: purchaseOrderItemId,
-        quote_status: "purchased",
-      })
+      .update(updatePayload)
       .eq("id", quoteId)
       .select("*")
       .single();

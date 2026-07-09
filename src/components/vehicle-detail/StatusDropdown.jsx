@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import useDismissableLayer from "../../hooks/useDismissableLayer";
 
 function formatStatusLabel(status) {
   if (!status) {
@@ -47,6 +48,13 @@ function getStatusClassName(status) {
 
 function StatusDropdown({ currentStatus, isUpdating, onChange, statuses = [] }) {
   const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useDismissableLayer({
+    enabled: isOpen,
+    onDismiss: () => setIsOpen(false),
+    refs: [dropdownRef],
+  });
 
   async function handleStatusChange(newStatus) {
     setIsOpen(false);
@@ -59,7 +67,7 @@ function StatusDropdown({ currentStatus, isUpdating, onChange, statuses = [] }) 
   }
 
   return (
-    <div className="relative inline-flex">
+    <div className="relative inline-flex" ref={dropdownRef}>
       <button
         aria-expanded={isOpen}
         aria-haspopup="menu"

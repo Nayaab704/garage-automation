@@ -3,14 +3,10 @@ import MarkReturnedModal from "../parts/MarkReturnedModal";
 import { hasPermission } from "../../lib/permissions";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import {
-  approvalLabels,
   formatPartLabel,
   getPrimaryPurchaseOrderItem,
-  isPartReturned,
+  getRequiredPartBadges,
   isPartNeedsPo,
-  isPartOrdered,
-  isPartReceived,
-  partSourceLabels,
   partStatusLabels,
 } from "../../lib/partWorkflowUtils";
 import {
@@ -141,6 +137,18 @@ function sourceClassName(partSource) {
   return "bg-zinc-100 text-zinc-700 ring-zinc-200";
 }
 
+function partBadgeClassName(badge) {
+  if (badge.kind === "approval") {
+    return approvalClassName(badge.value);
+  }
+
+  if (badge.kind === "source") {
+    return sourceClassName(badge.value);
+  }
+
+  return statusClassName(badge.value);
+}
+
 function Badge({ children, className }) {
   return (
     <span
@@ -200,50 +208,6 @@ function getPurchaseOrderStatusLabel(purchaseOrder, item) {
     purchaseOrder?.status ?? item?.status ?? "ordered",
     partStatusLabels
   );
-}
-
-function getLifecycleBadge(part) {
-  if (isPartReturned(part)) {
-    return {
-      className: statusClassName("returned"),
-      label: "Returned",
-    };
-  }
-
-  const primaryPurchaseOrderItem = getPrimaryPurchaseOrderItem(part);
-
-  if (isPartReceived(part)) {
-    return {
-      className: statusClassName("received"),
-      label: "Received",
-    };
-  }
-
-  if (primaryPurchaseOrderItem) {
-    return {
-      className: statusClassName("po_created"),
-      label: "PO Created",
-    };
-  }
-
-  if (isPartOrdered(part)) {
-    return {
-      className: statusClassName("ordered"),
-      label: "Ordered",
-    };
-  }
-
-  if (isPartNeedsPo(part)) {
-    return {
-      className: statusClassName("needs_po"),
-      label: "Needs to Buy",
-    };
-  }
-
-  return {
-    className: statusClassName(part.status),
-    label: formatPartLabel(part.status, partStatusLabels),
-  };
 }
 
 function enrichPartsWithPurchaseOrders(parts, purchaseOrderItems, purchaseOrders) {
@@ -408,11 +372,9 @@ function WorkOrderPartsList({
             const displayPurchaseOrderItem =
               primaryPurchaseOrderItem ?? returnedPurchaseOrderItem;
             const linkedPurchaseOrder = displayPurchaseOrderItem?.purchaseOrder;
-            const lifecycleBadge = getLifecycleBadge(part);
+            const partBadges = getRequiredPartBadges(part);
             const canCreatePoForPart = canCreatePurchaseOrder(currentProfile, part);
             const canApprove = canApprovePart(currentProfile, part);
-            const shouldShowSourceBadge =
-              part.part_source !== "needs_to_buy" || !displayPurchaseOrderItem;
             const createdByProfile = getProfileById(profiles, part.created_by);
             const approvedByProfile = getProfileById(profiles, part.approved_by);
             const returnedByProfile = getProfileById(
@@ -464,17 +426,14 @@ function WorkOrderPartsList({
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    <Badge className={lifecycleBadge.className}>
-                      {lifecycleBadge.label}
-                    </Badge>
-                    {shouldShowSourceBadge && (
-                      <Badge className={sourceClassName(part.part_source)}>
-                        {formatPartLabel(part.part_source, partSourceLabels)}
+                    {partBadges.map((badge) => (
+                      <Badge
+                        className={partBadgeClassName(badge)}
+                        key={badge.key}
+                      >
+                        {badge.label}
                       </Badge>
-                    )}
-                    <Badge className={approvalClassName(part.approval_status)}>
-                      {formatPartLabel(part.approval_status, approvalLabels)}
-                    </Badge>
+                    ))}
                   </div>
                 </div>
 

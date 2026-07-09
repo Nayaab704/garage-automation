@@ -31,6 +31,8 @@ const workOrderStatusLabels = {
   completed: "Completed",
   in_progress: "In Progress",
   needed: "Needed",
+  ordered: "Ordered",
+  parts_needed: "Parts Needed",
   waiting_parts: "Waiting Parts",
 };
 

@@ -6,6 +6,7 @@ import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { isPartNeedsPo } from "../../lib/partWorkflowUtils";
 import { supabase } from "../../lib/supabaseClient";
+import { markQuotePurchased } from "../../lib/vendorPriceMemory";
 
 const emptyForm = {
   vendor_id: "",
@@ -136,11 +137,7 @@ function canCreatePurchaseOrderForPart(partRequest) {
 }
 
 function getInitialFormData(initialPartRequest, initialVendorId = "") {
-  const unitCost =
-    initialPartRequest?.quoted_unit_cost ??
-    initialPartRequest?.selectedQuote?.unit_price ??
-    initialPartRequest?.unit_cost ??
-    "";
+  const unitCost = getPartRequestUnitCost(initialPartRequest);
   const vendorId = valueToString(
     initialVendorId || getPartRequestVendorId(initialPartRequest)
   );
@@ -160,6 +157,15 @@ function getInitialFormData(initialPartRequest, initialVendorId = "") {
     unit_cost: valueToString(unitCost),
     vendor_id: vendorId,
   };
+}
+
+function getPartRequestUnitCost(partRequest) {
+  return (
+    partRequest?.quoted_unit_cost ??
+    partRequest?.selectedQuote?.unit_price ??
+    partRequest?.unit_cost ??
+    ""
+  );
 }
 
 function getShippingSelection(value) {
@@ -256,9 +262,19 @@ function CreatePurchaseOrderForm({
   vehicleId,
   vendors = [],
 }) {
+  const availablePartRequests = useMemo(
+    () => partRequests.filter(canCreatePurchaseOrderForPart),
+    [partRequests]
+  );
+  const defaultPartRequest = useMemo(
+    () =>
+      initialPartRequest ??
+      (availablePartRequests.length === 1 ? availablePartRequests[0] : null),
+    [availablePartRequests, initialPartRequest]
+  );
   const initialFormData = useMemo(
-    () => getInitialFormData(initialPartRequest, initialVendorId),
-    [initialPartRequest, initialVendorId]
+    () => getInitialFormData(defaultPartRequest, initialVendorId),
+    [defaultPartRequest, initialVendorId]
   );
   const [formData, setFormData] = useState(() =>
     initialFormData
@@ -271,11 +287,12 @@ function CreatePurchaseOrderForm({
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [warningMessage, setWarningMessage] = useState("");
-  const availablePartRequests = partRequests.filter(canCreatePurchaseOrderForPart);
   const selectedPartRequest =
     partRequests.find(
       (partRequest) => partRequest.id === formData.part_request_id
-    ) ?? initialPartRequest;
+    ) ?? defaultPartRequest;
+  const shouldShowPartRequestSelector =
+    !lockPartRequest && availablePartRequests.length > 1;
   const selectedVendorOption = useMemo(() => {
     const vendorSourcePart = selectedPartRequest ?? initialPartRequest;
     const selectedVendorId =
@@ -340,28 +357,19 @@ function CreatePurchaseOrderForm({
 
     setFormData((currentFormData) => ({
       ...currentFormData,
+      description: selectedPartRequest
+        ? getPartRequestName(selectedPartRequest)
+        : "",
       part_request_id: selectedPartRequestId,
-      description:
-        currentFormData.description ||
-        (selectedPartRequest ? getPartRequestName(selectedPartRequest) : ""),
-      quantity:
-        currentFormData.quantity ||
-        valueToString(selectedPartRequest?.quantity || 1),
-      unit_cost:
-        currentFormData.unit_cost ||
-        valueToString(
-          selectedPartRequest?.quoted_unit_cost ??
-            selectedPartRequest?.selectedQuote?.unit_price ??
-            selectedPartRequest?.unit_cost ??
-            ""
-        ),
+      quantity: valueToString(selectedPartRequest?.quantity || 1),
+      unit_cost: valueToString(getPartRequestUnitCost(selectedPartRequest)),
       vendor_id:
         currentFormData.vendor_id || getPartRequestVendorId(selectedPartRequest),
     }));
   }
 
   function validateForm() {
-    const description = emptyToNull(formData.description);
+    const partName = emptyToNull(formData.description);
     const quantity = Number(formData.quantity || 1);
     const unitCost = parseUnitCost(formData.unit_cost);
     const shippingCost = parseOptionalCost(
@@ -383,10 +391,6 @@ function CreatePurchaseOrderForm({
       return { error: "Part request is required." };
     }
 
-    const selectedPartRequest = partRequests.find(
-      (partRequest) => partRequest.id === formData.part_request_id
-    );
-
     if (!canCreatePurchaseOrderForPart(selectedPartRequest)) {
       return {
         error:
@@ -394,8 +398,8 @@ function CreatePurchaseOrderForm({
       };
     }
 
-    if (!description) {
-      return { error: "Description is required." };
+    if (!partName) {
+      return { error: "Please enter a part name." };
     }
 
     if (!Number.isInteger(quantity) || quantity < 1) {
@@ -417,7 +421,7 @@ function CreatePurchaseOrderForm({
     return {
       error: "",
       values: {
-        description,
+        partName,
         quantity,
         shippingCost: shippingCost.value,
         tax: tax.value,
@@ -461,6 +465,32 @@ function CreatePurchaseOrderForm({
         return;
       }
 
+      const selectedPartRequest = partRequests.find(
+        (partRequest) => partRequest.id === formData.part_request_id
+      ) ?? defaultPartRequest;
+      const currentPartName = emptyToNull(getPartRequestName(selectedPartRequest));
+      let nextPartRequest = selectedPartRequest;
+
+      if (currentPartName !== validation.values.partName) {
+        const partNameResponse = await supabase
+          .from("part_requests")
+          .update({ part_name: validation.values.partName })
+          .eq("id", formData.part_request_id)
+          .select(partRequestResultColumns)
+          .single();
+
+        if (partNameResponse.error) {
+          console.error("Could not update part name:", partNameResponse.error);
+          setErrorMessage("Could not update part name. Please try again.");
+          return;
+        }
+
+        nextPartRequest = partNameResponse.data ?? {
+          ...selectedPartRequest,
+          part_name: validation.values.partName,
+        };
+      }
+
       const purchaseOrder = {
         ordered_by: currentProfile?.id ?? null,
         vehicle_id: vehicleId,
@@ -485,7 +515,7 @@ function CreatePurchaseOrderForm({
       const purchaseOrderItem = {
         purchase_order_id: purchaseOrderId,
         part_request_id: formData.part_request_id,
-        description: validation.values.description,
+        description: validation.values.partName,
         quantity: validation.values.quantity,
         unit_cost: validation.values.unitCost,
         shipping_cost: validation.values.shippingCost,
@@ -518,6 +548,31 @@ function CreatePurchaseOrderForm({
         return;
       }
 
+      const selectedQuoteId =
+        nextPartRequest?.selected_quote_id ?? nextPartRequest?.selectedQuote?.id;
+      let purchasedQuote = null;
+      let priceMemoryWarning = "";
+
+      if (selectedQuoteId) {
+        const quoteResult = await markQuotePurchased({
+          partName: validation.values.partName,
+          purchaseOrderId,
+          purchaseOrderItemId: itemResponse.data?.id ?? null,
+          quoteId: selectedQuoteId,
+        });
+
+        if (quoteResult.error) {
+          console.error(
+            "Purchase order created, but price memory could not be marked purchased:",
+            quoteResult.error
+          );
+          priceMemoryWarning =
+            "Purchase order created, but vendor price history could not be updated.";
+        } else {
+          purchasedQuote = quoteResult.data;
+        }
+      }
+
       const partRequestResponse = await supabase
         .from("part_requests")
         .update({ status: "ordered" })
@@ -526,9 +581,6 @@ function CreatePurchaseOrderForm({
         .single();
 
       let statusWarning = "";
-      const selectedPartRequest = partRequests.find(
-        (partRequest) => partRequest.id === formData.part_request_id
-      );
 
       if (partRequestResponse.error) {
         console.error(
@@ -543,22 +595,18 @@ function CreatePurchaseOrderForm({
       setFormData(initialFormData);
       setSelectedShippingOption(getShippingSelection(initialFormData.shipping_cost));
       setSuccessMessage("Purchase order created successfully.");
-      setWarningMessage(statusWarning);
+      setWarningMessage([statusWarning, priceMemoryWarning].filter(Boolean).join(" "));
       await logVehicleActivity({
         vehicleId,
         action: "Purchase order created",
         details: {
-          description: validation.values.description,
+          description: validation.values.partName,
           quantity: validation.values.quantity,
           unit_cost: validation.values.unitCost,
           vendor: getVendorName(
             vendorOptions.find((vendor) => vendor.id === formData.vendor_id) ?? {}
           ),
-          part_name: getPartRequestName(
-            partRequests.find(
-              (partRequest) => partRequest.id === formData.part_request_id
-            ) ?? {}
-          ),
+          part_name: validation.values.partName,
         },
       });
       if (!partRequestResponse.error) {
@@ -566,8 +614,8 @@ function CreatePurchaseOrderForm({
           vehicleId,
           action: "Part request status changed",
           details: {
-            part_name: getPartRequestName(selectedPartRequest ?? {}),
-            from: selectedPartRequest?.status,
+            part_name: validation.values.partName,
+            from: nextPartRequest?.status,
             to: "ordered",
           },
         });
@@ -578,10 +626,11 @@ function CreatePurchaseOrderForm({
         partRequest:
           partRequestResponse.data ??
           (partRequestStatusUpdated
-            ? { ...selectedPartRequest, status: "ordered" }
-            : selectedPartRequest),
+            ? { ...nextPartRequest, status: "ordered" }
+            : nextPartRequest),
         partRequestId: formData.part_request_id,
         partRequestStatusUpdated,
+        purchasedQuote,
         purchaseOrder: purchaseOrderResponse.data ?? {
           ...purchaseOrder,
           id: purchaseOrderId,
@@ -590,7 +639,10 @@ function CreatePurchaseOrderForm({
         purchaseOrderItemId: itemResponse.data?.id ?? null,
         purchaseOrderId,
         status: "ordered",
-        warningMessage: statusWarning,
+        vendorQuoteUpdated: Boolean(purchasedQuote),
+        warningMessage: [statusWarning, priceMemoryWarning]
+          .filter(Boolean)
+          .join(" "),
       });
     } catch (error) {
       console.error("Could not create purchase order:", error);
@@ -609,35 +661,35 @@ function CreatePurchaseOrderForm({
       title="Create Purchase Order"
     >
       <form className="space-y-5" onSubmit={handleSubmit}>
-          <fieldset className="space-y-4">
-            <legend className="text-sm font-black text-slate-950">
-              Vendor / Part
-            </legend>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block" htmlFor="purchase-order-vendor">
-              <span className={formControlClassNames.label}>Vendor</span>
-              <select
-                className={formControlClassNames.select}
-                id="purchase-order-vendor"
-                name="vendor_id"
-                onChange={handleChange}
-                required
-                value={formData.vendor_id}
-              >
-                <option value="">Select a vendor</option>
-                {vendorOptions.map((vendor) => (
-                  <option key={vendor.id} value={vendor.id}>
-                    {getVendorName(vendor)}
-                  </option>
-                ))}
-              </select>
-            </label>
+        <fieldset className="space-y-4">
+          <legend className="text-sm font-black text-slate-950">
+            Vendor / Part
+          </legend>
 
+          <label className="block" htmlFor="purchase-order-vendor">
+            <span className={formControlClassNames.label}>Vendor</span>
+            <select
+              className={formControlClassNames.select}
+              id="purchase-order-vendor"
+              name="vendor_id"
+              onChange={handleChange}
+              required
+              value={formData.vendor_id}
+            >
+              <option value="">Select a vendor</option>
+              {vendorOptions.map((vendor) => (
+                <option key={vendor.id} value={vendor.id}>
+                  {getVendorName(vendor)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {shouldShowPartRequestSelector && (
             <label className="block" htmlFor="purchase-order-part-request">
               <span className={formControlClassNames.label}>Part Request</span>
               <select
                 className={formControlClassNames.select}
-                disabled={lockPartRequest}
                 id="purchase-order-part-request"
                 name="part_request_id"
                 onChange={handlePartRequestChange}
@@ -652,7 +704,26 @@ function CreatePurchaseOrderForm({
                 ))}
               </select>
             </label>
-          </div>
+          )}
+
+          <label className="block" htmlFor="purchase-order-description">
+            <span className={formControlClassNames.label}>
+              Part Name / Description
+            </span>
+            <input
+              className={formControlClassNames.input}
+              id="purchase-order-description"
+              name="description"
+              onChange={handleChange}
+              required
+              type="text"
+              value={formData.description}
+            />
+            <span className="mt-2 block text-xs font-semibold leading-5 text-slate-500">
+              Changing this name updates the required part name across this
+              vehicle and parts queue.
+            </span>
+          </label>
 
           {hasSelectedVendorPrice ? (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
@@ -663,183 +734,170 @@ function CreatePurchaseOrderForm({
               No vendor selected yet. Choose a vendor or use View Prices first.
             </div>
           ) : null}
-          </fieldset>
+        </fieldset>
 
-          {selectedPartRequest?.approval_status === "pending" && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              Pending admin review. PO creation is still allowed.
-            </div>
-          )}
+        {selectedPartRequest?.approval_status === "pending" && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            Pending admin review. PO creation is still allowed.
+          </div>
+        )}
 
-          <label className="block" htmlFor="purchase-order-description">
-            <span className={formControlClassNames.label}>Description</span>
-            <input
-              className={formControlClassNames.input}
-              id="purchase-order-description"
-              name="description"
-              onChange={handleChange}
-              required
-              type="text"
-              value={formData.description}
-            />
-          </label>
-
-          <fieldset className="space-y-4 rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
-            <legend className="px-1 text-sm font-black text-slate-950">
-              Cost Details
-            </legend>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block" htmlFor="purchase-order-quantity">
-                <span className={formControlClassNames.label}>Quantity</span>
-                <input
-                  className={formControlClassNames.input}
-                  id="purchase-order-quantity"
-                  min="1"
-                  name="quantity"
-                  onChange={handleChange}
-                  step="1"
-                  type="number"
-                  value={formData.quantity}
-                />
-              </label>
-
-              <label className="block" htmlFor="purchase-order-unit-cost">
-                <span className={formControlClassNames.label}>Unit Cost</span>
-                <input
-                  className={formControlClassNames.input}
-                  id="purchase-order-unit-cost"
-                  min="0"
-                  name="unit_cost"
-                  onChange={handleChange}
-                  step="0.01"
-                  type="number"
-                  value={formData.unit_cost}
-                />
-              </label>
-            </div>
-
-            <div>
-              <span className={formControlClassNames.label}>Shipping</span>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {SHIPPING_QUICK_OPTIONS.map((option) => {
-                  const isSelected = selectedShippingOption === option;
-
-                  return (
-                    <button
-                      aria-pressed={isSelected}
-                      className={`inline-flex min-h-10 items-center justify-center rounded-2xl border px-3 py-2 text-sm font-black shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-100 ${
-                        isSelected
-                          ? "border-emerald-600 bg-emerald-600 text-white"
-                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                      }`}
-                      key={option}
-                      onClick={() => handleShippingQuickSelect(option)}
-                      type="button"
-                    >
-                      ${option}
-                      {option === DEFAULT_SHIPPING_COST ? " Default" : ""}
-                    </button>
-                  );
-                })}
-                <button
-                  aria-pressed={selectedShippingOption === "custom"}
-                  className={`inline-flex min-h-10 items-center justify-center rounded-2xl border px-3 py-2 text-sm font-black shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-100 ${
-                    selectedShippingOption === "custom"
-                      ? "border-emerald-600 bg-emerald-600 text-white"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
-                  onClick={handleCustomShippingSelect}
-                  type="button"
-                >
-                  Custom
-                </button>
-              </div>
-
-              <label className="mt-3 block" htmlFor="purchase-order-shipping">
-                <span className="sr-only">Shipping amount</span>
-                <input
-                  className={formControlClassNames.input}
-                  id="purchase-order-shipping"
-                  min="0"
-                  name="shipping_cost"
-                  onChange={handleChange}
-                  ref={shippingInputRef}
-                  step="0.01"
-                  type="number"
-                  value={formData.shipping_cost}
-                />
-              </label>
-            </div>
-
-            <label className="block" htmlFor="purchase-order-tax">
-              <span className={formControlClassNames.label}>Tax Optional</span>
+        <fieldset className="space-y-4 rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
+          <legend className="px-1 text-sm font-black text-slate-950">
+            Cost Details
+          </legend>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block" htmlFor="purchase-order-quantity">
+              <span className={formControlClassNames.label}>Quantity</span>
               <input
                 className={formControlClassNames.input}
-                id="purchase-order-tax"
-                min="0"
-                name="tax"
+                id="purchase-order-quantity"
+                min="1"
+                name="quantity"
                 onChange={handleChange}
-                placeholder="Optional"
-                step="0.01"
+                step="1"
                 type="number"
-                value={formData.tax}
+                value={formData.quantity}
               />
             </label>
 
-            <div className="space-y-2 border-t border-slate-200 pt-4 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-semibold text-slate-600">Subtotal</span>
-                <span className="text-right font-black text-slate-950">
-                  Qty {formatNumber(costSummary.quantity)} x{" "}
-                  {formatCurrency(costSummary.unitCost)} ={" "}
-                  {formatCurrency(costSummary.subtotal)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-semibold text-slate-600">Shipping</span>
-                <span className="font-black text-slate-950">
-                  {formatCurrency(costSummary.shippingCost)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-semibold text-slate-600">Tax</span>
-                <span className="font-black text-slate-950">
-                  {formatCurrency(costSummary.tax)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-2">
-                <span className="text-base font-black text-slate-950">Total</span>
-                <span className="text-xl font-black text-emerald-700">
-                  {formatCurrency(costSummary.total)}
-                </span>
-              </div>
-            </div>
-          </fieldset>
+            <label className="block" htmlFor="purchase-order-unit-cost">
+              <span className={formControlClassNames.label}>Unit Cost</span>
+              <input
+                className={formControlClassNames.input}
+                id="purchase-order-unit-cost"
+                min="0"
+                name="unit_cost"
+                onChange={handleChange}
+                step="0.01"
+                type="number"
+                value={formData.unit_cost}
+              />
+            </label>
+          </div>
 
-          <label className="block" htmlFor="purchase-order-notes">
-            <span className={formControlClassNames.label}>Notes</span>
-            <textarea
-              className={formControlClassNames.textarea}
-              id="purchase-order-notes"
-              name="notes"
+          <div>
+            <span className={formControlClassNames.label}>Shipping</span>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {SHIPPING_QUICK_OPTIONS.map((option) => {
+                const isSelected = selectedShippingOption === option;
+
+                return (
+                  <button
+                    aria-pressed={isSelected}
+                    className={`inline-flex min-h-10 items-center justify-center rounded-2xl border px-3 py-2 text-sm font-black shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-100 ${
+                      isSelected
+                        ? "border-emerald-600 bg-emerald-600 text-white"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                    key={option}
+                    onClick={() => handleShippingQuickSelect(option)}
+                    type="button"
+                  >
+                    ${option}
+                    {option === DEFAULT_SHIPPING_COST ? " Default" : ""}
+                  </button>
+                );
+              })}
+              <button
+                aria-pressed={selectedShippingOption === "custom"}
+                className={`inline-flex min-h-10 items-center justify-center rounded-2xl border px-3 py-2 text-sm font-black shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-100 ${
+                  selectedShippingOption === "custom"
+                    ? "border-emerald-600 bg-emerald-600 text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+                onClick={handleCustomShippingSelect}
+                type="button"
+              >
+                Custom
+              </button>
+            </div>
+
+            <label className="mt-3 block" htmlFor="purchase-order-shipping">
+              <span className="sr-only">Shipping amount</span>
+              <input
+                className={formControlClassNames.input}
+                id="purchase-order-shipping"
+                min="0"
+                name="shipping_cost"
+                onChange={handleChange}
+                ref={shippingInputRef}
+                step="0.01"
+                type="number"
+                value={formData.shipping_cost}
+              />
+            </label>
+          </div>
+
+          <label className="block" htmlFor="purchase-order-tax">
+            <span className={formControlClassNames.label}>Tax Optional</span>
+            <input
+              className={formControlClassNames.input}
+              id="purchase-order-tax"
+              min="0"
+              name="tax"
               onChange={handleChange}
-              value={formData.notes}
+              placeholder="Optional"
+              step="0.01"
+              type="number"
+              value={formData.tax}
             />
           </label>
 
-          <FormMessage tone="error">{errorMessage}</FormMessage>
+          <div className="space-y-2 border-t border-slate-200 pt-4 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-semibold text-slate-600">Subtotal</span>
+              <span className="text-right font-black text-slate-950">
+                Qty {formatNumber(costSummary.quantity)} x{" "}
+                {formatCurrency(costSummary.unitCost)} ={" "}
+                {formatCurrency(costSummary.subtotal)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-semibold text-slate-600">Shipping</span>
+              <span className="font-black text-slate-950">
+                {formatCurrency(costSummary.shippingCost)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-semibold text-slate-600">Tax</span>
+              <span className="font-black text-slate-950">
+                {formatCurrency(costSummary.tax)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-2">
+              <span className="text-base font-black text-slate-950">Total</span>
+              <span className="text-xl font-black text-emerald-700">
+                {formatCurrency(costSummary.total)}
+              </span>
+            </div>
+          </div>
+        </fieldset>
 
-          <FormMessage tone="success">{successMessage}</FormMessage>
-
-          <FormMessage tone="warning">{warningMessage}</FormMessage>
-
-          <FormActions
-            isSubmitting={isSubmitting}
-            onCancel={onClose}
-            submitLabel="Create Purchase Order"
-            submittingLabel="Creating PO..."
+        <label className="block" htmlFor="purchase-order-notes">
+          <span className={formControlClassNames.label}>Notes</span>
+          <textarea
+            className={formControlClassNames.textarea}
+            id="purchase-order-notes"
+            name="notes"
+            onChange={handleChange}
+            value={formData.notes}
           />
-        </form>
+        </label>
+
+        <FormMessage tone="error">{errorMessage}</FormMessage>
+
+        <FormMessage tone="success">{successMessage}</FormMessage>
+
+        <FormMessage tone="warning">{warningMessage}</FormMessage>
+
+        <FormActions
+          isSubmitting={isSubmitting}
+          onCancel={onClose}
+          submitLabel="Create Purchase Order"
+          submittingLabel="Creating PO..."
+        />
+      </form>
     </ModalShell>
   );
 }

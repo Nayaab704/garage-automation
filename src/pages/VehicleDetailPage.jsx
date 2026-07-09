@@ -28,6 +28,12 @@ import {
   normalizeVehicleStatus,
   shouldMoveToRepair,
 } from "../lib/vehicleStatus";
+import {
+  getWorkOrderStatusAfterPartAdded,
+  getWorkOrderStatusAfterPartsReceived,
+  getWorkOrderStatusAfterPurchaseOrderCreated,
+  getWorkOrderStatusAfterWorkStarted,
+} from "../lib/workOrderStatus";
 
 async function fetchInvestmentSummary(vehicleId, stockNumber) {
   const byVehicleId = await supabase
@@ -629,6 +635,83 @@ function VehicleDetailPage({
     });
   }
 
+  async function persistWorkOrderStatusIfNeeded(
+    workOrderId,
+    nextStatus,
+    details = {}
+  ) {
+    if (!workOrderId || !nextStatus) {
+      return false;
+    }
+
+    const workOrder = repairJobs.find(
+      (currentWorkOrder) => currentWorkOrder.id === workOrderId
+    );
+    const previousStatus = workOrder?.status ?? null;
+
+    if (previousStatus === nextStatus) {
+      return true;
+    }
+
+    setRepairJobs((currentRepairJobs) =>
+      currentRepairJobs.map((currentWorkOrder) =>
+        currentWorkOrder.id === workOrderId
+          ? { ...currentWorkOrder, status: nextStatus }
+          : currentWorkOrder
+      )
+    );
+
+    try {
+      const { data, error } = await supabase
+        .from("repair_jobs")
+        .update({ status: nextStatus })
+        .eq("id", workOrderId)
+        .select("*")
+        .single();
+
+      if (error) {
+        console.error("Could not update work order status:", error);
+        setRepairJobs((currentRepairJobs) =>
+          currentRepairJobs.map((currentWorkOrder) =>
+            currentWorkOrder.id === workOrderId
+              ? { ...currentWorkOrder, status: previousStatus }
+              : currentWorkOrder
+          )
+        );
+        return false;
+      }
+
+      if (data) {
+        setRepairJobs((currentRepairJobs) =>
+          replaceById(currentRepairJobs, data)
+        );
+      }
+
+      await logVehicleActivity({
+        vehicleId,
+        action: "Work order status changed automatically",
+        details: {
+          ...details,
+          from: previousStatus,
+          title: workOrder?.title ?? "Work Order",
+          to: nextStatus,
+        },
+      });
+      refreshActivityTimeline();
+      return true;
+    } catch (error) {
+      console.error("Could not update work order status:", error);
+      setRepairJobs((currentRepairJobs) =>
+        currentRepairJobs.map((currentWorkOrder) =>
+          currentWorkOrder.id === workOrderId
+            ? { ...currentWorkOrder, status: previousStatus }
+            : currentWorkOrder
+        )
+      );
+      return false;
+    }
+  }
+
   async function syncVehicleStatusFromFinalChecks(nextFinalChecks) {
     const nextStatus = getVehicleStatusAfterFinalCheckChange({
       finalChecks: nextFinalChecks,
@@ -674,6 +757,19 @@ function VehicleDetailPage({
       upsertNewestById(currentLaborLogs, laborLog)
     );
 
+    const workOrder = repairJobs.find(
+      (currentWorkOrder) => currentWorkOrder.id === laborLog?.repair_job_id
+    );
+
+    await persistWorkOrderStatusIfNeeded(
+      laborLog?.repair_job_id,
+      getWorkOrderStatusAfterWorkStarted(workOrder?.status),
+      {
+        labor_log_id: laborLog?.id,
+        trigger: "labor_added",
+      }
+    );
+
     await refreshInvestmentSummary();
   }
 
@@ -692,6 +788,20 @@ function VehicleDetailPage({
   async function handleWorkOrderPartAdded(partRequest) {
     setPartRequests((currentPartRequests) =>
       upsertNewestById(currentPartRequests, partRequest)
+    );
+
+    const workOrder = repairJobs.find(
+      (currentWorkOrder) => currentWorkOrder.id === partRequest?.repair_job_id
+    );
+
+    await persistWorkOrderStatusIfNeeded(
+      partRequest?.repair_job_id,
+      getWorkOrderStatusAfterPartAdded(workOrder?.status, partRequest),
+      {
+        part_name: partRequest?.part_name,
+        part_source: partRequest?.part_source,
+        trigger: "part_added",
+      }
     );
 
     await moveVehicleToRepairIfNeeded("part_added");
@@ -728,17 +838,73 @@ function VehicleDetailPage({
       );
     }
 
+    const workOrder = repairJobs.find(
+      (currentWorkOrder) =>
+        currentWorkOrder.id === updatedPartRequest?.repair_job_id
+    );
+
+    await persistWorkOrderStatusIfNeeded(
+      updatedPartRequest?.repair_job_id,
+      getWorkOrderStatusAfterPurchaseOrderCreated(workOrder?.status),
+      {
+        part_name: updatedPartRequest?.part_name,
+        purchase_order_id: result?.purchaseOrder?.id,
+        trigger: "purchase_order_created",
+      }
+    );
+
     await refreshInvestmentSummary();
   }
 
   async function handlePurchaseOrderItemUpdated(updatedItem) {
-    if (updatedItem?.id) {
-      setPurchaseOrderItems((currentPurchaseOrderItems) =>
-        currentPurchaseOrderItems.map((purchaseOrderItem) =>
+    const nextPurchaseOrderItems = updatedItem?.id
+      ? purchaseOrderItems.map((purchaseOrderItem) =>
           purchaseOrderItem.id === updatedItem.id
             ? { ...purchaseOrderItem, ...updatedItem }
             : purchaseOrderItem
         )
+      : purchaseOrderItems;
+    const linkedPartRequest = partRequests.find(
+      (partRequest) => partRequest.id === updatedItem?.part_request_id
+    );
+    const nextPartRequests =
+      linkedPartRequest && updatedItem?.status === "received"
+        ? partRequests.map((partRequest) =>
+            partRequest.id === linkedPartRequest.id
+              ? { ...partRequest, status: "received" }
+              : partRequest
+          )
+        : partRequests;
+
+    if (updatedItem?.id) {
+      setPurchaseOrderItems(nextPurchaseOrderItems);
+    }
+
+    if (linkedPartRequest && updatedItem?.status === "received") {
+      setPartRequests(nextPartRequests);
+    }
+
+    if (linkedPartRequest?.repair_job_id) {
+      const workOrder = repairJobs.find(
+        (currentWorkOrder) =>
+          currentWorkOrder.id === linkedPartRequest.repair_job_id
+      );
+      const workOrderPartRequests = nextPartRequests.filter(
+        (partRequest) =>
+          partRequest.repair_job_id === linkedPartRequest.repair_job_id
+      );
+
+      await persistWorkOrderStatusIfNeeded(
+        linkedPartRequest.repair_job_id,
+        getWorkOrderStatusAfterPartsReceived(workOrder?.status, {
+          partRequests: workOrderPartRequests,
+          purchaseOrderItems: nextPurchaseOrderItems,
+        }),
+        {
+          part_name: linkedPartRequest.part_name,
+          purchase_order_item_id: updatedItem?.id,
+          trigger: "purchase_order_item_received",
+        }
       );
     }
 
@@ -778,6 +944,20 @@ function VehicleDetailPage({
   async function handleThirdPartyRepairAdded(thirdPartyRepair) {
     setThirdPartyRepairs((currentRepairs) =>
       upsertNewestById(currentRepairs, thirdPartyRepair)
+    );
+
+    const workOrder = repairJobs.find(
+      (currentWorkOrder) =>
+        currentWorkOrder.id === thirdPartyRepair?.repair_job_id
+    );
+
+    await persistWorkOrderStatusIfNeeded(
+      thirdPartyRepair?.repair_job_id,
+      getWorkOrderStatusAfterWorkStarted(workOrder?.status),
+      {
+        third_party_repair_id: thirdPartyRepair?.id,
+        trigger: "third_party_repair_added",
+      }
     );
 
     await moveVehicleToRepairIfNeeded("third_party_repair_added");

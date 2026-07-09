@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppIcon from "../components/ui/AppIcon";
 import VehicleCard from "../components/VehicleCard";
 import { supabase } from "../lib/supabaseClient";
 import { buildVehiclePrimaryPhotoMap } from "../lib/vehicleDisplayPhoto";
+import useDismissableLayer from "../hooks/useDismissableLayer";
 import {
   activeVehicleWorkflowStatuses,
   normalizeVehicleStatus,
@@ -397,6 +398,14 @@ function VehiclesPage({ onSelectVehicle }) {
   const [errorMessage, setErrorMessage] = useState("");
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const filterButtonRef = useRef(null);
+  const filterPanelRef = useRef(null);
+
+  useDismissableLayer({
+    enabled: areFiltersOpen,
+    onDismiss: () => setAreFiltersOpen(false),
+    refs: [filterButtonRef, filterPanelRef],
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -486,6 +495,11 @@ function VehiclesPage({ onSelectVehicle }) {
     setSearchText("");
     setActiveStatusFilter("all_active");
     setTitleStatusFilter("all");
+  }
+
+  function handleTitleStatusFilterChange(event) {
+    setTitleStatusFilter(event.target.value);
+    setAreFiltersOpen(false);
   }
 
   function handleTabChange(nextTab) {
@@ -647,12 +661,15 @@ function VehiclesPage({ onSelectVehicle }) {
 
           <div className="flex gap-2">
             <button
+              aria-expanded={areFiltersOpen}
+              aria-haspopup="menu"
               className={`inline-flex h-12 w-12 items-center justify-center gap-1.5 rounded-2xl border px-0 text-sm font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-100 sm:w-auto sm:gap-2 sm:px-4 ${
                 areFiltersOpen
                   ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                   : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               }`}
               onClick={() => setAreFiltersOpen((isOpen) => !isOpen)}
+              ref={filterButtonRef}
               type="button"
             >
               <AppIcon name="filter" size={19} />
@@ -682,11 +699,14 @@ function VehiclesPage({ onSelectVehicle }) {
         </div>
 
         {areFiltersOpen && (
-          <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:max-w-md">
+          <div
+            className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:max-w-md"
+            ref={filterPanelRef}
+          >
             <FilterSelect
               id="vehicle-title-status-filter"
               label="Title Status"
-              onChange={(event) => setTitleStatusFilter(event.target.value)}
+              onChange={handleTitleStatusFilterChange}
               value={titleStatusFilter}
             >
               <option value="all">All Titles</option>

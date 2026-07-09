@@ -1,42 +1,15 @@
 import { useState } from "react";
 import WorkOrderCard from "./WorkOrderCard";
-
-const statusLabels = {
-  needed: "Needed",
-  approved: "Approved",
-  in_progress: "In Progress",
-  waiting_parts: "Waiting Parts",
-  blocked: "Blocked",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
-
-const statusOrder = [
-  "needed",
-  "approved",
-  "in_progress",
-  "waiting_parts",
-  "blocked",
-  "completed",
-  "cancelled",
-];
+import {
+  getWorkOrderStatusLabel,
+  isWorkOrderStatusWaitingForParts,
+  workOrderStatusOrder,
+} from "../../lib/workOrderStatus";
 
 function displayValue(value) {
   return value === null || value === undefined || value === ""
     ? "Not available"
     : value;
-}
-
-function formatLabel(value, labels) {
-  if (labels[value]) {
-    return labels[value];
-  }
-
-  return displayValue(value)
-    .toString()
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
 }
 
 function statusClassName(status) {
@@ -52,7 +25,7 @@ function statusClassName(status) {
     return "bg-blue-50 text-blue-700 ring-blue-200";
   }
 
-  if (status === "waiting_parts") {
+  if (isWorkOrderStatusWaitingForParts(status)) {
     return "bg-amber-50 text-amber-700 ring-amber-200";
   }
 
@@ -70,7 +43,7 @@ function Badge({ children, className }) {
 }
 
 function getStatusSummary(workOrders) {
-  return statusOrder
+  return workOrderStatusOrder
     .map((status) => ({
       count: workOrders.filter((workOrder) => workOrder.status === status).length,
       status,
@@ -145,7 +118,7 @@ function ServiceCategoryCard({
                   className={statusClassName(summaryItem.status)}
                   key={summaryItem.status}
                 >
-                  {formatLabel(summaryItem.status, statusLabels)}:{" "}
+                  {getWorkOrderStatusLabel(summaryItem.status)}:{" "}
                   {summaryItem.count}
                 </Badge>
               ))

@@ -4,16 +4,12 @@ import StatusDropdown from "./StatusDropdown";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { formatRepairProcessType } from "../../lib/repairProcess";
 import { supabase } from "../../lib/supabaseClient";
+import {
+  getWorkOrderStatusLabel,
+  workOrderStatusOptions,
+} from "../../lib/workOrderStatus";
 
-const repairJobStatuses = [
-  "needed",
-  "approved",
-  "in_progress",
-  "waiting_parts",
-  "blocked",
-  "completed",
-  "cancelled",
-];
+const repairJobStatuses = workOrderStatusOptions;
 
 function displayValue(value) {
   return value === null || value === undefined || value === ""
@@ -22,14 +18,7 @@ function displayValue(value) {
 }
 
 function formatStatusLabel(status) {
-  if (!status) {
-    return "Not Available";
-  }
-
-  return String(status)
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
+  return getWorkOrderStatusLabel(status);
 }
 
 function formatCategoryLabel(category) {

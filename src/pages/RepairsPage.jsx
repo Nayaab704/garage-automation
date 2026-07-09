@@ -21,16 +21,13 @@ import {
   REPAIR_QUEUE_TABS,
 } from "../lib/repairWorkflowUtils";
 import { supabase } from "../lib/supabaseClient";
+import {
+  getWorkOrderStatusAfterPartAdded,
+  getWorkOrderStatusAfterWorkStarted,
+  workOrderStatusOptions,
+} from "../lib/workOrderStatus";
 
-const statusOptions = [
-  "needed",
-  "approved",
-  "in_progress",
-  "waiting_parts",
-  "blocked",
-  "completed",
-  "cancelled",
-];
+const statusOptions = workOrderStatusOptions;
 
 function formatDate(value) {
   if (!value) {
@@ -529,7 +526,58 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
     );
   }
 
+  async function persistAutomaticJobStatus(job, nextStatus, details = {}) {
+    if (!job?.id || !nextStatus || job.status === nextStatus) {
+      return;
+    }
+
+    const previousStatus = job.status;
+
+    setJobs((currentJobs) =>
+      currentJobs.map((currentJob) =>
+        currentJob.id === job.id
+          ? { ...currentJob, status: nextStatus }
+          : currentJob
+      )
+    );
+
+    const { error } = await supabase
+      .from("repair_jobs")
+      .update({ status: nextStatus })
+      .eq("id", job.id);
+
+    if (error) {
+      console.error("Could not update work order status:", error);
+      setJobs((currentJobs) =>
+        currentJobs.map((currentJob) =>
+          currentJob.id === job.id
+            ? { ...currentJob, status: previousStatus }
+            : currentJob
+        )
+      );
+      setStatusErrorMessage(
+        "Work was saved, but work order status could not be updated. Please refresh and try again."
+      );
+      return;
+    }
+
+    await logVehicleActivity({
+      vehicleId: job.vehicle_id,
+      action: "Work order status changed automatically",
+      details: {
+        ...details,
+        from: previousStatus,
+        title: job.title,
+        to: nextStatus,
+      },
+    });
+  }
+
   async function handlePartAdded(partRequest) {
+    const job = jobs.find(
+      (currentJob) => currentJob.id === partRequest?.repair_job_id
+    );
+
     if (partRequest?.id && partRequest?.repair_job_id) {
       updateJobList(partRequest.repair_job_id, (job) => ({
         ...job,
@@ -540,10 +588,24 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
       }));
     }
 
+    await persistAutomaticJobStatus(
+      job,
+      getWorkOrderStatusAfterPartAdded(job?.status, partRequest),
+      {
+        part_name: partRequest?.part_name,
+        part_source: partRequest?.part_source,
+        trigger: "part_added",
+      }
+    );
+
     setActivePartJob(null);
   }
 
-  function handleLaborAdded(laborLog) {
+  async function handleLaborAdded(laborLog) {
+    const job = jobs.find(
+      (currentJob) => currentJob.id === laborLog?.repair_job_id
+    );
+
     if (laborLog?.id && laborLog?.repair_job_id) {
       updateJobList(laborLog.repair_job_id, (job) => ({
         ...job,
@@ -553,6 +615,15 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
         ],
       }));
     }
+
+    await persistAutomaticJobStatus(
+      job,
+      getWorkOrderStatusAfterWorkStarted(job?.status),
+      {
+        labor_log_id: laborLog?.id,
+        trigger: "labor_added",
+      }
+    );
 
     setActiveLaborJob(null);
   }

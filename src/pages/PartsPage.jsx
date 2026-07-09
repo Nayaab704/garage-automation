@@ -293,10 +293,14 @@ function PartsPage({
     const selectedPart = selectedPartForPurchaseOrder;
     const partRequestId = result?.partRequestId ?? selectedPart?.id;
     const selectedQuote = selectedPart?.selectedQuote;
-    let purchasedQuote = null;
+    let purchasedQuote = result?.purchasedQuote ?? null;
 
-    if (selectedQuote?.id && result?.purchaseOrderId) {
+    if (!purchasedQuote && selectedQuote?.id && result?.purchaseOrderId) {
       const quoteResult = await markQuotePurchased({
+        partName:
+          result?.partRequest?.part_name ??
+          result?.purchaseOrderItem?.description ??
+          selectedPart?.part_name,
         purchaseOrderId: result.purchaseOrderId,
         purchaseOrderItemId: result.purchaseOrderItemId ?? null,
         quoteId: selectedQuote.id,

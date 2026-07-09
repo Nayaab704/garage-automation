@@ -1,3 +1,8 @@
+import {
+  isWorkOrderStatusWaitingForParts,
+  workOrderStatusLabels,
+} from "./workOrderStatus";
+
 export const REPAIR_QUEUE_TABS = [
   { key: "open", label: "Open" },
   { key: "waiting_parts", label: "Waiting Parts" },
@@ -7,15 +12,7 @@ export const REPAIR_QUEUE_TABS = [
   { key: "all", label: "All" },
 ];
 
-export const repairStatusLabels = {
-  approved: "Approved",
-  blocked: "Blocked",
-  cancelled: "Cancelled",
-  completed: "Completed",
-  in_progress: "In Progress",
-  needed: "Needed",
-  waiting_parts: "Waiting Parts",
-};
+export const repairStatusLabels = workOrderStatusLabels;
 
 export const repairPriorityLabels = {
   critical: "Critical",
@@ -27,7 +24,13 @@ export const repairPriorityLabels = {
 
 const completedStatuses = ["completed", "closed", "cancelled"];
 const inProgressStatuses = ["approved", "in_progress", "repairing"];
-const waitingPartStatuses = ["ordered", "requested", "waiting_parts"];
+const waitingPartStatuses = [
+  "ordered",
+  "parts_needed",
+  "requested",
+  "waiting_for_parts",
+  "waiting_parts",
+];
 const receivedPartStatuses = ["received", "installed", "cancelled"];
 const inactivePurchaseOrderItemStatuses = ["cancelled", "returned"];
 const receivedPurchaseOrderItemStatuses = ["received", "installed"];
@@ -132,7 +135,7 @@ export function isRepairJobWaitingParts(job) {
     return false;
   }
 
-  if (job?.status === "waiting_parts") {
+  if (isWorkOrderStatusWaitingForParts(job?.status)) {
     return true;
   }
 

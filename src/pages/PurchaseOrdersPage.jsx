@@ -25,6 +25,7 @@ import {
 } from "../lib/purchaseOrderUtils";
 import { supabase } from "../lib/supabaseClient";
 import { formatUserFirstName } from "../lib/userDisplay";
+import { getWorkOrderStatusAfterPartsReceived } from "../lib/workOrderStatus";
 
 const purchaseOrderColumns =
   "id, vehicle_id, vendor_id, status, ordered_by, ordered_at, received_by, received_at, notes, created_at";
@@ -1053,6 +1054,85 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     [activeTab, enrichedPurchaseOrders, searchTerm]
   );
 
+  async function persistAutomaticRepairJobStatus(
+    repairJobId,
+    nextStatus,
+    details = {}
+  ) {
+    const repairJob = repairJobsById[repairJobId];
+
+    if (!repairJob?.id || !nextStatus || repairJob.status === nextStatus) {
+      return;
+    }
+
+    const previousStatus = repairJob.status;
+
+    setRepairJobsById((currentRepairJobsById) => ({
+      ...currentRepairJobsById,
+      [repairJob.id]: {
+        ...currentRepairJobsById[repairJob.id],
+        status: nextStatus,
+      },
+    }));
+
+    const { error } = await supabase
+      .from("repair_jobs")
+      .update({ status: nextStatus })
+      .eq("id", repairJob.id);
+
+    if (error) {
+      console.error("Could not update linked work order status:", error);
+      setRepairJobsById((currentRepairJobsById) => ({
+        ...currentRepairJobsById,
+        [repairJob.id]: {
+          ...currentRepairJobsById[repairJob.id],
+          status: previousStatus,
+        },
+      }));
+      return;
+    }
+
+    await logVehicleActivity({
+      vehicleId: repairJob.vehicle_id,
+      action: "Work order status changed automatically",
+      details: {
+        ...details,
+        from: previousStatus,
+        title: repairJob.title,
+        to: nextStatus,
+      },
+    });
+  }
+
+  async function syncRepairJobStatusesAfterPartsReceived(
+    repairJobIds,
+    {
+      nextPartRequestsById = partRequestsById,
+      nextPurchaseOrderItems = purchaseOrderItems,
+      triggerDetails = {},
+    } = {}
+  ) {
+    const nextPartRequests = Object.values(nextPartRequestsById);
+
+    await Promise.all(
+      uniqueValues(repairJobIds).map((repairJobId) => {
+        const repairJob = repairJobsById[repairJobId];
+        const workOrderPartRequests = nextPartRequests.filter(
+          (partRequest) => partRequest.repair_job_id === repairJobId
+        );
+
+        return persistAutomaticRepairJobStatus(
+          repairJobId,
+          getWorkOrderStatusAfterPartsReceived(repairJob?.status, {
+            partRequests: workOrderPartRequests,
+            purchaseOrderItems: nextPurchaseOrderItems,
+          }),
+          triggerDetails
+        );
+      })
+    );
+  }
+
   useEffect(() => {
     let isMounted = true;
 
@@ -1183,6 +1263,8 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
       }
 
       const linkedItems = itemsByPurchaseOrderId[purchaseOrder.id] ?? [];
+      let nextPurchaseOrderItems = purchaseOrderItems;
+      let nextPartRequestsById = partRequestsById;
 
       if ((shouldMarkReceived || shouldCancelItems) && linkedItems.length > 0) {
         const activeLinkedItems = linkedItems.filter(
@@ -1206,13 +1288,12 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
             return false;
           }
 
-          setPurchaseOrderItems((currentItems) =>
-            currentItems.map((item) =>
-              itemIds.includes(item.id)
-                ? { ...item, status: nextItemStatus }
-                : item
-            )
+          nextPurchaseOrderItems = purchaseOrderItems.map((item) =>
+            itemIds.includes(item.id)
+              ? { ...item, status: nextItemStatus }
+              : item
           );
+          setPurchaseOrderItems(nextPurchaseOrderItems);
         }
 
         if (shouldMarkReceived && partRequestIds.length > 0) {
@@ -1230,20 +1311,33 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
             return false;
           }
 
-          setPartRequestsById((currentPartRequestsById) => {
-            const nextPartRequestsById = { ...currentPartRequestsById };
+          nextPartRequestsById = { ...partRequestsById };
 
-            for (const partRequestId of partRequestIds) {
-              if (nextPartRequestsById[partRequestId]) {
-                nextPartRequestsById[partRequestId] = {
-                  ...nextPartRequestsById[partRequestId],
-                  status: "received",
-                };
-              }
+          for (const partRequestId of partRequestIds) {
+            if (nextPartRequestsById[partRequestId]) {
+              nextPartRequestsById[partRequestId] = {
+                ...nextPartRequestsById[partRequestId],
+                status: "received",
+              };
             }
+          }
 
-            return nextPartRequestsById;
-          });
+          setPartRequestsById(nextPartRequestsById);
+
+          await syncRepairJobStatusesAfterPartsReceived(
+            partRequestIds.map(
+              (partRequestId) =>
+                nextPartRequestsById[partRequestId]?.repair_job_id
+            ),
+            {
+              nextPartRequestsById,
+              nextPurchaseOrderItems,
+              triggerDetails: {
+                purchase_order_id: purchaseOrder.id,
+                trigger: "purchase_order_received",
+              },
+            }
+          );
         }
       }
 
@@ -1292,15 +1386,16 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     }
 
     const previousStatus = item.status;
+    const nextPurchaseOrderItems = purchaseOrderItems.map((currentItem) =>
+      currentItem.id === item.id
+        ? { ...currentItem, status: newStatus }
+        : currentItem
+    );
 
     setStatusErrorMessage("");
     setStatusSuccessMessage("");
     setUpdatingItemId(item.id);
-    setPurchaseOrderItems((currentItems) =>
-      currentItems.map((currentItem) =>
-        currentItem.id === item.id ? { ...currentItem, status: newStatus } : currentItem
-      )
-    );
+    setPurchaseOrderItems(nextPurchaseOrderItems);
 
     try {
       const { error } = await supabase
@@ -1328,13 +1423,28 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
           return;
         }
 
-        setPartRequestsById((currentPartRequestsById) => ({
-          ...currentPartRequestsById,
+        const nextPartRequestsById = {
+          ...partRequestsById,
           [item.part_request_id]: {
-            ...currentPartRequestsById[item.part_request_id],
+            ...partRequestsById[item.part_request_id],
             status: "received",
           },
-        }));
+        };
+
+        setPartRequestsById(nextPartRequestsById);
+
+        await syncRepairJobStatusesAfterPartsReceived(
+          [nextPartRequestsById[item.part_request_id]?.repair_job_id],
+          {
+            nextPartRequestsById,
+            nextPurchaseOrderItems,
+            triggerDetails: {
+              purchase_order_id: purchaseOrder.id,
+              purchase_order_item_id: item.id,
+              trigger: "purchase_order_item_received",
+            },
+          }
+        );
       }
 
       await logVehicleActivity({

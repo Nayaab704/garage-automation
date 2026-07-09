@@ -1,14 +1,22 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   formatVehicleStatus,
   getVehicleStatusClassName,
   normalizeVehicleStatus,
   vehicleStatusOptions,
 } from "../../lib/vehicleStatus";
+import useDismissableLayer from "../../hooks/useDismissableLayer";
 
 function VehicleStatusDropdown({ currentStatus, isUpdating, onChange }) {
   const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
   const normalizedCurrentStatus = normalizeVehicleStatus(currentStatus);
+
+  useDismissableLayer({
+    enabled: isOpen,
+    onDismiss: () => setIsOpen(false),
+    refs: [dropdownRef],
+  });
 
   async function handleStatusChange(newStatus) {
     setIsOpen(false);
@@ -21,7 +29,7 @@ function VehicleStatusDropdown({ currentStatus, isUpdating, onChange }) {
   }
 
   return (
-    <div className="relative inline-flex">
+    <div className="relative inline-flex" ref={dropdownRef}>
       <button
         aria-expanded={isOpen}
         aria-haspopup="menu"
