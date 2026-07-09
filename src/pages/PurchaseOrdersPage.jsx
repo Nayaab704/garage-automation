@@ -159,11 +159,32 @@ function getPurchaseOrderTotal(items = []) {
 }
 
 function getPurchaseOrderLabel(purchaseOrder) {
-  return `PO ${String(purchaseOrder?.id ?? "").slice(0, 8).toUpperCase()}`;
+  return `PO #${String(purchaseOrder?.id ?? "").slice(0, 8).toUpperCase()}`;
 }
 
 function getPrimaryItem(purchaseOrder) {
   return purchaseOrder?.items?.[0] ?? null;
+}
+
+function getItemDescription(item) {
+  return item?.description || item?.partRequest?.part_name || "";
+}
+
+function getPurchaseOrderTitle(purchaseOrder) {
+  const itemCount = purchaseOrder?.items?.length ?? 0;
+  const primaryDescription = getItemDescription(getPrimaryItem(purchaseOrder));
+
+  if (!itemCount) {
+    return "No items found";
+  }
+
+  if (!primaryDescription) {
+    return itemCount === 1 ? "Unnamed part" : `${formatNumber(itemCount)} parts ordered`;
+  }
+
+  return itemCount > 1
+    ? `${primaryDescription} + ${formatNumber(itemCount - 1)} more`
+    : primaryDescription;
 }
 
 function getWorkOrderLabel(item) {
@@ -207,43 +228,54 @@ function getActionFirstName(profile, profileId) {
   return isLikelyUuid(profileId) ? "User" : formatUserFirstName(profileId);
 }
 
-function formatActionWithDate(actionText, dateValue) {
-  return joinTrackingParts([actionText, dateValue ? formatDate(dateValue) : ""]);
-}
+function getActionAttributionParts(actionLabel, profile, profileId, dateValue) {
+  const actionName = getActionFirstName(profile, profileId);
+  const actionDate = dateValue ? formatDate(dateValue) : "";
 
-function getCreatedTrackingText(purchaseOrder) {
-  return purchaseOrder.created_at
-    ? `Created ${formatDate(purchaseOrder.created_at)}`
-    : "";
-}
-
-function getOrderedTrackingText(purchaseOrder, { includeDate = true } = {}) {
-  const orderedName = getActionFirstName(
-    purchaseOrder.orderedBy,
-    purchaseOrder.ordered_by
-  );
-
-  return formatActionWithDate(
-    orderedName ? `Ordered by ${orderedName}` : "Ordered",
-    includeDate ? purchaseOrder.ordered_at ?? purchaseOrder.created_at : ""
-  );
-}
-
-function getReceivedTrackingText(purchaseOrder, { includeDate = true } = {}) {
-  if (!purchaseOrder.received_at && !purchaseOrder.received_by) {
-    return "";
+  if (actionName) {
+    return [`${actionLabel} by ${actionName}`, actionDate].filter(Boolean);
   }
 
-  const receivedName = getActionFirstName(
-    purchaseOrder.receivedBy,
-    purchaseOrder.received_by
-  );
-  const receivedLabel = receivedName ? `Received by ${receivedName}` : "Received";
-  const receivedDate = purchaseOrder.received_at
-    ? formatDate(purchaseOrder.received_at)
-    : "";
+  if (actionDate) {
+    return [`${actionLabel} ${actionDate}`];
+  }
 
-  return joinTrackingParts([receivedLabel, includeDate ? receivedDate : ""]);
+  return [];
+}
+
+function getPrimaryOrderAttributionParts(purchaseOrder) {
+  if (
+    purchaseOrder.orderedBy ||
+    purchaseOrder.ordered_by ||
+    purchaseOrder.ordered_at
+  ) {
+    return getActionAttributionParts(
+      "Ordered",
+      purchaseOrder.orderedBy,
+      purchaseOrder.ordered_by,
+      purchaseOrder.ordered_at ?? purchaseOrder.created_at
+    );
+  }
+
+  return getActionAttributionParts(
+    "Created",
+    purchaseOrder.createdBy,
+    purchaseOrder.created_by,
+    purchaseOrder.created_at
+  );
+}
+
+function getReceivedAttributionParts(purchaseOrder) {
+  if (!purchaseOrder.received_at && !purchaseOrder.received_by) {
+    return [];
+  }
+
+  return getActionAttributionParts(
+    "Received",
+    purchaseOrder.receivedBy,
+    purchaseOrder.received_by,
+    purchaseOrder.received_at
+  );
 }
 
 function getReturnedTrackingText(
@@ -273,55 +305,44 @@ function getReturnedTrackingText(
   ]);
 }
 
-function getCancelledTrackingText(purchaseOrder) {
-  if (purchaseOrder.status !== "cancelled") {
-    return "";
+function getReturnedAttributionParts(returnedItem) {
+  if (!returnedItem) {
+    return [];
   }
 
-  return "Cancelled";
+  return getActionAttributionParts(
+    "Returned",
+    returnedItem.returnedBy,
+    returnedItem.returned_by,
+    returnedItem.returned_at
+  );
 }
 
-function getPurchaseOrderTrackingText(purchaseOrder, activeTab) {
+function getCancelledAttributionParts(purchaseOrder) {
+  if (purchaseOrder.status !== "cancelled") {
+    return [];
+  }
+
+  const cancelledParts = getActionAttributionParts(
+    "Cancelled",
+    purchaseOrder.cancelledBy,
+    purchaseOrder.cancelled_by,
+    purchaseOrder.cancelled_at
+  );
+
+  return cancelledParts.length > 0 ? cancelledParts : ["Cancelled"];
+}
+
+function getPurchaseOrderFooterParts(purchaseOrder) {
   const returnedItem = getLatestReturnedItem(purchaseOrder.items);
-  const createdText = getCreatedTrackingText(purchaseOrder);
-  const orderedText = getOrderedTrackingText(purchaseOrder);
-  const receivedText = getReceivedTrackingText(purchaseOrder);
-  const returnedText = getReturnedTrackingText(returnedItem);
-  const cancelledText = getCancelledTrackingText(purchaseOrder);
 
-  if (activeTab === "all") {
-    return joinTrackingParts([
-      getOrderedTrackingText(purchaseOrder, { includeDate: false }),
-      getReceivedTrackingText(purchaseOrder, { includeDate: false }),
-      getReturnedTrackingText(returnedItem, { includeDate: false }),
-      cancelledText,
-    ]);
-  }
-
-  if (activeTab === "open") {
-    return createdText || orderedText;
-  }
-
-  if (
-    activeTab === "ordered" ||
-    ["draft", "ordered", "partial_received"].includes(purchaseOrder.status)
-  ) {
-    return orderedText || createdText;
-  }
-
-  if (activeTab === "received" || purchaseOrder.status === "received") {
-    return receivedText || orderedText || createdText;
-  }
-
-  if (activeTab === "cancelled" || purchaseOrder.status === "cancelled") {
-    return cancelledText || createdText;
-  }
-
-  if (purchaseOrder.status === "returned" || returnedItem) {
-    return returnedText || receivedText || orderedText || createdText;
-  }
-
-  return orderedText || createdText;
+  return [
+    getPurchaseOrderLabel(purchaseOrder),
+    ...getPrimaryOrderAttributionParts(purchaseOrder),
+    ...getReceivedAttributionParts(purchaseOrder),
+    ...getReturnedAttributionParts(returnedItem),
+    ...getCancelledAttributionParts(purchaseOrder),
+  ].filter(Boolean);
 }
 
 function canUploadDocumentsForProfile(profile) {
@@ -556,22 +577,29 @@ async function fetchPurchaseOrdersData() {
 function Badge({ children, className }) {
   return (
     <span
-      className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-black ring-1 ring-inset ${className}`}
+      className={`inline-flex w-fit shrink-0 rounded-full px-2.5 py-1 text-xs font-black leading-none ring-1 ring-inset ${className}`}
     >
       {children}
     </span>
   );
 }
 
+const compactActionButtonClassName =
+  "inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black shadow-sm transition focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60";
+
+const primaryActionButtonClassName = `${compactActionButtonClassName} bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-200 disabled:bg-slate-400`;
+const secondaryActionButtonClassName = `${compactActionButtonClassName} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:ring-slate-200`;
+const dangerActionButtonClassName = `${compactActionButtonClassName} border border-red-200 bg-white text-red-700 hover:bg-red-50 focus:ring-red-100`;
+
 function PurchaseOrderTabs({ activeTab, counts, onChange }) {
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1">
+    <div className="flex max-w-full gap-1.5 overflow-x-auto pb-1">
       {PURCHASE_ORDER_TABS.map((tab) => {
         const isActive = activeTab === tab.key;
 
         return (
           <button
-            className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-2xl px-3.5 py-2 text-sm font-black transition ${
+            className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black transition sm:text-sm ${
               isActive
                 ? "bg-emerald-600 text-white shadow-sm"
                 : "border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
@@ -582,7 +610,7 @@ function PurchaseOrderTabs({ activeTab, counts, onChange }) {
           >
             <span>{tab.label}</span>
             <span
-              className={`rounded-full px-2 py-0.5 text-xs ${
+              className={`rounded-full px-1.5 py-0.5 text-[11px] ${
                 isActive ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"
               }`}
             >
@@ -601,10 +629,10 @@ function PurchaseOrderEmptyState({ activeTab, hasSearch, onClearSearch }) {
         body: "Try searching by VIN, stock number, vehicle, part, or vendor.",
         title: "No matching records found.",
       }
-    : activeTab === "open"
+    : activeTab === "ordered"
       ? {
           body: "Parts ordered from the Parts Queue will appear here.",
-          title: "No open purchase orders.",
+          title: "No ordered purchase orders.",
         }
       : {
           body: "Purchase orders matching this filter will appear here.",
@@ -636,7 +664,6 @@ function PurchaseOrderEmptyState({ activeTab, hasSearch, onClearSearch }) {
 }
 
 function PurchaseOrderCard({
-  activeTab,
   canDeleteDocuments,
   canManagePurchaseOrders,
   canManageReturns,
@@ -666,103 +693,171 @@ function PurchaseOrderCard({
   const canCancel =
     canManagePurchaseOrders && canCancelPurchaseOrder(purchaseOrder);
   const workOrderLabel = getWorkOrderLabel(primaryItem);
-  const trackingText = getPurchaseOrderTrackingText(purchaseOrder, activeTab);
+  const purchaseOrderTitle = getPurchaseOrderTitle(purchaseOrder);
+  const footerParts = getPurchaseOrderFooterParts(purchaseOrder);
 
   return (
-    <article className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h3 className="text-lg font-black leading-snug text-slate-950">
-                {getPurchaseOrderLabel(purchaseOrder)}
-              </h3>
-              <p className="mt-1 text-sm font-black text-slate-800">
-                {getVendorName(purchaseOrder)}
+    <article className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+      <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-start justify-between gap-3">
+            <h3 className="min-w-0 truncate text-lg font-black leading-tight text-slate-950 sm:text-xl">
+              {purchaseOrderTitle}
+            </h3>
+            <Badge className={badge.className}>{badge.label}</Badge>
+          </div>
+
+          <div className="mt-2 space-y-1">
+            <p className="flex min-w-0 items-center gap-1.5 text-sm font-black text-slate-800">
+              <AppIcon
+                className="shrink-0 text-slate-400"
+                name="box"
+                size={15}
+              />
+              <span className="truncate">{getVendorName(purchaseOrder)}</span>
+            </p>
+            <p className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-slate-700">
+              <AppIcon
+                className="shrink-0 text-slate-400"
+                name="vehicle"
+                size={15}
+              />
+              <span className="truncate">{getVehicleLabel(purchaseOrder.vehicle)}</span>
+            </p>
+            {workOrderLabel && (
+              <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-500 sm:text-sm">
+                <AppIcon
+                  className="shrink-0 text-slate-400"
+                  name="wrench"
+                  size={15}
+                />
+                <span className="truncate">{workOrderLabel}</span>
               </p>
-            </div>
-            <Badge className={`${badge.className} shrink-0`}>{badge.label}</Badge>
+            )}
           </div>
 
-          <div className="mt-3 space-y-1 text-sm text-slate-600">
-            <p className="font-black text-slate-900">
-              {getVehicleLabel(purchaseOrder.vehicle)}
+          <div className="mt-3 space-y-1.5 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2 text-xs text-slate-600 sm:text-sm">
+            <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <span>
+                <span className="font-bold text-slate-400">Qty</span>{" "}
+                <span className="font-black text-slate-950">
+                  {formatNumber(primaryItem?.quantity || 0)}
+                </span>
+              </span>
+              <span className="text-slate-300">|</span>
+              <span>
+                <span className="font-bold text-slate-400">Unit</span>{" "}
+                <span className="font-black text-slate-950">
+                  {formatCurrency(primaryItem?.unit_cost)}
+                </span>
+              </span>
+              <span className="text-slate-300">|</span>
+              <span>
+                <span className="font-bold text-slate-400">Total</span>{" "}
+                <span className="font-black text-slate-950">
+                  {formatCurrency(totalCost)}
+                </span>
+              </span>
             </p>
-            {workOrderLabel && <p>{workOrderLabel}</p>}
-          </div>
 
-          <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3">
-            <p className="text-sm font-black text-slate-950">
-              {displayValue(primaryItem?.description)}
-              {itemCount > 1 ? ` + ${itemCount - 1} more` : ""}
+            <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <span>
+                <span className="font-bold text-slate-400">Subtotal</span>{" "}
+                <span className="font-semibold text-slate-700">
+                  {formatCurrency(getItemSubtotal(primaryItem))}
+                </span>
+              </span>
+              <span className="text-slate-300">|</span>
+              <span>
+                <span className="font-bold text-slate-400">Shipping</span>{" "}
+                <span className="font-semibold text-slate-700">
+                  {formatCurrency(primaryItem?.shipping_cost)}
+                </span>
+              </span>
+              <span className="text-slate-300">|</span>
+              <span>
+                <span className="font-bold text-slate-400">Tax</span>{" "}
+                <span className="font-semibold text-slate-700">
+                  {formatCurrency(primaryItem?.tax)}
+                </span>
+              </span>
+              {itemCount > 1 && (
+                <>
+                  <span className="text-slate-300">|</span>
+                  <span className="font-bold text-slate-500">
+                    {formatNumber(itemCount)} items
+                  </span>
+                </>
+              )}
             </p>
-            <p className="mt-1 text-xs font-semibold text-slate-500">
-              Qty {formatNumber(primaryItem?.quantity || 0)} -{" "}
-              {formatCurrency(primaryItem?.unit_cost)} each
-            </p>
-            <p className="mt-1 text-xs font-semibold text-slate-500">
-              Subtotal {formatCurrency(getItemSubtotal(primaryItem))} - Shipping{" "}
-              {formatCurrency(primaryItem?.shipping_cost)} - Tax{" "}
-              {formatCurrency(primaryItem?.tax)}
-            </p>
+
             {isPurchaseOrderItemReturned(primaryItem) && (
-              <p className="mt-1 text-xs font-black text-red-700">
+              <p className="border-t border-red-100 pt-1.5 text-xs font-black text-red-700">
                 Returned - {formatCurrency(getReturnDeduction(primaryItem))} deducted
               </p>
             )}
-            <p className="mt-1 text-xs font-black text-slate-700">
-              Total {formatCurrency(totalCost)}
-            </p>
           </div>
-
-          {trackingText && (
-            <p className="mt-3 text-xs font-semibold text-slate-500">
-              {trackingText}
-            </p>
-          )}
         </div>
 
-        <div className="flex shrink-0 flex-wrap gap-2 lg:w-48 lg:flex-col lg:items-stretch">
+        <aside className="flex min-w-0 flex-wrap items-center gap-2 border-t border-slate-100 pt-3 lg:max-w-[18rem] lg:justify-end lg:border-l lg:border-t-0 lg:pl-3 lg:pt-0">
           {canReceive && (
             <button
-              className={`${buttonClassNames.primary} flex-1 lg:w-full`}
+              className={primaryActionButtonClassName}
               disabled={isUpdating}
               onClick={() => onMarkReceived(purchaseOrder)}
               type="button"
             >
+              <AppIcon name="check" size={15} />
               Mark Received
             </button>
           )}
           <button
-            className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
+            className={secondaryActionButtonClassName}
             disabled={!purchaseOrder.vehicle_id}
             onClick={() => onOpenVehicle?.(purchaseOrder.vehicle_id)}
             type="button"
           >
-            Open Vehicle
+            <AppIcon name="vehicle" size={15} />
+            Vehicle
           </button>
           <button
-            className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
+            className={secondaryActionButtonClassName}
             onClick={() => onToggleDetails(purchaseOrder.id)}
             type="button"
           >
-            {isExpanded ? "Hide Details" : "View Details"}
+            <AppIcon name="file" size={15} />
+            {isExpanded ? "Hide" : "Details"}
           </button>
           {canCancel && (
             <button
-              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-2.5 text-sm font-black text-red-700 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 lg:w-full"
+              className={dangerActionButtonClassName}
               disabled={isUpdating}
               onClick={() => onCancel(purchaseOrder)}
               type="button"
             >
-              Cancel PO
+              Cancel
             </button>
           )}
-        </div>
+        </aside>
       </div>
 
+      {footerParts.length > 0 && (
+        <footer className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-100 pt-2 text-[11px] font-semibold leading-4 text-slate-400">
+          <AppIcon className="shrink-0" name="clock" size={13} />
+          {footerParts.map((part, index) => (
+            <span
+              className="inline-flex min-w-0 items-center gap-2"
+              key={`${part}-${index}`}
+            >
+              {index > 0 && <span className="text-slate-300">|</span>}
+              <span>{part}</span>
+            </span>
+          ))}
+        </footer>
+      )}
+
       {isExpanded && (
-        <div className="mt-5 space-y-4 border-t border-slate-100 pt-4">
+        <div className="mt-3 space-y-4 border-t border-slate-100 pt-3">
           <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <p className="text-xs font-black uppercase tracking-wide text-slate-400">
@@ -804,7 +899,9 @@ function PurchaseOrderCard({
                 Status controls
               </p>
               <StatusDropdown
-                currentStatus={purchaseOrder.status}
+                currentStatus={
+                  purchaseOrder.status === "open" ? "ordered" : purchaseOrder.status
+                }
                 isUpdating={isUpdating}
                 onChange={(newStatus) => onStatusChange(purchaseOrder, newStatus)}
                 statuses={purchaseOrderStatuses}
@@ -944,7 +1041,7 @@ function PurchaseOrderCard({
 }
 
 function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
-  const [activeTab, setActiveTab] = useState("open");
+  const [activeTab, setActiveTab] = useState("ordered");
   const [confirmReceivedOrder, setConfirmReceivedOrder] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [expandedPurchaseOrderIds, setExpandedPurchaseOrderIds] = useState([]);
@@ -1053,6 +1150,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
         ...purchaseOrder,
         documents: documentsByPurchaseOrderId[purchaseOrder.id] ?? [],
         items,
+        cancelledBy: profilesById[purchaseOrder.cancelled_by] ?? null,
         orderedBy: profilesById[purchaseOrder.ordered_by] ?? null,
         receivedBy: profilesById[purchaseOrder.received_by] ?? null,
         vehicle: topLevelVehicle ?? relatedVehicleContexts[0] ?? null,
@@ -1407,11 +1505,19 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
       shouldMarkReceived && currentProfile?.id
         ? currentProfile.id
         : purchaseOrder.received_by ?? null;
+    const cancelledAt =
+      shouldCancelItems && !purchaseOrder.cancelled_at
+        ? new Date().toISOString()
+        : purchaseOrder.cancelled_at;
+    const cancelledBy =
+      shouldCancelItems && currentProfile?.id
+        ? currentProfile.id
+        : purchaseOrder.cancelled_by ?? null;
 
     setStatusErrorMessage("");
     setStatusSuccessMessage("");
     setUpdatingPurchaseOrderId(purchaseOrder.id);
-    if (shouldMarkReceived && currentProfile?.id) {
+    if ((shouldMarkReceived || shouldCancelItems) && currentProfile?.id) {
       setProfilesById((currentProfilesById) => ({
         ...currentProfilesById,
         [currentProfile.id]: currentProfile,
@@ -1422,6 +1528,8 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
         currentPurchaseOrder.id === purchaseOrder.id
           ? {
               ...currentPurchaseOrder,
+              cancelled_at: cancelledAt,
+              cancelled_by: cancelledBy,
               received_at: receivedAt,
               received_by: receivedBy,
               status: newStatus,
@@ -1548,6 +1656,8 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
           currentPurchaseOrder.id === purchaseOrder.id
             ? {
                 ...currentPurchaseOrder,
+                cancelled_at: purchaseOrder.cancelled_at,
+                cancelled_by: purchaseOrder.cancelled_by,
                 received_at: purchaseOrder.received_at,
                 received_by: purchaseOrder.received_by,
                 status: previousStatus,
@@ -1761,21 +1871,22 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
   }
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-2xl font-black text-slate-950">
+    <div className="min-w-0 space-y-4 overflow-x-hidden">
+      <section className="min-w-0 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm sm:p-4">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-xl font-black text-slate-950 sm:text-2xl">
               Purchase Orders
             </h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+            <p className="mt-0.5 max-w-2xl text-xs font-semibold leading-5 text-slate-500 sm:text-sm">
               Track ordered parts, vendors, costs, and receiving status.
             </p>
           </div>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-3 min-w-0">
           <OperationalSearchBar
+            dense
             id="purchase-order-search"
             label="Search purchase orders"
             onChange={setSearchTerm}
@@ -1787,7 +1898,7 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
           />
         </div>
 
-        <div className="mt-4">
+        <div className="mt-3 min-w-0">
           <PurchaseOrderTabs
             activeTab={activeTab}
             counts={countsByTab}
@@ -1831,10 +1942,9 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
       )}
 
       {!isLoading && !errorMessage && filteredPurchaseOrders.length > 0 && (
-        <section className="space-y-3">
+        <section className="min-w-0 space-y-2.5">
           {filteredPurchaseOrders.map((purchaseOrder) => (
             <PurchaseOrderCard
-              activeTab={activeTab}
               canDeleteDocuments={canDeleteDocuments}
               canManagePurchaseOrders={canManagePurchaseOrders}
               canManageReturns={canManageReturns}

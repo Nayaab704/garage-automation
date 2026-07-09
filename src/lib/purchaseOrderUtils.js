@@ -7,7 +7,6 @@ import {
 } from "./searchText";
 
 export const PURCHASE_ORDER_TABS = [
-  { key: "open", label: "Open" },
   { key: "ordered", label: "Ordered" },
   { key: "received", label: "Received" },
   { key: "cancelled", label: "Cancelled" },
@@ -17,6 +16,7 @@ export const PURCHASE_ORDER_TABS = [
 export const purchaseOrderStatusLabels = {
   cancelled: "Cancelled",
   draft: "Draft",
+  open: "Ordered",
   ordered: "Ordered",
   partial_received: "Partial Received",
   received: "Received",
@@ -176,12 +176,10 @@ export function isPurchaseOrderOpen(purchaseOrder) {
 }
 
 export function purchaseOrderMatchesTab(purchaseOrder, tabKey) {
-  if (tabKey === "open") {
-    return isPurchaseOrderOpen(purchaseOrder);
-  }
-
   if (tabKey === "ordered") {
-    return ["draft", "ordered", "partial_received"].includes(purchaseOrder?.status);
+    return ["draft", "open", "ordered", "partial_received"].includes(
+      purchaseOrder?.status
+    );
   }
 
   if (tabKey === "received") {
@@ -281,7 +279,7 @@ export function getPurchaseOrderSearchText(purchaseOrder) {
 
 export function filterPurchaseOrders(
   purchaseOrders = [],
-  { search = "", tab = "open", vehicleSearchIndex = [] } = {}
+  { search = "", tab = "ordered", vehicleSearchIndex = [] } = {}
 ) {
   const normalizedSearch = normalizeSearch(search);
   const matchedVehicles = findMatchingVehicles(vehicleSearchIndex, search);
@@ -303,7 +301,9 @@ export function filterPurchaseOrders(
 }
 
 export function canMarkPurchaseOrderReceived(purchaseOrder) {
-  return ["draft", "ordered", "partial_received"].includes(purchaseOrder?.status);
+  return ["draft", "open", "ordered", "partial_received"].includes(
+    purchaseOrder?.status
+  );
 }
 
 export function canCancelPurchaseOrder(purchaseOrder) {
