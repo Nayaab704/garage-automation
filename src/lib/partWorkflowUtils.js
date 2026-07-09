@@ -17,7 +17,6 @@ export const PART_QUEUE_TABS = [
   { key: "ordered", label: "Ordered" },
   { key: "received", label: "Received" },
   { key: "returned", label: "Returned" },
-  { key: "issues", label: "Issues" },
   { key: "all", label: "All" },
 ];
 

@@ -5,10 +5,6 @@ const emptyMessages = {
     body: "Parts added inside work orders will appear here.",
     title: "No parts found.",
   },
-  issues: {
-    body: "Rejected, cancelled, or unavailable parts will appear here.",
-    title: "No part issues right now.",
-  },
   needs_po: {
     body: 'Parts marked "Needs to Buy" will appear here until a purchase order is created.',
     title: "No parts need purchase orders right now.",
