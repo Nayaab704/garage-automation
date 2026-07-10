@@ -41,9 +41,15 @@ const numberFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
-const INITIAL_ACTIVE_WORK_ORDER_COUNT = 5;
-const INITIAL_TODAY_ACTIVITY_COUNT = 6;
+const INITIAL_ACTIVE_WORK_ORDER_COUNT = 3;
+const INITIAL_TODAY_ACTIVITY_COUNT = 5;
 const INITIAL_RECENT_VEHICLE_COUNT = 6;
+
+const mobileSectionTabs = [
+  { key: "active", label: "Active" },
+  { key: "activity", label: "Activity" },
+  { key: "vehicles", label: "Vehicles" },
+];
 
 function uniqueValues(values) {
   return [...new Set(values.filter(Boolean))];
@@ -781,32 +787,107 @@ function buildMyWorkViewModel(records, currentProfile) {
 
 function SummaryCard({ icon, label, value, helper }) {
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100">
-          <AppIcon name={icon} size={17} />
+    <article className="min-w-0 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100">
+          <AppIcon name={icon} size={15} />
         </span>
         <div className="min-w-0">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+          <p className="truncate text-[10px] font-black uppercase tracking-wide text-slate-400">
             {label}
           </p>
-          <p className="text-xl font-black text-slate-950">{value}</p>
+          <p className="text-lg font-black leading-5 text-slate-950">{value}</p>
         </div>
       </div>
       {helper && (
-        <p className="mt-2 text-xs font-semibold text-slate-500">{helper}</p>
+        <p className="mt-1 truncate text-[11px] font-semibold text-slate-500">
+          {helper}
+        </p>
       )}
     </article>
   );
 }
 
+function MobileSummaryStrip({ summary }) {
+  const stats = [
+    {
+      helper: "Today",
+      icon: "clock",
+      label: "Today",
+      value: formatHours(summary.todayLaborHours),
+    },
+    {
+      helper: "Week",
+      icon: "labor",
+      label: "Week",
+      value: formatHours(summary.weekLaborHours),
+    },
+    {
+      helper: "Touched",
+      icon: "vehicle",
+      label: "Vehicles",
+      value: numberFormatter.format(summary.vehiclesTouchedToday),
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-3 divide-x divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      {stats.map((stat) => (
+        <div className="min-w-0 px-2 py-2 text-center" key={stat.label}>
+          <div className="mx-auto flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+            <AppIcon name={stat.icon} size={13} />
+          </div>
+          <p className="mt-1 truncate text-[10px] font-black uppercase tracking-wide text-slate-400">
+            {stat.label}
+          </p>
+          <p className="text-base font-black leading-5 text-slate-950">
+            {stat.value}
+          </p>
+          <p className="truncate text-[10px] font-semibold text-slate-500">
+            {stat.helper}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MobileSectionTabs({ activeSection, counts, onChange }) {
+  return (
+    <div className="grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 sm:hidden">
+      {mobileSectionTabs.map((tab) => {
+        const isActive = activeSection === tab.key;
+
+        return (
+          <button
+            aria-pressed={isActive}
+            className={`min-h-8 rounded-lg px-2 py-1 text-xs font-black transition ${
+              isActive
+                ? "bg-white text-emerald-700 shadow-sm ring-1 ring-inset ring-emerald-100"
+                : "text-slate-600 hover:bg-white/60"
+            }`}
+            key={tab.key}
+            onClick={() => onChange(tab.key)}
+            type="button"
+          >
+            <span>{tab.label}</span>
+            <span className="ml-1 text-[10px] text-slate-400">
+              {counts[tab.key] ?? 0}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function SectionHeader({ count, description, title }) {
   return (
-    <div className="flex items-start justify-between gap-3">
+    <div className="flex items-start justify-between gap-2">
       <div className="min-w-0">
         <h2 className="text-base font-black text-slate-950">{title}</h2>
         {description && (
-          <p className="mt-0.5 text-xs font-semibold leading-5 text-slate-500">
+          <p className="text-[11px] font-semibold leading-4 text-slate-500">
             {description}
           </p>
         )}
@@ -822,9 +903,9 @@ function SectionHeader({ count, description, title }) {
 
 function EmptyState({ children, title }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-4">
-      <p className="font-black text-slate-800">{title}</p>
-      <p className="mt-1 text-sm font-semibold leading-5 text-slate-500">
+    <div className="rounded-xl border border-dashed border-slate-300 bg-white p-3">
+      <p className="text-sm font-black text-slate-800">{title}</p>
+      <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
         {children}
       </p>
     </div>
@@ -834,20 +915,21 @@ function EmptyState({ children, title }) {
 function OpenVehicleButton({ onSelectVehicle, vehicle }) {
   return (
     <button
-      className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+      aria-label={`Open ${getVehicleLine(vehicle)}`}
+      className="inline-flex min-h-8 shrink-0 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-black text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
       disabled={!vehicle?.id}
       onClick={() => onSelectVehicle?.(vehicle.id)}
       type="button"
     >
-      <AppIcon name="vehicle" size={15} />
-      Open Vehicle
+      <AppIcon name="vehicle" size={13} />
+      Open
     </button>
   );
 }
 
 function MiniMetric({ label, value }) {
   return (
-    <span className="inline-flex min-h-8 items-center gap-1.5 rounded-xl bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600 ring-1 ring-inset ring-slate-100">
+    <span className="inline-flex min-h-7 items-center gap-1 rounded-lg bg-slate-50 px-2 py-0.5 text-[11px] font-bold text-slate-600 ring-1 ring-inset ring-slate-100">
       <span className="text-slate-400">{label}:</span>
       <span className="text-slate-950">{value}</span>
     </span>
@@ -866,7 +948,7 @@ function ShowMoreButton({
 
   return (
     <button
-      className="mt-3 inline-flex min-h-9 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+      className="mt-2 inline-flex min-h-8 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1 text-[11px] font-black text-slate-700 transition hover:bg-slate-50"
       onClick={onClick}
       type="button"
     >
@@ -888,30 +970,30 @@ function WorkOrderCard({
     getCategoryLabel(workOrder, serviceCategoriesById);
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="flex min-w-0 flex-col gap-2">
-        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <h3 className="min-w-0 text-base font-black leading-6 text-slate-950">
+    <article className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <div className="flex min-w-0 items-start justify-between gap-2">
+          <h3 className="min-w-0 flex-1 text-sm font-black leading-5 text-slate-950">
             {getWorkOrderTitle(workOrder)}
           </h3>
-          <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
             <StatusBadge
-              className="px-2 py-0.5 text-[11px]"
+              className="px-2 py-0.5 text-[10px]"
               label={getWorkOrderStatusLabel(workOrder.status)}
               status={workOrder.status}
             />
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600 ring-1 ring-inset ring-slate-200">
+            <span className="max-w-[7rem] truncate rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 ring-1 ring-inset ring-slate-200">
               {categoryLabel}
             </span>
           </div>
         </div>
 
-        <p className="truncate text-sm font-semibold text-slate-600">
+        <p className="truncate text-xs font-semibold text-slate-600">
           {getVehicleLine(vehicle)}
         </p>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-1">
             <MiniMetric
               label="My labor"
               value={formatHours(workOrder.involvement.laborHours)}
@@ -933,26 +1015,30 @@ function WorkOrderCard({
 
 function ActivityItem({ activity, onSelectVehicle }) {
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="flex min-w-0 flex-col gap-2">
-        <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-          <p className="min-w-0 text-sm font-black leading-5 text-slate-950">
-            {activity.action}
-          </p>
-          <time className="shrink-0 text-[11px] font-black uppercase tracking-wide text-slate-400">
-            {formatDateTime(activity.date)}
-          </time>
-        </div>
-
+    <article className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
+      <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-slate-600">
+          <div className="flex min-w-0 items-start justify-between gap-2">
+            <p className="min-w-0 text-sm font-black leading-5 text-slate-950">
+              {activity.action}
+            </p>
+            <time className="shrink-0 text-[10px] font-black uppercase tracking-wide text-slate-400 sm:hidden">
+              {formatRelativeDate(activity.date)}
+            </time>
+          </div>
+          <p className="mt-0.5 truncate text-xs font-semibold text-slate-600">
             {getVehicleLine(activity.vehicle)}
           </p>
-          {activity.repairJob && (
-            <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">
-              {getWorkOrderTitle(activity.repairJob)}
-            </p>
-          )}
+          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-semibold text-slate-500">
+            {activity.repairJob && (
+              <span className="max-w-full truncate">
+                {getWorkOrderTitle(activity.repairJob)}
+              </span>
+            )}
+            <time className="hidden shrink-0 text-slate-400 sm:inline">
+              {formatDateTime(activity.date)}
+            </time>
+          </div>
         </div>
 
         <OpenVehicleButton
@@ -968,22 +1054,22 @@ function RecentVehicleCard({ onSelectVehicle, record }) {
   const vehicle = record.vehicle;
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+    <article className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
       <div className="flex min-w-0 flex-col gap-2">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <VehicleStatusBadge className="px-2 py-0.5 text-[11px]" status={vehicle.status} />
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600 ring-1 ring-inset ring-slate-200">
+          <div className="flex flex-wrap items-center gap-1">
+            <VehicleStatusBadge className="px-2 py-0.5 text-[10px]" status={vehicle.status} />
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 ring-1 ring-inset ring-slate-200">
               {record.actionCount} {record.actionCount === 1 ? "touch" : "touches"}
             </span>
           </div>
-          <h3 className="mt-2 text-base font-black text-slate-950">
+          <h3 className="mt-1.5 text-sm font-black text-slate-950">
             {displayValue(vehicle.stock_number, "No stock number")}
           </h3>
-          <p className="truncate text-sm font-semibold text-slate-600">
+          <p className="truncate text-xs font-semibold text-slate-600">
             {getVehicleName(vehicle)}
           </p>
-          <p className="mt-1 text-xs font-black uppercase tracking-wide text-slate-400">
+          <p className="mt-1 truncate text-[10px] font-black uppercase tracking-wide text-slate-400">
             {record.lastAction} - {formatRelativeDate(record.lastActivityAt)}
           </p>
         </div>
@@ -1000,6 +1086,7 @@ function MyWorkPage({ currentProfile, onSelectVehicle }) {
   const [records, setRecords] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [activeMobileSection, setActiveMobileSection] = useState("active");
   const [showAllActiveWorkOrders, setShowAllActiveWorkOrders] = useState(false);
   const [showAllTodayActivities, setShowAllTodayActivities] = useState(false);
   const [showAllRecentVehicles, setShowAllRecentVehicles] = useState(false);
@@ -1071,23 +1158,66 @@ function MyWorkPage({ currentProfile, onSelectVehicle }) {
       ? viewModel.recentVehicles
       : viewModel.recentVehicles.slice(0, INITIAL_RECENT_VEHICLE_COUNT)
     : [];
+  const mobileSectionCounts = viewModel
+    ? {
+        active: viewModel.activeWorkOrders.length,
+        activity: viewModel.todayActivities.length,
+        vehicles: viewModel.recentVehicles.length,
+      }
+    : {};
 
   return (
-    <div className="min-w-0 space-y-3 overflow-x-hidden">
-      <section className="rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm sm:p-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+    <div className="min-w-0 space-y-2.5 overflow-x-hidden">
+      <section className="rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm sm:p-3">
+        <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,0.78fr)_minmax(420px,1.22fr)] lg:items-center">
+          <div className="min-w-0">
+            <p className="text-[11px] font-black uppercase tracking-wide text-emerald-700 sm:text-xs">
               {firstName}'s Workspace
             </p>
-            <h1 className="mt-1 text-2xl font-black text-slate-950">
+            <h1 className="text-xl font-black leading-7 text-slate-950 sm:text-2xl sm:leading-8">
               My Work
             </h1>
-            <p className="mt-0.5 max-w-2xl text-sm font-semibold leading-5 text-slate-500">
+            <p className="max-w-2xl truncate text-[11px] font-semibold leading-4 text-slate-500 sm:text-xs sm:leading-5">
               Track your active work orders, labor, and recent vehicle activity.
             </p>
           </div>
+
+          {!isLoading && !errorMessage && viewModel && (
+            <div className="hidden min-w-0 gap-2 sm:grid sm:grid-cols-3">
+              <SummaryCard
+                helper="Logged today"
+                icon="clock"
+                label="Today's Hours"
+                value={formatHours(viewModel.summary.todayLaborHours)}
+              />
+              <SummaryCard
+                helper="Since Sunday"
+                icon="labor"
+                label="This Week"
+                value={formatHours(viewModel.summary.weekLaborHours)}
+              />
+              <SummaryCard
+                helper="Touched today"
+                icon="vehicle"
+                label="Vehicles Touched"
+                value={numberFormatter.format(
+                  viewModel.summary.vehiclesTouchedToday
+                )}
+              />
+            </div>
+          )}
         </div>
+
+        {!isLoading && !errorMessage && viewModel && (
+          <div className="mt-2 space-y-2 sm:hidden">
+            <MobileSummaryStrip summary={viewModel.summary} />
+            <MobileSectionTabs
+              activeSection={activeMobileSection}
+              counts={mobileSectionCounts}
+              onChange={setActiveMobileSection}
+            />
+          </div>
+        )}
       </section>
 
       {isLoading && (
@@ -1104,135 +1234,221 @@ function MyWorkPage({ currentProfile, onSelectVehicle }) {
 
       {!isLoading && !errorMessage && viewModel && (
         <>
-          <section className="grid gap-2 sm:grid-cols-3">
-            <SummaryCard
-              helper="Logged today"
-              icon="clock"
-              label="Today's Hours"
-              value={formatHours(viewModel.summary.todayLaborHours)}
-            />
-            <SummaryCard
-              helper="Since Sunday"
-              icon="labor"
-              label="This Week"
-              value={formatHours(viewModel.summary.weekLaborHours)}
-            />
-            <SummaryCard
-              helper="Touched today"
-              icon="vehicle"
-              label="Vehicles Touched"
-              value={numberFormatter.format(
-                viewModel.summary.vehiclesTouchedToday
-              )}
-            />
-          </section>
+          <div className="sm:hidden">
+            {activeMobileSection === "active" && (
+              <section className="min-w-0 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm">
+                <SectionHeader
+                  count={viewModel.activeWorkOrders.length}
+                  title="Active Work"
+                />
 
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.12fr)_minmax(320px,0.88fr)]">
-            <section className="min-w-0 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm sm:p-4">
+                <div className="mt-2 space-y-1.5">
+                  {viewModel.activeWorkOrders.length === 0 ? (
+                    <EmptyState title="No active work yet.">
+                      Start by opening a vehicle and adding labor, parts, or
+                      vendor work.
+                    </EmptyState>
+                  ) : (
+                    visibleActiveWorkOrders.map((workOrder) => (
+                      <WorkOrderCard
+                        key={workOrder.id}
+                        onSelectVehicle={onSelectVehicle}
+                        serviceCategoriesById={viewModel.serviceCategoriesById}
+                        workOrder={workOrder}
+                      />
+                    ))
+                  )}
+                </div>
+
+                <ShowMoreButton
+                  isExpanded={showAllActiveWorkOrders}
+                  onClick={() =>
+                    setShowAllActiveWorkOrders((currentValue) => !currentValue)
+                  }
+                  totalCount={viewModel.activeWorkOrders.length}
+                  visibleCount={INITIAL_ACTIVE_WORK_ORDER_COUNT}
+                />
+              </section>
+            )}
+
+            {activeMobileSection === "activity" && (
+              <section className="min-w-0 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm">
+                <SectionHeader
+                  count={viewModel.todayActivities.length}
+                  title="Today Activity"
+                />
+
+                <div className="mt-2 space-y-1.5">
+                  {viewModel.todayActivities.length === 0 ? (
+                    <EmptyState title="No activity today.">
+                      Your actions will appear here when you add labor, parts,
+                      documents, receive POs, or return parts.
+                    </EmptyState>
+                  ) : (
+                    visibleTodayActivities.map((activity) => (
+                      <ActivityItem
+                        activity={activity}
+                        key={activity.id}
+                        onSelectVehicle={onSelectVehicle}
+                      />
+                    ))
+                  )}
+                </div>
+
+                <ShowMoreButton
+                  isExpanded={showAllTodayActivities}
+                  onClick={() =>
+                    setShowAllTodayActivities((currentValue) => !currentValue)
+                  }
+                  totalCount={viewModel.todayActivities.length}
+                  visibleCount={INITIAL_TODAY_ACTIVITY_COUNT}
+                />
+              </section>
+            )}
+
+            {activeMobileSection === "vehicles" && (
+              <section className="min-w-0 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm">
+                <SectionHeader
+                  count={viewModel.recentVehicles.length}
+                  title="Touched Vehicles"
+                />
+
+                <div className="mt-2 space-y-1.5">
+                  {viewModel.recentVehicles.length === 0 ? (
+                    <EmptyState title="No recently touched vehicles.">
+                      Vehicles will appear here after you log or handle work.
+                    </EmptyState>
+                  ) : (
+                    visibleRecentVehicles.map((record) => (
+                      <RecentVehicleCard
+                        key={record.vehicle.id}
+                        onSelectVehicle={onSelectVehicle}
+                        record={record}
+                      />
+                    ))
+                  )}
+                </div>
+
+                <ShowMoreButton
+                  isExpanded={showAllRecentVehicles}
+                  onClick={() =>
+                    setShowAllRecentVehicles((currentValue) => !currentValue)
+                  }
+                  totalCount={viewModel.recentVehicles.length}
+                  visibleCount={INITIAL_RECENT_VEHICLE_COUNT}
+                />
+              </section>
+            )}
+          </div>
+
+          <div className="hidden space-y-2.5 sm:block">
+            <div className="grid gap-2.5 lg:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
+              <section className="min-w-0 rounded-2xl border border-slate-200 bg-white/95 p-2.5 shadow-sm sm:p-3">
+                <SectionHeader
+                  count={viewModel.activeWorkOrders.length}
+                  description="Open work connected to your activity."
+                  title="My Active Work Orders"
+                />
+
+                <div className="mt-2 space-y-1.5">
+                  {viewModel.activeWorkOrders.length === 0 ? (
+                    <EmptyState title="No active work yet.">
+                      Start by opening a vehicle and adding labor, parts,
+                      documents, or vendor work.
+                    </EmptyState>
+                  ) : (
+                    visibleActiveWorkOrders.map((workOrder) => (
+                      <WorkOrderCard
+                        key={workOrder.id}
+                        onSelectVehicle={onSelectVehicle}
+                        serviceCategoriesById={viewModel.serviceCategoriesById}
+                        workOrder={workOrder}
+                      />
+                    ))
+                  )}
+                </div>
+
+                <ShowMoreButton
+                  isExpanded={showAllActiveWorkOrders}
+                  onClick={() =>
+                    setShowAllActiveWorkOrders((currentValue) => !currentValue)
+                  }
+                  totalCount={viewModel.activeWorkOrders.length}
+                  visibleCount={INITIAL_ACTIVE_WORK_ORDER_COUNT}
+                />
+              </section>
+
+              <section className="min-w-0 rounded-2xl border border-slate-200 bg-white/95 p-2.5 shadow-sm sm:p-3">
+                <SectionHeader
+                  count={viewModel.todayActivities.length}
+                  description="Actions connected to your profile today."
+                  title="My Today Activity"
+                />
+
+                <div className="mt-2 space-y-1.5">
+                  {viewModel.todayActivities.length === 0 ? (
+                    <EmptyState title="No activity today.">
+                      Your actions will appear here when you add labor, request
+                      parts, upload documents, receive POs, or return parts.
+                    </EmptyState>
+                  ) : (
+                    visibleTodayActivities.map((activity) => (
+                      <ActivityItem
+                        activity={activity}
+                        key={activity.id}
+                        onSelectVehicle={onSelectVehicle}
+                      />
+                    ))
+                  )}
+                </div>
+
+                <ShowMoreButton
+                  isExpanded={showAllTodayActivities}
+                  onClick={() =>
+                    setShowAllTodayActivities((currentValue) => !currentValue)
+                  }
+                  totalCount={viewModel.todayActivities.length}
+                  visibleCount={INITIAL_TODAY_ACTIVITY_COUNT}
+                />
+              </section>
+            </div>
+
+            <section className="rounded-2xl border border-slate-200 bg-white/95 p-2.5 shadow-sm sm:p-3">
               <SectionHeader
-                count={viewModel.activeWorkOrders.length}
-                description="Open work connected to your activity."
-                title="My Active Work Orders"
+                count={viewModel.recentVehicles.length}
+                description="Vehicles where you recently logged or handled work."
+                title="Recently Touched Vehicles"
               />
 
-              <div className="mt-3 space-y-2">
-                {viewModel.activeWorkOrders.length === 0 ? (
-                  <EmptyState title="No active work yet.">
-                    Start by opening a vehicle and adding labor, parts,
-                    documents, or vendor work.
-                  </EmptyState>
+              <div className="mt-2 grid gap-1.5 md:grid-cols-2 xl:grid-cols-3">
+                {viewModel.recentVehicles.length === 0 ? (
+                  <div className="md:col-span-2 xl:col-span-3">
+                    <EmptyState title="No recently touched vehicles.">
+                      Vehicles will appear here after you log labor, create work,
+                      request parts, upload documents, receive POs, or return parts.
+                    </EmptyState>
+                  </div>
                 ) : (
-                  visibleActiveWorkOrders.map((workOrder) => (
-                    <WorkOrderCard
-                      key={workOrder.id}
+                  visibleRecentVehicles.map((record) => (
+                    <RecentVehicleCard
+                      key={record.vehicle.id}
                       onSelectVehicle={onSelectVehicle}
-                      serviceCategoriesById={viewModel.serviceCategoriesById}
-                      workOrder={workOrder}
+                      record={record}
                     />
                   ))
                 )}
               </div>
 
               <ShowMoreButton
-                isExpanded={showAllActiveWorkOrders}
+                isExpanded={showAllRecentVehicles}
                 onClick={() =>
-                  setShowAllActiveWorkOrders((currentValue) => !currentValue)
+                  setShowAllRecentVehicles((currentValue) => !currentValue)
                 }
-                totalCount={viewModel.activeWorkOrders.length}
-                visibleCount={INITIAL_ACTIVE_WORK_ORDER_COUNT}
-              />
-            </section>
-
-            <section className="min-w-0 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm sm:p-4">
-              <SectionHeader
-                count={viewModel.todayActivities.length}
-                description="Actions connected to your profile today."
-                title="My Today Activity"
-              />
-
-              <div className="mt-3 space-y-2">
-                {viewModel.todayActivities.length === 0 ? (
-                  <EmptyState title="No activity today.">
-                    Your actions will appear here when you add labor, request
-                    parts, upload documents, receive POs, or return parts.
-                  </EmptyState>
-                ) : (
-                  visibleTodayActivities.map((activity) => (
-                    <ActivityItem
-                      activity={activity}
-                      key={activity.id}
-                      onSelectVehicle={onSelectVehicle}
-                    />
-                  ))
-                )}
-              </div>
-
-              <ShowMoreButton
-                isExpanded={showAllTodayActivities}
-                onClick={() =>
-                  setShowAllTodayActivities((currentValue) => !currentValue)
-                }
-                totalCount={viewModel.todayActivities.length}
-                visibleCount={INITIAL_TODAY_ACTIVITY_COUNT}
+                totalCount={viewModel.recentVehicles.length}
+                visibleCount={INITIAL_RECENT_VEHICLE_COUNT}
               />
             </section>
           </div>
-
-          <section className="rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm sm:p-4">
-            <SectionHeader
-              count={viewModel.recentVehicles.length}
-              description="Vehicles where you recently logged or handled work."
-              title="Recently Touched Vehicles"
-            />
-
-            <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-              {viewModel.recentVehicles.length === 0 ? (
-                <div className="md:col-span-2 xl:col-span-3">
-                  <EmptyState title="No recently touched vehicles.">
-                    Vehicles will appear here after you log labor, create work,
-                    request parts, upload documents, receive POs, or return parts.
-                  </EmptyState>
-                </div>
-              ) : (
-                visibleRecentVehicles.map((record) => (
-                  <RecentVehicleCard
-                    key={record.vehicle.id}
-                    onSelectVehicle={onSelectVehicle}
-                    record={record}
-                  />
-                ))
-              )}
-            </div>
-
-            <ShowMoreButton
-              isExpanded={showAllRecentVehicles}
-              onClick={() =>
-                setShowAllRecentVehicles((currentValue) => !currentValue)
-              }
-              totalCount={viewModel.recentVehicles.length}
-              visibleCount={INITIAL_RECENT_VEHICLE_COUNT}
-            />
-          </section>
         </>
       )}
     </div>

@@ -58,6 +58,12 @@ const purchaseOrderStatusLabels = {
 
 const openPurchaseOrderStatuses = ["ordered", "partial_received"];
 
+const dashboardSections = [
+  { key: "overview", label: "Overview" },
+  { key: "attention", label: "Attention" },
+  { key: "finance", label: "Finance" },
+];
+
 function numberOrZero(value) {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : 0;
@@ -759,10 +765,10 @@ function getToneClasses(tone) {
 function DashboardSection({ children, className = "", title }) {
   return (
     <section
-      className={`rounded-3xl border border-slate-200 bg-white shadow-sm ${className}`}
+      className={`min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`}
     >
-      <div className="border-b border-slate-100 px-4 py-3 sm:px-5">
-        <h2 className="text-base font-black text-slate-950">{title}</h2>
+      <div className="border-b border-slate-100 px-3 py-2.5 sm:px-4">
+        <h2 className="truncate text-sm font-black text-slate-950">{title}</h2>
       </div>
       {children}
     </section>
@@ -777,19 +783,21 @@ function SummaryCard({
   valueClassName = "text-slate-950",
 }) {
   return (
-    <article className="flex min-h-20 items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100">
-        <AppIcon name={icon} size={19} />
+    <article className="flex min-h-[4.75rem] min-w-0 items-start gap-2.5 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm sm:min-h-20 sm:p-3">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100 sm:h-9 sm:w-9">
+        <AppIcon name={icon} size={18} />
       </div>
       <div className="min-w-0">
-        <p className="truncate text-[0.68rem] font-black uppercase tracking-wide text-slate-500">
+        <p className="truncate text-[0.65rem] font-black uppercase text-slate-500 sm:text-[0.68rem]">
           {label}
         </p>
-        <p className={`mt-1 truncate text-lg font-black sm:text-xl ${valueClassName}`}>
+        <p
+          className={`mt-0.5 truncate text-base font-black leading-tight sm:text-xl ${valueClassName}`}
+        >
           {value}
         </p>
         {helperText && (
-          <p className="mt-0.5 truncate text-xs text-slate-500">
+          <p className="mt-0.5 truncate text-[0.7rem] leading-4 text-slate-500 sm:text-xs">
             {helperText}
           </p>
         )}
@@ -799,20 +807,32 @@ function SummaryCard({
 }
 
 function DashboardQuickActions({ canStartIntake, onNavigate }) {
-  if (!canStartIntake) {
-    return null;
-  }
-
   return (
-    <section>
-      <button
-        className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-base font-black text-white shadow-[0_14px_28px_rgba(5,150,105,0.22)] transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-        onClick={() => onNavigate?.("Intake")}
-        type="button"
-      >
-        <AppIcon name="plus" size={20} />
-        New Vehicle
-      </button>
+    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div className="min-w-0">
+          <p className="text-[0.68rem] font-black uppercase text-emerald-700">
+            Admin Workspace
+          </p>
+          <h1 className="mt-0.5 truncate text-xl font-black text-slate-950 sm:text-2xl">
+            Dashboard
+          </h1>
+          <p className="mt-1 line-clamp-2 text-sm text-slate-500">
+            Track inventory, work, purchasing, and financial momentum.
+          </p>
+        </div>
+
+        {canStartIntake && (
+          <button
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-[0_12px_24px_rgba(5,150,105,0.2)] transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:w-auto"
+            onClick={() => onNavigate?.("Intake")}
+            type="button"
+          >
+            <AppIcon name="plus" size={18} />
+            New Vehicle
+          </button>
+        )}
+      </div>
     </section>
   );
 }
@@ -827,42 +847,154 @@ function Badge({ children, className }) {
   );
 }
 
+function DashboardSectionSwitcher({ activeSection, counts = {}, onChange }) {
+  return (
+    <nav
+      aria-label="Dashboard sections"
+      className="min-w-0 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm"
+    >
+      <div className="grid grid-cols-3 gap-1">
+        {dashboardSections.map((section) => {
+          const isActive = activeSection === section.key;
+          const count = counts[section.key];
+
+          return (
+            <button
+              aria-pressed={isActive}
+              className={`flex min-h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 sm:text-sm ${
+                isActive
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+              }`}
+              key={section.key}
+              onClick={() => onChange?.(section.key)}
+              type="button"
+            >
+              <span className="truncate">{section.label}</span>
+              {count !== undefined && (
+                <span
+                  className={`inline-flex min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 py-0.5 text-[0.65rem] font-black ${
+                    isActive
+                      ? "bg-white/20 text-white"
+                      : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {formatNumber(count)}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+function DashboardActionRow({
+  helperText,
+  icon,
+  label,
+  onClick,
+  tone = "gray",
+  value,
+}) {
+  const toneClasses = getToneClasses(tone);
+  const rowContent = (
+    <>
+      <span
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${toneClasses.icon}`}
+      >
+        <AppIcon name={icon} size={17} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-black text-slate-950">
+          {label}
+        </span>
+        {helperText && (
+          <span className="mt-0.5 block truncate text-xs text-slate-500">
+            {helperText}
+          </span>
+        )}
+      </span>
+      <span className="flex shrink-0 items-center gap-2">
+        <span
+          className={`inline-flex min-w-8 items-center justify-center rounded-full border px-2 py-0.5 text-xs font-black ${toneClasses.badge}`}
+        >
+          {value}
+        </span>
+        {onClick && (
+          <AppIcon
+            className="text-slate-400"
+            name="chevron-right"
+            size={17}
+          />
+        )}
+      </span>
+    </>
+  );
+
+  if (!onClick) {
+    return (
+      <div className="grid min-h-14 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 sm:px-4">
+        {rowContent}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      className="grid min-h-14 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 text-left transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 sm:px-4"
+      onClick={onClick}
+      type="button"
+    >
+      {rowContent}
+    </button>
+  );
+}
+
 function DashboardAttentionList({ metrics, onNavigate }) {
   return (
     <DashboardSection title="Needs Attention">
-      <div className="grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="divide-y divide-slate-100">
         {metrics.map((metric) => {
           const toneClasses = getToneClasses(metric.tone);
 
           return (
             <button
-              className="flex min-h-24 w-full items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-3 text-left transition hover:border-emerald-200 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+              className="grid min-h-14 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 text-left transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 sm:px-4"
               key={metric.label}
               onClick={() => onNavigate?.(metric.actionPage)}
               type="button"
             >
               <span
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${toneClasses.icon}`}
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${toneClasses.icon}`}
               >
-                <AppIcon name={metric.icon} size={20} />
+                <AppIcon name={metric.icon} size={17} />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-bold text-slate-900">
                   {metric.label}
                 </span>
                 {metric.helperText && (
-                  <span className="mt-1 block line-clamp-2 text-xs leading-5 text-slate-500">
+                  <span className="mt-0.5 block truncate text-xs text-slate-500">
                     {metric.helperText}
                   </span>
                 )}
               </span>
-              <span className="flex shrink-0 flex-col items-end gap-1">
+              <span className="flex shrink-0 items-center gap-2">
                 <span
-                  className={`inline-flex min-w-9 items-center justify-center rounded-full border px-2.5 py-1 text-sm font-black ${toneClasses.badge}`}
+                  className={`inline-flex min-w-8 items-center justify-center rounded-full border px-2 py-0.5 text-xs font-black ${toneClasses.badge}`}
                 >
                   {formatNumber(metric.count)}
                 </span>
-                <span className="text-xs font-bold text-slate-400">Open</span>
+                <span className="hidden text-xs font-bold text-slate-400 sm:inline">
+                  Open
+                </span>
+                <AppIcon
+                  className="text-slate-400 sm:hidden"
+                  name="chevron-right"
+                  size={17}
+                />
               </span>
             </button>
           );
@@ -872,26 +1004,204 @@ function DashboardAttentionList({ metrics, onNavigate }) {
   );
 }
 
+function DashboardAttentionPanel({
+  attentionMetrics,
+  attentionQueue,
+  onNavigate,
+  onSelectVehicle,
+}) {
+  return (
+    <div className="grid min-w-0 gap-3 xl:grid-cols-[0.92fr_1.08fr]">
+      <DashboardAttentionList metrics={attentionMetrics} onNavigate={onNavigate} />
+      <AttentionQueue
+        items={attentionQueue}
+        onNavigate={onNavigate}
+        onSelectVehicle={onSelectVehicle}
+      />
+    </div>
+  );
+}
+
+function DashboardOverviewPanel({
+  activeVehiclesCount,
+  openPurchaseOrderCount,
+  openRepairJobsCount,
+  partQueueCounts,
+  qualityCheckCount,
+  readyForSaleCount,
+  recentActivityLogs,
+  vehiclesById,
+  onNavigate,
+}) {
+  const overviewRows = [
+    {
+      helperText: "Vehicles not sold or archived",
+      icon: "car",
+      label: "Active Inventory",
+      page: "Vehicles",
+      tone: "green",
+      value: formatNumber(activeVehiclesCount),
+    },
+    {
+      helperText: "Open service work",
+      icon: "wrench",
+      label: "Repair Work",
+      page: "Repairs",
+      tone: "amber",
+      value: formatNumber(openRepairJobsCount),
+    },
+    {
+      helperText: "Ready for purchase orders",
+      icon: "parts",
+      label: "Parts Need PO",
+      page: "Parts",
+      tone: "amber",
+      value: formatNumber(partQueueCounts.needs_po ?? 0),
+    },
+    {
+      helperText: "Ordered or partially received",
+      icon: "file",
+      label: "Open Purchase Orders",
+      page: "Purchase Orders",
+      tone: "blue",
+      value: formatNumber(openPurchaseOrderCount),
+    },
+    {
+      helperText: "Final review before sale",
+      icon: "status",
+      label: "Quality Check",
+      page: "Vehicles",
+      tone: "blue",
+      value: formatNumber(qualityCheckCount),
+    },
+    {
+      helperText: "Available after final checks",
+      icon: "check",
+      label: "Ready for Sale",
+      page: "Vehicles",
+      tone: "green",
+      value: formatNumber(readyForSaleCount),
+    },
+  ];
+
+  return (
+    <div className="grid min-w-0 gap-3 xl:grid-cols-[0.9fr_1.1fr]">
+      <DashboardSection title="Operations Snapshot">
+        <div className="divide-y divide-slate-100">
+          {overviewRows.map((row) => (
+            <DashboardActionRow
+              helperText={row.helperText}
+              icon={row.icon}
+              key={row.label}
+              label={row.label}
+              onClick={() => onNavigate?.(row.page)}
+              tone={row.tone}
+              value={row.value}
+            />
+          ))}
+        </div>
+      </DashboardSection>
+
+      <RecentActivity
+        activityLogs={recentActivityLogs}
+        vehiclesById={vehiclesById}
+      />
+    </div>
+  );
+}
+
+function DashboardFinancePanel({
+  activeInventoryInvestment,
+  activeVehiclesCount,
+  averageActiveInvestment,
+  estimatedActiveProfit,
+  soldRevenue,
+  soldVehiclesCount,
+}) {
+  return (
+    <div className="grid min-w-0 gap-3 xl:grid-cols-[1.2fr_0.8fr]">
+      <DashboardSection title="Finance Overview">
+        <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2">
+          <SummaryCard
+            helperText={`${formatNumber(activeVehiclesCount)} active`}
+            icon="dollar"
+            label="Active Investment"
+            value={formatCurrency(activeInventoryInvestment)}
+          />
+          <SummaryCard
+            helperText="Active vehicles"
+            icon="chart-up"
+            label="Estimated Profit"
+            value={formatCurrency(estimatedActiveProfit)}
+            valueClassName={
+              estimatedActiveProfit < 0 ? "text-red-700" : "text-emerald-700"
+            }
+          />
+          <SummaryCard
+            helperText={`${formatNumber(soldVehiclesCount)} sold`}
+            icon="dollar"
+            label="Sold Revenue"
+            value={formatCurrency(soldRevenue)}
+            valueClassName="text-emerald-700"
+          />
+          <SummaryCard
+            helperText="Per active vehicle"
+            icon="car"
+            label="Avg Investment"
+            value={formatCurrency(averageActiveInvestment)}
+          />
+        </div>
+      </DashboardSection>
+
+      <DashboardSection title="Sales Snapshot">
+        <div className="divide-y divide-slate-100">
+          <DashboardActionRow
+            helperText="Closed sales"
+            icon="check"
+            label="Sold Vehicles"
+            tone="green"
+            value={formatNumber(soldVehiclesCount)}
+          />
+          <DashboardActionRow
+            helperText="Total sale revenue"
+            icon="dollar"
+            label="Sold Revenue"
+            tone="green"
+            value={formatCurrency(soldRevenue)}
+          />
+          <DashboardActionRow
+            helperText="Projected active upside"
+            icon="chart-up"
+            label="Estimated Profit"
+            tone={estimatedActiveProfit < 0 ? "red" : "green"}
+            value={formatCurrency(estimatedActiveProfit)}
+          />
+        </div>
+      </DashboardSection>
+    </div>
+  );
+}
+
 function DashboardLoadingState() {
   return (
     <div className="space-y-4">
-      <section className="rounded-3xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-600 shadow-sm">
+      <section className="rounded-2xl border border-slate-200 bg-white p-3 text-sm font-semibold text-slate-600 shadow-sm">
         Loading dashboard...
       </section>
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         {Array.from({ length: 6 }).map((_, index) => (
           <div
-            className="h-20 animate-pulse rounded-2xl border border-slate-200 bg-white shadow-sm"
+            className="h-[4.75rem] animate-pulse rounded-2xl border border-slate-200 bg-white shadow-sm"
             key={index}
           />
         ))}
       </section>
-      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <div className="h-4 w-36 rounded-full bg-slate-200" />
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, index) => (
             <div
-              className="h-20 animate-pulse rounded-2xl bg-slate-100"
+              className="h-14 animate-pulse rounded-xl bg-slate-100"
               key={index}
             />
           ))}
@@ -950,39 +1260,39 @@ function AttentionQueue({ items, onNavigate, onSelectVehicle }) {
   }
 
   return (
-    <DashboardSection title="Attention Queue">
+    <DashboardSection title="Priority Queue">
       {items.length === 0 ? (
-        <div className="m-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500 sm:m-5">
+        <div className="m-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
           Nothing urgent in the queue right now.
         </div>
       ) : (
         <div className="divide-y divide-slate-100">
           {items.map((item, index) => (
             <button
-              className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 sm:px-5"
+              className="grid min-h-16 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 text-left transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 sm:px-4"
               disabled={!item.actionPage && !item.vehicleId}
               key={`${item.type}-${item.vehicleId}-${item.title}-${index}`}
               onClick={() => handleAction(item)}
               type="button"
             >
               <span
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
                   getToneClasses(getQueueTone(item)).icon
                 }`}
               >
-                <AppIcon name={getQueueIcon(item)} size={20} />
+                <AppIcon name={getQueueIcon(item)} size={17} />
               </span>
 
               <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <h3 className="truncate text-sm font-black text-slate-950">
                     {item.title}
                   </h3>
-                  <Badge className={genericBadgeClassName(item.status)}>
+                  <Badge className={`${genericBadgeClassName(item.status)} hidden sm:inline-flex`}>
                     {formatLabel(item.status, item.statusLabels)}
                   </Badge>
                 </div>
-                <p className="mt-1 truncate text-xs text-slate-500">
+                <p className="mt-0.5 truncate text-xs text-slate-500">
                   {item.type} - {getVehicleLabel(item.vehicle)}
                 </p>
                 <p className="mt-0.5 truncate text-xs text-slate-600">
@@ -1009,18 +1319,18 @@ function RecentActivity({ activityLogs, vehiclesById }) {
   return (
     <DashboardSection title="Recent Activity">
       {visibleActivityLogs.length === 0 ? (
-        <div className="m-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500 sm:m-5">
+        <div className="m-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
           No recent activity found yet.
         </div>
       ) : (
         <div className="divide-y divide-slate-100">
           {visibleActivityLogs.map((activityLog) => (
             <div
-              className="flex items-start gap-3 px-4 py-3 sm:px-5"
+              className="flex min-w-0 items-start gap-2.5 px-3 py-2.5 sm:px-4"
               key={activityLog.id}
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
-                <AppIcon name="status" size={18} />
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                <AppIcon name="status" size={17} />
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
@@ -1059,6 +1369,8 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
   const [sales, setSales] = useState([]);
   const [thirdPartyRepairs, setThirdPartyRepairs] = useState([]);
   const [vehicles, setVehicles] = useState([]);
+  const [activeDashboardSection, setActiveDashboardSection] =
+    useState("attention");
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -1165,6 +1477,23 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
   const soldRevenue = getSalesTotal(sales);
   const partQueueCounts = getPartQueueCounts(partRequests);
   const repairQueueCounts = getRepairQueueCounts(repairJobs);
+  const openPurchaseOrderCount = purchaseOrders.filter((purchaseOrder) =>
+    openPurchaseOrderStatuses.includes(purchaseOrder.status)
+  ).length;
+  const openRepairJobsCount = repairJobs.filter(
+    (repairJob) =>
+      repairJob.status !== "completed" && repairJob.status !== "cancelled"
+  ).length;
+  const qualityCheckCount = vehicles.filter(
+    (vehicle) => vehicle.status === "quality_check"
+  ).length;
+  const readyForSaleCount = vehicles.filter(
+    (vehicle) => vehicle.status === "ready_for_sale"
+  ).length;
+  const averageActiveInvestment =
+    activeVehicles.length > 0
+      ? activeInventoryInvestment / activeVehicles.length
+      : 0;
   const attentionMetrics = getAttentionMetrics({
     partQueueCounts,
     partRequests,
@@ -1181,6 +1510,10 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
     thirdPartyRepairs,
     vehiclesById,
   });
+  const totalAttentionCount = attentionMetrics.reduce(
+    (total, metric) => total + numberOrZero(metric.count),
+    0
+  );
 
   if (!canViewDashboard) {
     return (
@@ -1191,7 +1524,7 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-3 sm:space-y-4">
       <DashboardQuickActions
         canStartIntake={canStartIntake}
         onNavigate={onNavigate}
@@ -1253,26 +1586,48 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
             />
           </section>
 
-          <DashboardAttentionList
-            metrics={attentionMetrics}
-            onNavigate={onNavigate}
+          <DashboardSectionSwitcher
+            activeSection={activeDashboardSection}
+            counts={{ attention: totalAttentionCount }}
+            onChange={setActiveDashboardSection}
           />
 
-          <div className="grid gap-4 xl:grid-cols-[1.35fr_0.9fr]">
-            <AttentionQueue
-              items={attentionQueue}
+          {activeDashboardSection === "overview" && (
+            <DashboardOverviewPanel
+              activeVehiclesCount={activeVehicles.length}
+              openPurchaseOrderCount={openPurchaseOrderCount}
+              openRepairJobsCount={openRepairJobsCount}
+              partQueueCounts={partQueueCounts}
+              qualityCheckCount={qualityCheckCount}
+              readyForSaleCount={readyForSaleCount}
+              recentActivityLogs={activityLogs}
+              vehiclesById={vehiclesById}
+              onNavigate={onNavigate}
+            />
+          )}
+
+          {activeDashboardSection === "attention" && (
+            <DashboardAttentionPanel
+              attentionMetrics={attentionMetrics}
+              attentionQueue={attentionQueue}
               onNavigate={onNavigate}
               onSelectVehicle={onSelectVehicle}
             />
+          )}
 
-            <RecentActivity
-              activityLogs={activityLogs}
-              vehiclesById={vehiclesById}
+          {activeDashboardSection === "finance" && (
+            <DashboardFinancePanel
+              activeInventoryInvestment={activeInventoryInvestment}
+              activeVehiclesCount={activeVehicles.length}
+              averageActiveInvestment={averageActiveInvestment}
+              estimatedActiveProfit={estimatedActiveProfit}
+              soldRevenue={soldRevenue}
+              soldVehiclesCount={soldVehicles.length}
             />
-          </div>
+          )}
 
           {vehicles.length === 0 && investmentSummaries.length === 0 && (
-            <section className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
               <h2 className="text-lg font-semibold text-slate-900">
                 No vehicles yet.
               </h2>
