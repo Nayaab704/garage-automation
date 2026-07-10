@@ -6,13 +6,16 @@ function VehiclePrebookingBadge({
   interactive = false,
   onClick,
   prebooking,
+  showAmount = true,
+  showIcon = true,
 }) {
   if (!prebooking) {
     return null;
   }
 
-  const label = getPrebookingBadgeLabel(prebooking);
-  const classNames = `inline-flex h-7 max-w-full items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-bold leading-none text-indigo-700 ${className}`;
+  const label = showAmount ? getPrebookingBadgeLabel(prebooking) : "Prebooked";
+  const gapClassName = showIcon ? "gap-1.5" : "";
+  const classNames = `inline-flex h-7 max-w-full items-center ${gapClassName} rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold leading-none text-indigo-700 ${className}`;
 
   if (interactive) {
     return (
@@ -22,7 +25,7 @@ function VehiclePrebookingBadge({
         title="Open prebooking details"
         type="button"
       >
-        <AppIcon name="dollar" size={14} />
+        {showIcon && <AppIcon name="dollar" size={14} />}
         <span className="min-w-0 truncate">{label}</span>
       </button>
     );
@@ -30,7 +33,7 @@ function VehiclePrebookingBadge({
 
   return (
     <span className={classNames} title={label}>
-      <AppIcon name="dollar" size={14} />
+      {showIcon && <AppIcon name="dollar" size={14} />}
       <span className="min-w-0 truncate">{label}</span>
     </span>
   );

@@ -142,6 +142,8 @@ function VehicleCard({
                 interactive={canManagePrebooking}
                 onClick={handlePrebookingBadgeClick}
                 prebooking={prebooking}
+                showAmount={false}
+                showIcon={false}
               />
             )}
             {hasThirdPartyRepair && <ThirdPartyBadge />}

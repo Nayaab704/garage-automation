@@ -24,9 +24,9 @@ function AuthHeader({
     : getGreetingName({ currentProfile, userEmail, userMetadata });
 
   return (
-    <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5 sm:flex-none sm:gap-3">
+    <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none sm:gap-3">
       <div className="min-w-0 text-right" title={userEmail || undefined}>
-        <p className="max-w-20 truncate text-xs font-black text-slate-900 sm:max-w-48 sm:text-base">
+        <p className="max-w-[11rem] truncate text-xs font-black text-slate-900 sm:max-w-48 sm:text-base">
           Hello, {greetingName}
         </p>
         {profileError && !isProfileLoading && (

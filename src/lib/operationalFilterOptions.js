@@ -3,6 +3,7 @@ import {
   getVehicleContext,
   getVehicleSearchValues,
 } from "./searchText";
+import { getVehicleColorDisplay } from "./vehicleColorDisplay";
 
 function uniqueValues(values) {
   return [...new Set(values.filter(Boolean))];
@@ -24,6 +25,14 @@ function getVehicleName(vehicle) {
     .join(" ");
 }
 
+function getVehicleModelTrim(vehicle) {
+  return [vehicle?.model, vehicle?.trim].filter(Boolean).join(" ");
+}
+
+function getVehicleYearMake(vehicle) {
+  return [vehicle?.year, vehicle?.make].filter(Boolean).join(" ");
+}
+
 export function formatVehicleFilterLabel(vehicle) {
   const context = getVehicleContext(vehicle);
 
@@ -31,19 +40,51 @@ export function formatVehicleFilterLabel(vehicle) {
     return "Vehicle not found";
   }
 
-  return [
-    context.stock_number || "No stock number",
-    getVehicleName(context),
-    context.color,
-  ]
-    .filter(Boolean)
-    .join(" - ");
+  const modelTrim = getVehicleModelTrim(context);
+  const yearMake = getVehicleYearMake(context);
+
+  return [modelTrim, yearMake].filter(Boolean).join(" · ") || "Vehicle";
 }
 
 function getVehicleShortLabel(vehicle) {
   const context = getVehicleContext(vehicle);
+  const modelTrim = getVehicleModelTrim(context);
+  const year = context?.year ? String(context.year) : "";
 
-  return context?.stock_number || getVehicleName(context) || "Vehicle";
+  return [modelTrim, year].filter(Boolean).join(" · ") || modelTrim || "Vehicle";
+}
+
+function hexToRgba(hexColor, alpha) {
+  const hex = String(hexColor ?? "").replace("#", "");
+
+  if (!/^[0-9a-f]{6}$/i.test(hex)) {
+    return "";
+  }
+
+  const red = parseInt(hex.slice(0, 2), 16);
+  const green = parseInt(hex.slice(2, 4), 16);
+  const blue = parseInt(hex.slice(4, 6), 16);
+
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function getVehicleOptionColorStyles(color) {
+  const colorDisplay = getVehicleColorDisplay(color);
+  const dotColor = colorDisplay.dotStyle.backgroundColor;
+  const normalizedLabel = String(colorDisplay.label ?? "").toLowerCase();
+  const tintSource =
+    normalizedLabel.includes("white") || normalizedLabel.includes("silver")
+      ? "#94A3B8"
+      : dotColor;
+  const tintColor =
+    hexToRgba(tintSource, 0.08) || "rgba(100, 116, 139, 0.08)";
+
+  return {
+    colorDotStyle: colorDisplay.dotStyle,
+    colorTintStyle: {
+      backgroundColor: tintColor,
+    },
+  };
 }
 
 function createVendorKey({ id, name }) {
@@ -86,10 +127,12 @@ function addVehicleOption(optionMap, { date, vehicle }) {
   const existingOption = optionMap.get(String(context.id));
   const vehicleName = getVehicleName(context);
   const label = formatVehicleFilterLabel(context);
+  const colorStyles = getVehicleOptionColorStyles(context.color);
 
   optionMap.set(String(context.id), {
-    description: context.vin || context.status || "",
+    description: "",
     id: String(context.id),
+    kind: "vehicle",
     label,
     lastUsedAt: Math.max(existingOption?.lastUsedAt ?? 0, getTime(date)),
     searchText: buildSearchText([
@@ -98,6 +141,7 @@ function addVehicleOption(optionMap, { date, vehicle }) {
       ...getVehicleSearchValues(context),
     ]),
     shortLabel: getVehicleShortLabel(context),
+    ...colorStyles,
     vehicleId: String(context.id),
     vehicleName,
   });

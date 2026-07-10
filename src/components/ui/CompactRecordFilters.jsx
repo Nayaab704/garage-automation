@@ -44,7 +44,43 @@ function FilterDropdown({
     setSearchTerm("");
   }
 
+  function renderVehicleDot(option) {
+    return (
+      <span
+        aria-hidden="true"
+        className="h-3 w-3 shrink-0 rounded-full border border-slate-300"
+        style={option.colorDotStyle}
+      />
+    );
+  }
+
+  function renderSelectedMarker() {
+    if (selectedOption?.kind === "vehicle") {
+      return renderVehicleDot(selectedOption);
+    }
+
+    return <AppIcon name="filter" size={14} />;
+  }
+
   function renderOption(option) {
+    if (option.kind === "vehicle") {
+      return (
+        <button
+          className="flex w-full min-w-0 items-center gap-2 rounded-xl px-3 py-2 text-left transition hover:bg-slate-50"
+          key={option.id}
+          onClick={() => handleSelect(option.id)}
+          style={option.colorTintStyle}
+          title={option.label}
+          type="button"
+        >
+          {renderVehicleDot(option)}
+          <span className="min-w-0 truncate text-sm font-black text-slate-800">
+            {option.label}
+          </span>
+        </button>
+      );
+    }
+
     return (
       <button
         className="flex w-full min-w-0 items-start gap-2 rounded-xl px-3 py-2 text-left transition hover:bg-slate-50"
@@ -95,7 +131,7 @@ function FilterDropdown({
         onClick={() => setIsOpen((currentValue) => !currentValue)}
         type="button"
       >
-        <AppIcon name="filter" size={14} />
+        {renderSelectedMarker()}
         <span className="truncate">
           {selectedOption?.shortLabel || selectedOption?.label || label}
         </span>

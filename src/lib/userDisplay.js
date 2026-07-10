@@ -24,6 +24,22 @@ function getEmailUserName(value) {
   return userName ? userName.replace(/[._-]+/g, " ") : "";
 }
 
+function formatNameToken(value) {
+  const token = getFirstToken(value);
+
+  if (!token) {
+    return "";
+  }
+
+  const hasUppercase = /[A-Z]/.test(token);
+
+  if (hasUppercase) {
+    return token;
+  }
+
+  return token.charAt(0).toUpperCase() + token.slice(1);
+}
+
 function isGenericDisplayName(value) {
   return [
     "admin",
@@ -48,26 +64,27 @@ export function formatUserFirstName(profileOrName) {
   if (typeof profileOrName === "string") {
     const emailUserName = getEmailUserName(profileOrName);
 
-    return getFirstToken(emailUserName || profileOrName) || "User";
+    return formatNameToken(emailUserName || profileOrName) || "User";
   }
 
   const metadataName = firstNonEmpty([
+    profileOrName.name,
     profileOrName.user_metadata?.full_name,
     profileOrName.user_metadata?.name,
     profileOrName.user_metadata?.display_name,
     profileOrName.raw_user_meta_data?.full_name,
     profileOrName.raw_user_meta_data?.name,
     profileOrName.raw_user_meta_data?.display_name,
-    profileOrName.name,
   ]);
   const fullName = firstNonEmpty([profileOrName.full_name]);
   const emailUserName = getEmailUserName(profileOrName.email);
-  const displayName = isGenericDisplayName(fullName) && (metadataName || emailUserName)
-    ? firstNonEmpty([metadataName, emailUserName])
-    : firstNonEmpty([fullName, metadataName, emailUserName]);
+  const displayName =
+    isGenericDisplayName(fullName) && (metadataName || emailUserName)
+      ? firstNonEmpty([metadataName, emailUserName])
+      : firstNonEmpty([fullName, metadataName, emailUserName]);
   const fallbackDisplayName = getEmailUserName(displayName) || displayName;
 
-  return getFirstToken(fallbackDisplayName) || fallbackDisplayName || "User";
+  return formatNameToken(fallbackDisplayName) || fallbackDisplayName || "User";
 }
 
 export function formatUserAction(label, profileOrName) {

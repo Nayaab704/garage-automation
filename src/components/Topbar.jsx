@@ -26,12 +26,13 @@ function Topbar({
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           {showBackButton && (
             <button
-              className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 sm:min-h-10 sm:gap-1.5 sm:px-3 sm:py-2 sm:text-sm"
+              aria-label="Back"
+              className="inline-flex min-h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-0 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 sm:min-h-10 sm:w-auto sm:gap-1.5 sm:px-3 sm:py-2 sm:text-sm"
               onClick={onBack}
               type="button"
             >
               <AppIcon className="rotate-180" name="chevron-right" size={17} />
-              <span>Back</span>
+              <span className="hidden sm:inline">Back</span>
             </button>
           )}
 
