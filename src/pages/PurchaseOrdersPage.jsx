@@ -937,7 +937,7 @@ function PurchaseOrderCard({
             canDelete={canDeleteDocuments}
             canUpload={canUploadDocuments}
             currentProfile={currentProfile}
-            description="Upload a PDF or image receipt or invoice for this purchase order."
+            description="Upload a document or image receipt/invoice for this purchase order."
             documentType="purchase_receipt"
             documents={documents}
             emptyMessage="No receipts or invoices uploaded for this purchase order."

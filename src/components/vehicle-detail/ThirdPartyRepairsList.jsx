@@ -330,7 +330,7 @@ function ThirdPartyRepairsList({
                   canDelete={canManageDocuments}
                   canUpload={canUploadDocuments}
                   currentProfile={currentProfile}
-                  description="Upload a PDF or image invoice for this outside repair."
+                  description="Upload a document or image invoice for this outside repair."
                   documentType="third_party_invoice"
                   documents={documents.filter(
                     (documentRecord) =>

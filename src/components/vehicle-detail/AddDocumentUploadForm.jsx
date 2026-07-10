@@ -20,6 +20,50 @@ const emptyForm = {
   notes: "",
 };
 
+const maxDocumentFileSizeBytes = 5 * 1024 * 1024;
+const largeDocumentMessage =
+  "This file is too large. Please upload a file under 5 MB.";
+const documentUploadAccept = [
+  "image/*",
+  "application/pdf",
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".csv",
+  ".txt",
+  ".rtf",
+  "text/csv",
+  "text/plain",
+  "application/msword",
+  "application/rtf",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+].join(",");
+const allowedDocumentMimeTypes = new Set([
+  "application/csv",
+  "application/msword",
+  "application/pdf",
+  "application/rtf",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/csv",
+  "text/plain",
+]);
+const allowedDocumentExtensions = new Set([
+  "csv",
+  "doc",
+  "docx",
+  "pdf",
+  "rtf",
+  "txt",
+  "xls",
+  "xlsx",
+]);
+
 function emptyToNull(value) {
   const trimmedValue = String(value ?? "").trim();
   return trimmedValue === "" ? null : trimmedValue;
@@ -43,13 +87,37 @@ function getDocumentTypeLabel(documentType) {
   return documentTypeLabels[documentType] ?? "Document";
 }
 
+function getFileExtension(file) {
+  return String(file?.name ?? "")
+    .split(".")
+    .pop()
+    .toLowerCase();
+}
+
 function isAllowedFile(file) {
-  return file?.type === "application/pdf" || file?.type?.startsWith("image/");
+  if (!file) {
+    return false;
+  }
+
+  if (isImageFile(file)) {
+    return true;
+  }
+
+  return (
+    allowedDocumentMimeTypes.has(String(file.type ?? "").toLowerCase()) ||
+    allowedDocumentExtensions.has(getFileExtension(file))
+  );
+}
+
+function isOversizedDocumentFile(file) {
+  return Boolean(
+    file && !isImageFile(file) && file.size > maxDocumentFileSizeBytes
+  );
 }
 
 function AddDocumentUploadForm({
   currentProfile,
-  description = "Upload a PDF or image document.",
+  description = "Upload a document or image.",
   documentType,
   onActivityLogged,
   onClose,
@@ -79,7 +147,28 @@ function AddDocumentUploadForm({
 
   function handleFileChange(event) {
     const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+      setSelectedFile(null);
+      return;
+    }
+
+    if (!isAllowedFile(file)) {
+      setSelectedFile(null);
+      setErrorMessage("Please choose a document or image file.");
+      event.target.value = "";
+      return;
+    }
+
+    if (isOversizedDocumentFile(file)) {
+      setSelectedFile(null);
+      setErrorMessage(largeDocumentMessage);
+      event.target.value = "";
+      return;
+    }
+
     setSelectedFile(file);
+    setErrorMessage("");
   }
 
   async function cleanupUploadedFile(filePath) {
@@ -99,12 +188,17 @@ function AddDocumentUploadForm({
     }
 
     if (!selectedFile) {
-      setErrorMessage("Choose a PDF or image before uploading.");
+      setErrorMessage("Choose a document or image before uploading.");
       return;
     }
 
     if (!isAllowedFile(selectedFile)) {
-      setErrorMessage("Please choose a PDF or image file.");
+      setErrorMessage("Please choose a document or image file.");
+      return;
+    }
+
+    if (isOversizedDocumentFile(selectedFile)) {
+      setErrorMessage(largeDocumentMessage);
       return;
     }
 
@@ -201,11 +295,11 @@ function AddDocumentUploadForm({
       <form className="space-y-5" onSubmit={handleSubmit}>
           <div>
             <span className={formControlClassNames.label}>
-              PDF or Image
+              Document or Image
             </span>
             <div className="mt-2">
               <input
-                accept="application/pdf,image/*"
+                accept={documentUploadAccept}
                 className="sr-only"
                 id="document-upload-file"
                 key={fileInputKey}
@@ -216,7 +310,7 @@ function AddDocumentUploadForm({
                 className={buttonClassNames.file}
                 htmlFor="document-upload-file"
               >
-                Choose PDF or Image
+                Choose Document or Image
               </label>
             </div>
             {selectedFile && (
