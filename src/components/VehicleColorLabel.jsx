@@ -3,10 +3,11 @@ import { getVehicleColorDisplay } from "../lib/vehicleColorDisplay";
 function VehicleColorLabel({
   className = "",
   color,
+  colorHex = "",
   label = "Color",
   showLabel = false,
 }) {
-  const colorDisplay = getVehicleColorDisplay(color);
+  const colorDisplay = getVehicleColorDisplay(color, colorHex);
   const title = showLabel
     ? `${label}: ${colorDisplay.label}`
     : colorDisplay.label;

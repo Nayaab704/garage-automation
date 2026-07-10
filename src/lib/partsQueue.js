@@ -158,7 +158,7 @@ export async function fetchPartsQueue() {
   ] = await Promise.all([
     supabase
       .from("vehicles")
-      .select("id, stock_number, vin, year, make, model, trim, color, status"),
+      .select("id, stock_number, vin, year, make, model, trim, color, color_hex, status"),
     repairJobIds.length > 0
       ? supabase
           .from("repair_jobs")
@@ -256,7 +256,7 @@ export async function fetchPartsQueue() {
   if (missingRepairJobVehicleIds.length > 0) {
     const missingVehiclesResponse = await supabase
       .from("vehicles")
-      .select("id, stock_number, vin, year, make, model, trim, color, status")
+      .select("id, stock_number, vin, year, make, model, trim, color, color_hex, status")
       .in("id", missingRepairJobVehicleIds);
 
     if (missingVehiclesResponse.error) {

@@ -6,6 +6,7 @@ import {
 } from "./ui/uiStyles";
 import AppIcon from "./ui/AppIcon";
 import VehicleAutocompleteInput from "./VehicleAutocompleteInput";
+import VehicleColorPicker from "./VehicleColorPicker";
 import {
   compressImageFile,
   defaultPhotoCompressionOptions,
@@ -18,6 +19,10 @@ import {
   getTrimSuggestions,
   recordVehicleCatalogEntrySafely,
 } from "../lib/vehicleCatalog";
+import {
+  getVehicleColorHexForName,
+  normalizeVehicleColorHex,
+} from "../lib/vehicleColorDisplay";
 import { vehicleOriginOptions } from "../lib/vehicleOrigin";
 import {
   buildPrebookingPayload,
@@ -34,6 +39,7 @@ const emptyForm = {
   trim: "",
   mileage: "",
   color: "",
+  color_hex: "",
   title_status: "unknown",
   vehicle_origin: "unknown",
   purchase_price: "",
@@ -87,7 +93,13 @@ const basicFields = [
     type: "text",
   },
   { name: "trim", label: "Trim", placeholder: "LE", type: "text" },
-  { name: "color", label: "Color", placeholder: "White", type: "text" },
+  {
+    name: "color",
+    label: "Color",
+    layoutClassName: "md:col-span-2",
+    placeholder: "White",
+    type: "text",
+  },
   {
     name: "mileage",
     label: "Mileage",
@@ -192,6 +204,10 @@ function buildInitialFormData(initialValues = {}) {
 }
 
 function buildVehiclePayload(formData) {
+  const colorHex =
+    normalizeVehicleColorHex(formData.color_hex) ||
+    getVehicleColorHexForName(formData.color);
+
   return {
     vin: emptyToNull(normalizeVin(formData.vin)),
     year: numberOrNull(formData.year),
@@ -200,6 +216,7 @@ function buildVehiclePayload(formData) {
     trim: emptyToNull(formData.trim),
     mileage: numberOrNull(formData.mileage),
     color: emptyToNull(formData.color),
+    color_hex: emptyToNull(colorHex),
     title_status: getValidTitleStatus(formData.title_status),
     vehicle_origin: getValidVehicleOrigin(formData.vehicle_origin),
     purchase_price: decimalOrZero(formData.purchase_price),
@@ -466,6 +483,14 @@ function AddVehicleForm({
     }));
   }
 
+  function handleColorChange({ colorHex, colorName }) {
+    setFormData((currentFormData) => ({
+      ...currentFormData,
+      color: colorName,
+      color_hex: colorHex,
+    }));
+  }
+
   function handlePrebookingChange(event) {
     const { name, value } = event.target;
 
@@ -682,6 +707,20 @@ function AddVehicleForm({
           >
             <IntakeFieldGrid>
               {basicFields.map((field) => {
+                if (field.name === "color") {
+                  return (
+                    <VehicleColorPicker
+                      className={field.layoutClassName ?? ""}
+                      colorHex={formData.color_hex}
+                      colorName={formData.color}
+                      disabled={isSubmitting}
+                      key={field.name}
+                      label={field.label}
+                      onChange={handleColorChange}
+                    />
+                  );
+                }
+
                 if (catalogFieldNames.has(field.name)) {
                   return (
                     <VehicleAutocompleteInput

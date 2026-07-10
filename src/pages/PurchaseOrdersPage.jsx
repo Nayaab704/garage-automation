@@ -425,7 +425,7 @@ async function fetchPurchaseOrdersData() {
       : { data: [], error: null },
     supabase
       .from("vehicles")
-      .select("id, stock_number, vin, year, make, model, trim, color, status"),
+      .select("id, stock_number, vin, year, make, model, trim, color, color_hex, status"),
   ]);
 
   const firstRequiredError =
@@ -534,7 +534,7 @@ async function fetchPurchaseOrdersData() {
     missingVehicleIds.length > 0
       ? await supabase
           .from("vehicles")
-          .select("id, stock_number, vin, year, make, model, trim, color, status")
+          .select("id, stock_number, vin, year, make, model, trim, color, color_hex, status")
           .in("id", missingVehicleIds)
       : { data: [], error: null };
 

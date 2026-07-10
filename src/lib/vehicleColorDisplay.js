@@ -4,9 +4,27 @@ const fallbackColor = {
   textColor: "#64748B",
 };
 
+export const commonVehicleColorOptions = [
+  { hex: "#F8FAFC", name: "White" },
+  { hex: "#111827", name: "Black" },
+  { hex: "#C0C0C0", name: "Silver" },
+  { hex: "#6B7280", name: "Gray" },
+  { hex: "#DC2626", name: "Red" },
+  { hex: "#2563EB", name: "Blue" },
+  { hex: "#16A34A", name: "Green" },
+  { hex: "#92400E", name: "Brown" },
+  { hex: "#D97706", name: "Gold" },
+  { hex: "#CA8A04", name: "Yellow" },
+  { hex: "#EA580C", name: "Orange" },
+  { hex: "#D6B98C", name: "Beige" },
+  { hex: "#7F1D1D", name: "Maroon" },
+  { hex: "#7C3AED", name: "Purple" },
+];
+
 const vehicleColorTokens = {
   beige: {
-    dotColor: "#D6C6A8",
+    borderColor: "#B89462",
+    dotColor: "#D6B98C",
     textColor: "#854D0E",
   },
   black: {
@@ -22,11 +40,11 @@ const vehicleColorTokens = {
     textColor: "#92400E",
   },
   gold: {
-    dotColor: "#CA8A04",
+    dotColor: "#D97706",
     textColor: "#A16207",
   },
   gray: {
-    dotColor: "#9CA3AF",
+    dotColor: "#6B7280",
     textColor: "#6B7280",
   },
   green: {
@@ -34,8 +52,12 @@ const vehicleColorTokens = {
     textColor: "#15803D",
   },
   grey: {
-    dotColor: "#9CA3AF",
+    dotColor: "#6B7280",
     textColor: "#6B7280",
+  },
+  maroon: {
+    dotColor: "#7F1D1D",
+    textColor: "#7F1D1D",
   },
   orange: {
     dotColor: "#EA580C",
@@ -50,7 +72,8 @@ const vehicleColorTokens = {
     textColor: "#DC2626",
   },
   silver: {
-    dotColor: "#94A3B8",
+    borderColor: "#94A3B8",
+    dotColor: "#C0C0C0",
     textColor: "#64748B",
   },
   white: {
@@ -66,9 +89,12 @@ const vehicleColorTokens = {
 
 const tokenAliases = {
   charcoal: "black",
+  cream: "beige",
   gray: "gray",
   grey: "grey",
   pearl: "white",
+  tan: "beige",
+  violet: "purple",
 };
 
 function titleCase(value) {
@@ -103,21 +129,119 @@ function getColorToken(normalizedColor) {
   return tokenAliases[matchedToken] ?? matchedToken ?? "";
 }
 
-export function getVehicleColorDisplay(color) {
+function hexToRgb(hexColor) {
+  const normalizedHex = normalizeVehicleColorHex(hexColor);
+
+  if (!normalizedHex) {
+    return null;
+  }
+
+  return {
+    blue: parseInt(normalizedHex.slice(5, 7), 16),
+    green: parseInt(normalizedHex.slice(3, 5), 16),
+    red: parseInt(normalizedHex.slice(1, 3), 16),
+  };
+}
+
+function getRgbDistance(firstRgb, secondRgb) {
+  return Math.sqrt(
+    (firstRgb.red - secondRgb.red) ** 2 +
+      (firstRgb.green - secondRgb.green) ** 2 +
+      (firstRgb.blue - secondRgb.blue) ** 2
+  );
+}
+
+function getLuminance(hexColor) {
+  const rgb = hexToRgb(hexColor);
+
+  if (!rgb) {
+    return 0;
+  }
+
+  return (0.299 * rgb.red + 0.587 * rgb.green + 0.114 * rgb.blue) / 255;
+}
+
+function getReadableTextColorForHex(hexColor) {
+  const normalizedHex = normalizeVehicleColorHex(hexColor);
+
+  if (!normalizedHex) {
+    return fallbackColor.textColor;
+  }
+
+  return getLuminance(normalizedHex) > 0.58
+    ? fallbackColor.textColor
+    : normalizedHex;
+}
+
+function getSwatchBorderColor(hexColor) {
+  return getLuminance(hexColor) > 0.64 ? "#94A3B8" : hexColor;
+}
+
+export function normalizeVehicleColorHex(hexColor) {
+  const normalizedHex = String(hexColor ?? "").trim();
+
+  if (!normalizedHex) {
+    return "";
+  }
+
+  const withHash = normalizedHex.startsWith("#")
+    ? normalizedHex
+    : `#${normalizedHex}`;
+
+  return /^#[0-9a-f]{6}$/i.test(withHash) ? withHash.toUpperCase() : "";
+}
+
+export function getVehicleColorHexForName(color) {
   const normalizedColor = normalizeVehicleColorName(color);
   const colorToken = getColorToken(normalizedColor);
+
+  return vehicleColorTokens[colorToken]?.dotColor ?? "";
+}
+
+export function getClosestVehicleColorName(hexColor) {
+  const rgb = hexToRgb(hexColor);
+
+  if (!rgb) {
+    return "";
+  }
+
+  return commonVehicleColorOptions
+    .map((option) => ({
+      distance: getRgbDistance(rgb, hexToRgb(option.hex)),
+      name: option.name,
+    }))
+    .sort((firstOption, secondOption) => firstOption.distance - secondOption.distance)[0]
+    ?.name ?? "";
+}
+
+export function getVehicleColorDisplay(color, colorHex = "") {
+  const normalizedColor = normalizeVehicleColorName(color);
+  const colorToken = getColorToken(normalizedColor);
+  const normalizedHex = normalizeVehicleColorHex(colorHex);
   const colorStyle = vehicleColorTokens[colorToken] ?? fallbackColor;
-  const label = normalizedColor ? titleCase(normalizedColor) : "Color n/a";
-  const borderColor = colorStyle.borderColor ?? colorStyle.dotColor;
+  const dotColor = normalizedHex || colorStyle.dotColor;
+  const label = normalizedColor
+    ? titleCase(normalizedColor)
+    : normalizedHex
+      ? getClosestVehicleColorName(normalizedHex) || "Custom color"
+      : "Color n/a";
+  const borderColor = normalizedHex
+    ? getSwatchBorderColor(normalizedHex)
+    : colorStyle.borderColor ?? colorStyle.dotColor;
+  const textColor = normalizedHex
+    ? colorToken
+      ? colorStyle.textColor
+      : getReadableTextColorForHex(normalizedHex)
+    : colorStyle.textColor;
 
   return {
     dotStyle: {
-      backgroundColor: colorStyle.dotColor,
+      backgroundColor: dotColor,
       borderColor,
     },
     label,
     textStyle: {
-      color: colorStyle.textColor,
+      color: textColor,
     },
   };
 }

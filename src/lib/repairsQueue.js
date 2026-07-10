@@ -111,7 +111,9 @@ export async function fetchRepairsQueue() {
     vehicleIds.length > 0
       ? supabase
           .from("vehicles")
-          .select("id, stock_number, vin, year, make, model, trim, color, status")
+          .select(
+            "id, stock_number, vin, year, make, model, trim, color, color_hex, status"
+          )
           .in("id", vehicleIds)
       : { data: [], error: null },
     supabase

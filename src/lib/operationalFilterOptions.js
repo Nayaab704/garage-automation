@@ -68,8 +68,8 @@ function hexToRgba(hexColor, alpha) {
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
-function getVehicleOptionColorStyles(color) {
-  const colorDisplay = getVehicleColorDisplay(color);
+function getVehicleOptionColorStyles(color, colorHex) {
+  const colorDisplay = getVehicleColorDisplay(color, colorHex);
   const dotColor = colorDisplay.dotStyle.backgroundColor;
   const normalizedLabel = String(colorDisplay.label ?? "").toLowerCase();
   const tintSource =
@@ -127,7 +127,10 @@ function addVehicleOption(optionMap, { date, vehicle }) {
   const existingOption = optionMap.get(String(context.id));
   const vehicleName = getVehicleName(context);
   const label = formatVehicleFilterLabel(context);
-  const colorStyles = getVehicleOptionColorStyles(context.color);
+  const colorStyles = getVehicleOptionColorStyles(
+    context.color,
+    context.color_hex
+  );
 
   optionMap.set(String(context.id), {
     description: "",

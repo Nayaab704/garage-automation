@@ -39,6 +39,7 @@ export function getVehicleContext(vehicle) {
 
   return {
     color: vehicle.color ?? null,
+    color_hex: vehicle.color_hex ?? vehicle.colorHex ?? null,
     id: vehicle.id ?? null,
     make: vehicle.make ?? null,
     model: vehicle.model ?? null,

@@ -184,6 +184,7 @@ function VehicleCard({
             <VehicleColorLabel
               className="max-w-full"
               color={vehicle.color}
+              colorHex={vehicle.color_hex}
               showLabel
             />
           </div>

@@ -134,7 +134,13 @@ function MetadataRow({ vehicle }) {
         }
       : null,
     {
-      content: <VehicleColorLabel color={vehicle.color} showLabel />,
+      content: (
+        <VehicleColorLabel
+          color={vehicle.color}
+          colorHex={vehicle.color_hex}
+          showLabel
+        />
+      ),
       key: "color",
     },
     vehicle.vin

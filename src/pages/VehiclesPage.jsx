@@ -13,7 +13,7 @@ import {
 } from "../lib/vehicleStatus";
 
 const vehicleColumns =
-  "id, stock_number, vin, year, make, model, trim, mileage, color, title_status, status, primary_photo_id, created_at";
+  "id, stock_number, vin, year, make, model, trim, mileage, color, color_hex, title_status, status, primary_photo_id, created_at";
 
 const vehiclePhotoColumns =
   "id, vehicle_id, photo_url, repair_job_id, created_at";

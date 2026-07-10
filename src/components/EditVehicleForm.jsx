@@ -3,6 +3,7 @@ import FormActions from "./ui/FormActions";
 import FormMessage from "./ui/FormMessage";
 import ModalShell from "./ui/ModalShell";
 import VehicleAutocompleteInput from "./VehicleAutocompleteInput";
+import VehicleColorPicker from "./VehicleColorPicker";
 import { formControlClassNames } from "./ui/uiStyles";
 import { supabase } from "../lib/supabaseClient";
 import {
@@ -12,6 +13,10 @@ import {
   getTrimSuggestions,
   recordVehicleCatalogEntrySafely,
 } from "../lib/vehicleCatalog";
+import {
+  getVehicleColorHexForName,
+  normalizeVehicleColorHex,
+} from "../lib/vehicleColorDisplay";
 import { vehicleOriginOptions } from "../lib/vehicleOrigin";
 
 const titleStatusOptions = [
@@ -89,6 +94,7 @@ function getInitialFormData(vehicle) {
     trim: valueToString(vehicle.trim),
     mileage: valueToString(vehicle.mileage),
     color: valueToString(vehicle.color),
+    color_hex: valueToString(vehicle.color_hex),
     title_status: vehicle.title_status ?? "unknown",
     vehicle_origin: vehicle.vehicle_origin ?? "unknown",
     purchase_price: valueToString(vehicle.purchase_price),
@@ -98,6 +104,10 @@ function getInitialFormData(vehicle) {
 }
 
 function buildVehiclePayload(formData) {
+  const colorHex =
+    normalizeVehicleColorHex(formData.color_hex) ||
+    getVehicleColorHexForName(formData.color);
+
   return {
     vin: emptyToNull(formData.vin),
     year: numberOrNull(formData.year),
@@ -106,6 +116,7 @@ function buildVehiclePayload(formData) {
     trim: emptyToNull(formData.trim),
     mileage: numberOrNull(formData.mileage),
     color: emptyToNull(formData.color),
+    color_hex: emptyToNull(colorHex),
     title_status: formData.title_status,
     vehicle_origin: formData.vehicle_origin,
     purchase_price: decimalOrNull(formData.purchase_price),
@@ -190,6 +201,14 @@ function EditVehicleForm({ onClose, onVehicleUpdated, vehicle }) {
     }));
   }
 
+  function handleColorChange({ colorHex, colorName }) {
+    setFormData((currentFormData) => ({
+      ...currentFormData,
+      color: colorName,
+      color_hex: colorHex,
+    }));
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
 
@@ -247,6 +266,20 @@ function EditVehicleForm({ onClose, onVehicleUpdated, vehicle }) {
             </legend>
           <div className="grid gap-4 sm:grid-cols-2">
             {textFields.map((field) => {
+              if (field.name === "color") {
+                return (
+                  <VehicleColorPicker
+                    className="sm:col-span-2"
+                    colorHex={formData.color_hex}
+                    colorName={formData.color}
+                    disabled={isSubmitting}
+                    key={field.name}
+                    label={field.label}
+                    onChange={handleColorChange}
+                  />
+                );
+              }
+
               if (catalogFieldNames.has(field.name)) {
                 return (
                   <VehicleAutocompleteInput

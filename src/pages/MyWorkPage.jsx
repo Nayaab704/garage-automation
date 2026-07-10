@@ -28,7 +28,7 @@ const purchaseOrderItemColumns =
   "id, purchase_order_id, part_request_id, description, quantity, status, created_at, return_status, returned_at, returned_by";
 
 const vehicleColumns =
-  "id, stock_number, vin, year, make, model, trim, color, status";
+  "id, stock_number, vin, year, make, model, trim, color, color_hex, status";
 
 const terminalWorkOrderStatuses = new Set([
   "archived",

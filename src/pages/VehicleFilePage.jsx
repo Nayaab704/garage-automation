@@ -397,7 +397,11 @@ function VehicleFileHeader({
                 {formatNumber(vehicle.mileage)} mi
               </span>
             )}
-            <VehicleColorLabel color={vehicle.color} showLabel />
+            <VehicleColorLabel
+              color={vehicle.color}
+              colorHex={vehicle.color_hex}
+              showLabel
+            />
             {vehicle.vin && (
               <span className="break-all font-mono font-semibold">
                 {vehicle.vin}
