@@ -19,6 +19,7 @@ import {
   normalizeThirdPartyRepairStatus,
   thirdPartyRepairStatusLabels,
 } from "../lib/thirdPartyRepairWorkflow";
+import { activePrebookingBadgeColumns } from "../lib/vehiclePrebookings";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -353,6 +354,7 @@ function getAttentionHelperText(metricKey) {
     open_purchase_orders: "Track ordered parts that still need receiving.",
     parts_need_po: "Create purchase orders for pending parts.",
     pending_review: "Review requested parts before ordering.",
+    prebooked_vehicles: "Reservations attached to inventory vehicles.",
     ready_for_sale: "Vehicles marked ready after final checks.",
     rejected_parts: "Resolve rejected or unavailable part requests.",
     third_party_out: "Follow up on outside repair work.",
@@ -367,6 +369,7 @@ function getAttentionMetrics({
   partQueueCounts,
   partRequests,
   purchaseOrders,
+  prebookingBadges = [],
   repairJobs,
   repairQueueCounts,
   thirdPartyRepairs,
@@ -442,6 +445,14 @@ function getAttentionMetrics({
       icon: "third-party",
       key: "third_party_out",
       label: "Third-Party Repairs Out",
+      tone: "blue",
+    },
+    {
+      actionPage: "Vehicles",
+      count: prebookingBadges.length,
+      icon: "dollar",
+      key: "prebooked_vehicles",
+      label: "Prebooked Vehicles",
       tone: "blue",
     },
     {
@@ -638,6 +649,7 @@ async function fetchDashboardData() {
     purchaseOrdersResponse,
     purchaseOrderItemsResponse,
     thirdPartyRepairsResponse,
+    prebookingBadgesResponse,
     activityLogsResponse,
   ] = await Promise.all([
     supabase
@@ -678,6 +690,9 @@ async function fetchDashboardData() {
       )
       .order("created_at", { ascending: false }),
     supabase
+      .from("active_vehicle_prebooking_badges")
+      .select(activePrebookingBadgeColumns),
+    supabase
       .from("activity_logs")
       .select("id, vehicle_id, action, details, created_at")
       .order("created_at", { ascending: false })
@@ -692,7 +707,8 @@ async function fetchDashboardData() {
     repairJobsResponse.error ??
     purchaseOrdersResponse.error ??
     purchaseOrderItemsResponse.error ??
-    thirdPartyRepairsResponse.error;
+    thirdPartyRepairsResponse.error ??
+    prebookingBadgesResponse.error;
 
   if (firstRequiredError) {
     return { data: null, error: firstRequiredError };
@@ -725,6 +741,7 @@ async function fetchDashboardData() {
       investmentSummaries: summariesResponse.data ?? [],
       partRequests,
       purchaseOrders,
+      prebookingBadges: prebookingBadgesResponse.data ?? [],
       repairJobs,
       sales: salesResponse.data ?? [],
       thirdPartyRepairs: thirdPartyRepairsResponse.data ?? [],
@@ -1362,6 +1379,7 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
   const [activityLogs, setActivityLogs] = useState([]);
   const [investmentSummaries, setInvestmentSummaries] = useState([]);
   const [partRequests, setPartRequests] = useState([]);
+  const [prebookingBadges, setPrebookingBadges] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [repairJobs, setRepairJobs] = useState([]);
   const [returnDeductionsByVehicleId, setReturnDeductionsByVehicleId] =
@@ -1400,6 +1418,7 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
           setActivityLogs([]);
           setInvestmentSummaries([]);
           setPartRequests([]);
+          setPrebookingBadges([]);
           setPurchaseOrders([]);
           setRepairJobs([]);
           setReturnDeductionsByVehicleId({});
@@ -1412,6 +1431,7 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
         setActivityLogs(data.activityLogs);
         setInvestmentSummaries(data.investmentSummaries);
         setPartRequests(data.partRequests);
+        setPrebookingBadges(data.prebookingBadges);
         setPurchaseOrders(data.purchaseOrders);
         setRepairJobs(data.repairJobs);
         setReturnDeductionsByVehicleId(data.returnDeductionsByVehicleId);
@@ -1425,6 +1445,7 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
           setActivityLogs([]);
           setInvestmentSummaries([]);
           setPartRequests([]);
+          setPrebookingBadges([]);
           setPurchaseOrders([]);
           setRepairJobs([]);
           setReturnDeductionsByVehicleId({});
@@ -1497,6 +1518,7 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
   const attentionMetrics = getAttentionMetrics({
     partQueueCounts,
     partRequests,
+    prebookingBadges,
     purchaseOrders,
     repairJobs,
     repairQueueCounts,

@@ -11,6 +11,12 @@ import {
 } from "../lib/imageCompression";
 import { supabase } from "../lib/supabaseClient";
 import { vehicleOriginOptions } from "../lib/vehicleOrigin";
+import {
+  buildPrebookingPayload,
+  prebookingPaymentMethods,
+  validatePrebookingForm,
+  vehiclePrebookingColumns,
+} from "../lib/vehiclePrebookings";
 
 const emptyForm = {
   vin: "",
@@ -25,6 +31,19 @@ const emptyForm = {
   purchase_price: "",
   target_sale_price: "",
   notes: "",
+};
+
+const emptyPrebookingForm = {
+  customer_name: "",
+  customer_phone: "",
+  customer_email: "",
+  deposit_amount: "",
+  payment_method: "",
+  deposit_date: "",
+  status: "active",
+  notes: "",
+  refund_amount: "",
+  refund_date: "",
 };
 
 const basicFields = [
@@ -109,6 +128,8 @@ const disabledPhotoInputActionClassName =
   "pointer-events-none cursor-not-allowed opacity-60";
 const photoSaveFailureMessage =
   "Vehicle was created, but the photo could not be saved. Please open the vehicle and add the main photo again.";
+const prebookingSaveFailureMessage =
+  "Vehicle was created, but the prebooking details could not be saved. Open the vehicle to add the prebooking again.";
 
 function emptyToNull(value) {
   const trimmedValue = String(value ?? "").trim();
@@ -177,6 +198,29 @@ function buildVehiclePayload(formData) {
     target_sale_price: decimalOrZero(formData.target_sale_price),
     notes: emptyToNull(formData.notes),
   };
+}
+
+async function saveVehiclePrebooking(vehicleId, formData, currentProfile) {
+  const payload = {
+    ...buildPrebookingPayload(
+      {
+        ...emptyPrebookingForm,
+        ...formData,
+        status: "active",
+      },
+      {
+        currentProfile,
+        vehicleId,
+      }
+    ),
+    created_by: currentProfile?.id ?? null,
+  };
+
+  return supabase
+    .from("vehicle_prebookings")
+    .insert([payload])
+    .select(vehiclePrebookingColumns)
+    .single();
 }
 
 function cleanFileName(fileName) {
@@ -307,9 +351,18 @@ function IntakeFieldGrid({ children }) {
   return <div className="grid gap-4 md:grid-cols-2">{children}</div>;
 }
 
-function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
+function AddVehicleForm({
+  currentProfile,
+  initialValues = {},
+  onBack,
+  onVehicleAdded,
+}) {
   const [formData, setFormData] = useState(() =>
     buildInitialFormData(initialValues)
+  );
+  const [isPrebooked, setIsPrebooked] = useState(false);
+  const [prebookingFormData, setPrebookingFormData] = useState(
+    emptyPrebookingForm
   );
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [photoInputKey, setPhotoInputKey] = useState(0);
@@ -340,6 +393,20 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
       ...currentFormData,
       [name]: nextValue,
     }));
+  }
+
+  function handlePrebookingChange(event) {
+    const { name, value } = event.target;
+
+    setPrebookingFormData((currentFormData) => ({
+      ...currentFormData,
+      [name]: value,
+    }));
+  }
+
+  function handlePrebookingToggle(event) {
+    setIsPrebooked(event.target.checked);
+    setErrorMessage("");
   }
 
   function handlePhotoChange(event) {
@@ -387,6 +454,16 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
       return;
     }
 
+    if (isPrebooked) {
+      const validationMessage = validatePrebookingForm(prebookingFormData);
+
+      if (validationMessage) {
+        setErrorMessage(validationMessage);
+        setSuccessMessage("");
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     setSubmitStatus("Creating vehicle...");
     setErrorMessage("");
@@ -407,6 +484,30 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
         );
       } else {
         let savedVehicle = data;
+        let savedPrebooking = null;
+
+        if (isPrebooked) {
+          setSubmitStatus("Saving prebooking...");
+          const prebookingResponse = await saveVehiclePrebooking(
+            data.id,
+            prebookingFormData,
+            currentProfile
+          );
+
+          if (prebookingResponse.error) {
+            console.error(
+              "Failed to save intake prebooking",
+              prebookingResponse.error
+            );
+            await onVehicleAdded?.({
+              ...data,
+              prebookingSaveWarning: prebookingSaveFailureMessage,
+            });
+            return;
+          }
+
+          savedPrebooking = prebookingResponse.data;
+        }
 
         try {
           const photoResult = await saveMainVehiclePhoto(data, selectedPhoto, {
@@ -416,17 +517,21 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
             ...data,
             ...photoResult.vehicle,
             primary_photo_id: photoResult.photo.id,
+            prebooking: savedPrebooking,
           };
         } catch (photoError) {
           console.error("Failed to save intake vehicle photo", photoError);
           await onVehicleAdded?.({
             ...data,
+            prebooking: savedPrebooking,
             photoSaveWarning: photoSaveFailureMessage,
           });
           return;
         }
 
         setFormData(buildInitialFormData(initialValues));
+        setIsPrebooked(false);
+        setPrebookingFormData(emptyPrebookingForm);
         setSelectedPhoto(null);
         setPhotoInputKey((currentKey) => currentKey + 1);
         setSuccessMessage(
@@ -695,6 +800,118 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
                 />
               </label>
             </IntakeFieldGrid>
+          </IntakeFormSection>
+
+          <IntakeFormSection
+            description="Mark this vehicle as reserved for a customer without changing its workflow status."
+            icon="dollar"
+            title="Prebooking"
+          >
+            <div className="space-y-4">
+              <label className="flex cursor-pointer flex-col gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 text-slate-900 sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  <span className="block text-sm font-black text-slate-950">
+                    Prebooked
+                  </span>
+                  <span className="mt-1 block text-sm text-slate-600">
+                    Mark this vehicle as reserved for a customer.
+                  </span>
+                </span>
+                <input
+                  checked={isPrebooked}
+                  className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-200"
+                  disabled={isSubmitting}
+                  onChange={handlePrebookingToggle}
+                  type="checkbox"
+                />
+              </label>
+
+              {isPrebooked && (
+                <IntakeFieldGrid>
+                  <label className="block" htmlFor="prebooking-customer-name">
+                    <span className={formControlClassNames.label}>
+                      Customer Name
+                    </span>
+                    <input
+                      className={intakeInputClassName}
+                      id="prebooking-customer-name"
+                      name="customer_name"
+                      onChange={handlePrebookingChange}
+                      placeholder="Optional"
+                      type="text"
+                      value={prebookingFormData.customer_name}
+                    />
+                  </label>
+
+                  <label className="block" htmlFor="prebooking-phone">
+                    <span className={formControlClassNames.label}>Phone</span>
+                    <input
+                      className={intakeInputClassName}
+                      id="prebooking-phone"
+                      name="customer_phone"
+                      onChange={handlePrebookingChange}
+                      placeholder="Optional"
+                      type="tel"
+                      value={prebookingFormData.customer_phone}
+                    />
+                  </label>
+
+                  <label className="block" htmlFor="prebooking-deposit">
+                    <span className={formControlClassNames.label}>
+                      Deposit Amount
+                    </span>
+                    <input
+                      className={intakeInputClassName}
+                      id="prebooking-deposit"
+                      min="0"
+                      name="deposit_amount"
+                      onChange={handlePrebookingChange}
+                      placeholder="0.00"
+                      step="0.01"
+                      type="number"
+                      value={prebookingFormData.deposit_amount}
+                    />
+                  </label>
+
+                  <label className="block" htmlFor="prebooking-payment-method">
+                    <span className={formControlClassNames.label}>
+                      Payment Method
+                    </span>
+                    <select
+                      className={intakeInputClassName}
+                      id="prebooking-payment-method"
+                      name="payment_method"
+                      onChange={handlePrebookingChange}
+                      value={prebookingFormData.payment_method}
+                    >
+                      {prebookingPaymentMethods.map((method) => (
+                        <option
+                          key={method.value || "empty"}
+                          value={method.value}
+                        >
+                          {method.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label
+                    className="block md:col-span-2"
+                    htmlFor="prebooking-notes"
+                  >
+                    <span className={formControlClassNames.label}>Notes</span>
+                    <textarea
+                      className={intakeTextareaClassName}
+                      id="prebooking-notes"
+                      name="notes"
+                      onChange={handlePrebookingChange}
+                      placeholder="Optional prebooking notes"
+                      value={prebookingFormData.notes}
+                    />
+                  </label>
+                </IntakeFieldGrid>
+              )}
+            </div>
           </IntakeFormSection>
 
           {errorMessage && (

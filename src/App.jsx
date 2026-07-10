@@ -466,6 +466,7 @@ function App() {
     if (effectiveActivePage === "Vehicles") {
       return (
         <VehiclesPage
+          currentProfile={currentProfile}
           onSelectVehicle={handleSelectVehicle}
         />
       );

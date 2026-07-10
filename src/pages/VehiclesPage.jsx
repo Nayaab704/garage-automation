@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import AppIcon from "../components/ui/AppIcon";
 import VehicleCard from "../components/VehicleCard";
+import VehiclePrebookingModal from "../components/vehicle-detail/VehiclePrebookingModal";
+import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 import { buildVehiclePrimaryPhotoMap } from "../lib/vehicleDisplayPhoto";
 import useDismissableLayer from "../hooks/useDismissableLayer";
+import { activePrebookingBadgeColumns } from "../lib/vehiclePrebookings";
 import {
   activeVehicleWorkflowStatuses,
   normalizeVehicleStatus,
@@ -82,7 +85,12 @@ const activeStatusQueryValues = activeVehicleWorkflowStatuses.flatMap(
   (status) => workflowStatusQueryValues[status] ?? [status]
 );
 
-function getActiveFilterCount(searchText, titleStatusFilter, hasThirdPartyFilter) {
+function getActiveFilterCount(
+  searchText,
+  titleStatusFilter,
+  hasThirdPartyFilter,
+  hasPrebookingFilter
+) {
   let count = 0;
 
   if (searchText.trim()) {
@@ -94,6 +102,10 @@ function getActiveFilterCount(searchText, titleStatusFilter, hasThirdPartyFilter
   }
 
   if (hasThirdPartyFilter) {
+    count += 1;
+  }
+
+  if (hasPrebookingFilter) {
     count += 1;
   }
 
@@ -124,6 +136,8 @@ function getSearchPattern(searchText) {
 function applyVehicleQueryFilters(query, {
   activeStatusFilter,
   activeTab,
+  prebookedVehicleIds = null,
+  prebookingSearchVehicleIds = null,
   searchText,
   thirdPartyVehicleIds = null,
   titleStatusFilter,
@@ -143,16 +157,31 @@ function applyVehicleQueryFilters(query, {
     filteredQuery = filteredQuery.in("id", thirdPartyVehicleIds);
   }
 
+  if (Array.isArray(prebookedVehicleIds)) {
+    filteredQuery = filteredQuery.in("id", prebookedVehicleIds);
+  }
+
   if (searchPattern) {
+    const searchConditions = [
+      `stock_number.ilike.${searchPattern}`,
+      `vin.ilike.${searchPattern}`,
+      `make.ilike.${searchPattern}`,
+      `model.ilike.${searchPattern}`,
+      `trim.ilike.${searchPattern}`,
+      `color.ilike.${searchPattern}`,
+    ];
+
+    if (
+      Array.isArray(prebookingSearchVehicleIds) &&
+      prebookingSearchVehicleIds.length > 0
+    ) {
+      searchConditions.push(
+        `id.in.(${prebookingSearchVehicleIds.join(",")})`
+      );
+    }
+
     filteredQuery = filteredQuery.or(
-      [
-        `stock_number.ilike.${searchPattern}`,
-        `vin.ilike.${searchPattern}`,
-        `make.ilike.${searchPattern}`,
-        `model.ilike.${searchPattern}`,
-        `trim.ilike.${searchPattern}`,
-        `color.ilike.${searchPattern}`,
-      ].join(",")
+      searchConditions.join(",")
     );
   }
 
@@ -198,6 +227,81 @@ async function fetchThirdPartyRepairVehicleMap(vehicleIds) {
         (vehicleId) => [vehicleId, true]
       )
     ),
+    error: null,
+  };
+}
+
+async function fetchActivePrebookingBadges(vehicleIds = null) {
+  if (Array.isArray(vehicleIds) && vehicleIds.length === 0) {
+    return { data: [], error: null };
+  }
+
+  let query = supabase
+    .from("active_vehicle_prebooking_badges")
+    .select(activePrebookingBadgeColumns);
+
+  if (Array.isArray(vehicleIds)) {
+    query = query.in("vehicle_id", vehicleIds);
+  }
+
+  const response = await query;
+
+  if (response.error) {
+    return { data: [], error: response.error };
+  }
+
+  return {
+    data: response.data ?? [],
+    error: null,
+  };
+}
+
+function buildPrebookingMap(prebookings = []) {
+  return Object.fromEntries(
+    prebookings
+      .filter((prebooking) => prebooking?.vehicle_id)
+      .map((prebooking) => [prebooking.vehicle_id, prebooking])
+  );
+}
+
+async function fetchPrebookedVehicleIds() {
+  const response = await fetchActivePrebookingBadges();
+
+  if (response.error) {
+    return { data: [], error: response.error };
+  }
+
+  return {
+    data: uniqueValues(response.data.map((prebooking) => prebooking.vehicle_id)),
+    error: null,
+  };
+}
+
+async function fetchPrebookingSearchVehicleIds(searchText) {
+  const searchPattern = getSearchPattern(searchText);
+
+  if (!searchPattern) {
+    return { data: [], error: null };
+  }
+
+  const response = await supabase
+    .from("vehicle_prebookings")
+    .select("vehicle_id")
+    .eq("status", "active")
+    .or(
+      [
+        `customer_name.ilike.${searchPattern}`,
+        `customer_phone.ilike.${searchPattern}`,
+        `customer_email.ilike.${searchPattern}`,
+      ].join(",")
+    );
+
+  if (response.error) {
+    return { data: [], error: response.error };
+  }
+
+  return {
+    data: uniqueValues((response.data ?? []).map((record) => record.vehicle_id)),
     error: null,
   };
 }
@@ -253,6 +357,8 @@ async function fetchVehicleCounts() {
 async function fetchVehiclesWithPhotos({
   activeStatusFilter,
   activeTab,
+  canSearchPrebookings = false,
+  hasPrebookingFilter = false,
   hasThirdPartyFilter = false,
   page = 0,
   searchText = "",
@@ -261,6 +367,42 @@ async function fetchVehiclesWithPhotos({
   const from = page * VEHICLES_PAGE_SIZE;
   const to = from + VEHICLES_PAGE_SIZE - 1;
   let thirdPartyVehicleIds = null;
+  let prebookedVehicleIds = null;
+  let prebookingSearchVehicleIds = null;
+
+  if (canSearchPrebookings && searchText.trim()) {
+    const prebookingSearchResponse =
+      await fetchPrebookingSearchVehicleIds(searchText);
+
+    if (prebookingSearchResponse.error) {
+      return { data: null, error: prebookingSearchResponse.error };
+    }
+
+    prebookingSearchVehicleIds = prebookingSearchResponse.data;
+  }
+
+  if (hasPrebookingFilter) {
+    const prebookedVehicleIdsResponse = await fetchPrebookedVehicleIds();
+
+    if (prebookedVehicleIdsResponse.error) {
+      return { data: null, error: prebookedVehicleIdsResponse.error };
+    }
+
+    prebookedVehicleIds = prebookedVehicleIdsResponse.data;
+
+    if (prebookedVehicleIds.length === 0) {
+      return {
+        data: {
+          count: 0,
+          prebookingsByVehicleId: {},
+          thirdPartyVehiclesByVehicleId: {},
+          vehiclePhotosByVehicleId: {},
+          vehicles: [],
+        },
+        error: null,
+      };
+    }
+  }
 
   if (hasThirdPartyFilter) {
     const thirdPartyVehicleIdsResponse = await fetchThirdPartyRepairVehicleIds();
@@ -275,6 +417,7 @@ async function fetchVehiclesWithPhotos({
       return {
         data: {
           count: 0,
+          prebookingsByVehicleId: {},
           thirdPartyVehiclesByVehicleId: {},
           vehiclePhotosByVehicleId: {},
           vehicles: [],
@@ -290,6 +433,8 @@ async function fetchVehiclesWithPhotos({
   const vehiclesResponse = await applyVehicleQueryFilters(baseQuery, {
     activeStatusFilter,
     activeTab,
+    prebookedVehicleIds,
+    prebookingSearchVehicleIds,
     searchText,
     thirdPartyVehicleIds,
     titleStatusFilter,
@@ -307,7 +452,11 @@ async function fetchVehiclesWithPhotos({
   const primaryPhotoIds = [
     ...new Set(vehicles.map((vehicle) => vehicle.primary_photo_id).filter(Boolean)),
   ];
-  const [photosResponse, thirdPartyVehicleMapResponse] = await Promise.all([
+  const [
+    photosResponse,
+    thirdPartyVehicleMapResponse,
+    prebookingBadgesResponse,
+  ] = await Promise.all([
     primaryPhotoIds.length > 0
       ? supabase
           .from("vehicle_photos")
@@ -315,6 +464,7 @@ async function fetchVehiclesWithPhotos({
           .in("id", primaryPhotoIds)
       : { data: [], error: null },
     fetchThirdPartyRepairVehicleMap(vehicleIds),
+    fetchActivePrebookingBadges(vehicleIds),
   ]);
 
   if (photosResponse.error) {
@@ -328,9 +478,19 @@ async function fetchVehiclesWithPhotos({
     );
   }
 
+  if (prebookingBadgesResponse.error) {
+    console.error(
+      "Could not load vehicle prebooking badges:",
+      prebookingBadgesResponse.error
+    );
+  }
+
   return {
     data: {
       count: vehiclesResponse.count ?? vehicles.length,
+      prebookingsByVehicleId: prebookingBadgesResponse.error
+        ? {}
+        : buildPrebookingMap(prebookingBadgesResponse.data),
       thirdPartyVehiclesByVehicleId: thirdPartyVehicleMapResponse.error
         ? {}
         : thirdPartyVehicleMapResponse.data,
@@ -457,9 +617,10 @@ function getEmptyStateMessage({ activeStatusFilter, activeTab, hasFilters }) {
   };
 }
 
-function VehiclesPage({ onSelectVehicle }) {
+function VehiclesPage({ currentProfile, onSelectVehicle }) {
   const [vehicles, setVehicles] = useState([]);
   const [vehiclePhotosByVehicleId, setVehiclePhotosByVehicleId] = useState({});
+  const [prebookingsByVehicleId, setPrebookingsByVehicleId] = useState({});
   const [thirdPartyVehiclesByVehicleId, setThirdPartyVehiclesByVehicleId] =
     useState({});
   const [activeTab, setActiveTab] = useState("active");
@@ -467,6 +628,7 @@ function VehiclesPage({ onSelectVehicle }) {
   const [searchText, setSearchText] = useState("");
   const [debouncedSearchText, setDebouncedSearchText] = useState("");
   const [titleStatusFilter, setTitleStatusFilter] = useState("all");
+  const [hasPrebookingFilter, setHasPrebookingFilter] = useState(false);
   const [hasThirdPartyFilter, setHasThirdPartyFilter] = useState(false);
   const [areFiltersOpen, setAreFiltersOpen] = useState(false);
   const [counts, setCounts] = useState({
@@ -485,8 +647,12 @@ function VehiclesPage({ onSelectVehicle }) {
   const [errorMessage, setErrorMessage] = useState("");
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const [selectedPrebookingVehicle, setSelectedPrebookingVehicle] =
+    useState(null);
+  const [selectedPrebooking, setSelectedPrebooking] = useState(null);
   const filterButtonRef = useRef(null);
   const filterPanelRef = useRef(null);
+  const canManagePrebooking = hasPermission(currentProfile?.role, "sale:manage");
 
   useDismissableLayer({
     enabled: areFiltersOpen,
@@ -537,6 +703,8 @@ function VehiclesPage({ onSelectVehicle }) {
         const { data, error } = await fetchVehiclesWithPhotos({
           activeStatusFilter,
           activeTab,
+          canSearchPrebookings: canManagePrebooking,
+          hasPrebookingFilter,
           hasThirdPartyFilter,
           page: 0,
           searchText: debouncedSearchText,
@@ -551,12 +719,14 @@ function VehiclesPage({ onSelectVehicle }) {
           console.error("Could not load vehicles:", error);
           setErrorMessage("Could not load vehicles.");
           setVehicles([]);
+          setPrebookingsByVehicleId({});
           setVehiclePhotosByVehicleId({});
           setThirdPartyVehiclesByVehicleId({});
           return;
         }
 
         setVehicles(data.vehicles);
+        setPrebookingsByVehicleId(data.prebookingsByVehicleId);
         setVehiclePhotosByVehicleId(data.vehiclePhotosByVehicleId);
         setThirdPartyVehiclesByVehicleId(data.thirdPartyVehiclesByVehicleId);
         setTotalCount(data.count);
@@ -565,6 +735,7 @@ function VehiclesPage({ onSelectVehicle }) {
           console.error("Could not load vehicles:", error);
           setErrorMessage("Could not load vehicles.");
           setVehicles([]);
+          setPrebookingsByVehicleId({});
           setVehiclePhotosByVehicleId({});
           setThirdPartyVehiclesByVehicleId({});
         }
@@ -583,7 +754,9 @@ function VehiclesPage({ onSelectVehicle }) {
   }, [
     activeStatusFilter,
     activeTab,
+    canManagePrebooking,
     debouncedSearchText,
+    hasPrebookingFilter,
     hasThirdPartyFilter,
     titleStatusFilter,
   ]);
@@ -591,6 +764,7 @@ function VehiclesPage({ onSelectVehicle }) {
   function clearFilters() {
     setSearchText("");
     setActiveStatusFilter("all_active");
+    setHasPrebookingFilter(false);
     setHasThirdPartyFilter(false);
     setTitleStatusFilter("all");
   }
@@ -602,6 +776,11 @@ function VehiclesPage({ onSelectVehicle }) {
 
   function handleThirdPartyFilterChange(event) {
     setHasThirdPartyFilter(event.target.checked);
+    setAreFiltersOpen(false);
+  }
+
+  function handlePrebookingFilterChange(event) {
+    setHasPrebookingFilter(event.target.checked);
     setAreFiltersOpen(false);
   }
 
@@ -623,6 +802,8 @@ function VehiclesPage({ onSelectVehicle }) {
         fetchVehiclesWithPhotos({
           activeStatusFilter,
           activeTab,
+          canSearchPrebookings: canManagePrebooking,
+          hasPrebookingFilter,
           hasThirdPartyFilter,
           page: 0,
           searchText: debouncedSearchText,
@@ -639,6 +820,7 @@ function VehiclesPage({ onSelectVehicle }) {
 
       setCounts(nextCounts);
       setVehicles(dataResponse.data.vehicles);
+      setPrebookingsByVehicleId(dataResponse.data.prebookingsByVehicleId);
       setVehiclePhotosByVehicleId(dataResponse.data.vehiclePhotosByVehicleId);
       setThirdPartyVehiclesByVehicleId(
         dataResponse.data.thirdPartyVehiclesByVehicleId
@@ -666,6 +848,8 @@ function VehiclesPage({ onSelectVehicle }) {
       const { data, error } = await fetchVehiclesWithPhotos({
         activeStatusFilter,
         activeTab,
+        canSearchPrebookings: canManagePrebooking,
+        hasPrebookingFilter,
         hasThirdPartyFilter,
         page: nextPage,
         searchText: debouncedSearchText,
@@ -693,6 +877,10 @@ function VehiclesPage({ onSelectVehicle }) {
         ...currentPhotos,
         ...data.vehiclePhotosByVehicleId,
       }));
+      setPrebookingsByVehicleId((currentPrebookings) => ({
+        ...currentPrebookings,
+        ...data.prebookingsByVehicleId,
+      }));
       setThirdPartyVehiclesByVehicleId((currentThirdPartyVehicles) => ({
         ...currentThirdPartyVehicles,
         ...data.thirdPartyVehiclesByVehicleId,
@@ -710,7 +898,8 @@ function VehiclesPage({ onSelectVehicle }) {
   const activeFilterCount = getActiveFilterCount(
     searchText,
     titleStatusFilter,
-    hasThirdPartyFilter
+    hasThirdPartyFilter,
+    hasPrebookingFilter
   );
   const hasActiveFilters = activeFilterCount > 0;
   const hasMoreVehicles = vehicles.length < totalCount;
@@ -749,6 +938,35 @@ function VehiclesPage({ onSelectVehicle }) {
 
     setActiveTab("active");
     setActiveStatusFilter(chip.key);
+  }
+
+  function handlePrebookingClick(vehicle, prebooking) {
+    if (!canManagePrebooking || !prebooking) {
+      return;
+    }
+
+    setSelectedPrebookingVehicle(vehicle);
+    setSelectedPrebooking(prebooking);
+  }
+
+  async function handlePrebookingSaved(savedPrebooking) {
+    if (savedPrebooking?.vehicle_id) {
+      setPrebookingsByVehicleId((currentPrebookings) => {
+        const nextPrebookings = { ...currentPrebookings };
+
+        if (savedPrebooking.status === "active") {
+          nextPrebookings[savedPrebooking.vehicle_id] = savedPrebooking;
+        } else {
+          delete nextPrebookings[savedPrebooking.vehicle_id];
+        }
+
+        return nextPrebookings;
+      });
+    }
+
+    setSelectedPrebookingVehicle(null);
+    setSelectedPrebooking(null);
+    await refreshVehicles();
   }
 
   return (
@@ -829,6 +1047,17 @@ function VehiclesPage({ onSelectVehicle }) {
                 </option>
               ))}
             </FilterSelect>
+
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50">
+              <input
+                checked={hasPrebookingFilter}
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-200"
+                onChange={handlePrebookingFilterChange}
+                type="checkbox"
+              />
+              <AppIcon className="text-indigo-600" name="dollar" size={17} />
+              <span>Prebooked</span>
+            </label>
 
             <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-violet-200 hover:bg-violet-50">
               <input
@@ -943,11 +1172,14 @@ function VehiclesPage({ onSelectVehicle }) {
             {vehicles.map((vehicle) => (
               <VehicleCard
                 key={vehicle.id}
+                canManagePrebooking={canManagePrebooking}
                 onSelectVehicle={onSelectVehicle}
+                onPrebookingClick={handlePrebookingClick}
                 hasThirdPartyRepair={
                   thirdPartyVehiclesByVehicleId[vehicle.id] === true
                 }
                 photo={vehiclePhotosByVehicleId[vehicle.id]}
+                prebooking={prebookingsByVehicleId[vehicle.id]}
                 vehicle={{
                   ...vehicle,
                   status: normalizeVehicleStatus(vehicle.status),
@@ -971,6 +1203,20 @@ function VehiclesPage({ onSelectVehicle }) {
             </div>
           )}
         </>
+      )}
+
+      {selectedPrebooking && canManagePrebooking && (
+        <VehiclePrebookingModal
+          currentProfile={currentProfile}
+          onClose={() => {
+            setSelectedPrebooking(null);
+            setSelectedPrebookingVehicle(null);
+          }}
+          onSaved={handlePrebookingSaved}
+          prebooking={selectedPrebooking}
+          vehicle={selectedPrebookingVehicle}
+          vehicleId={selectedPrebookingVehicle?.id}
+        />
       )}
     </div>
   );

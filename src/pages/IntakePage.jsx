@@ -121,6 +121,7 @@ function IntakePage({ currentProfile, onViewVehicles }) {
         {showVehicleForm && canCreateVehicle && (
           <div className="mx-auto max-w-4xl">
             <AddVehicleForm
+              currentProfile={currentProfile}
               initialValues={{ vin }}
               key={vin}
               onBack={handleBackToVin}
@@ -146,6 +147,16 @@ function IntakePage({ currentProfile, onViewVehicles }) {
               {createdVehicle.photoSaveWarning && (
                 <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
                   {createdVehicle.photoSaveWarning}
+                </div>
+              )}
+              {createdVehicle.prebookingSaveWarning && (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+                  {createdVehicle.prebookingSaveWarning}
+                </div>
+              )}
+              {createdVehicle.prebooking?.id && (
+                <div className="mt-4 rounded-2xl border border-indigo-200 bg-indigo-50 p-3 text-sm font-semibold text-indigo-900">
+                  Prebooking saved for this vehicle.
                 </div>
               )}
               <button

@@ -1,5 +1,6 @@
 import AppIcon from "./ui/AppIcon";
 import VehicleColorLabel from "./VehicleColorLabel";
+import VehiclePrebookingBadge from "./VehiclePrebookingBadge";
 import VehicleStatusBadge from "./VehicleStatusBadge";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
@@ -65,9 +66,12 @@ function ThirdPartyBadge() {
 }
 
 function VehicleCard({
+  canManagePrebooking = false,
   hasThirdPartyRepair = false,
+  onPrebookingClick,
   onSelectVehicle,
   photo,
+  prebooking,
   vehicle,
 }) {
   const title = getVehicleTitle(vehicle);
@@ -75,65 +79,91 @@ function VehicleCard({
     ? `${formatNumber(vehicle.mileage)} mi`
     : "Mileage n/a";
 
+  function handleOpenVehicle() {
+    if (vehicle.id) {
+      onSelectVehicle?.(vehicle.id);
+    }
+  }
+
+  function handleCardKeyDown(event) {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    handleOpenVehicle();
+  }
+
+  function handlePrebookingBadgeClick(event) {
+    event.stopPropagation();
+    onPrebookingClick?.(vehicle, prebooking);
+  }
+
   return (
-    <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md">
-      <button
-        className="block h-full w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
-        disabled={!vehicle.id}
-        onClick={() => onSelectVehicle?.(vehicle.id)}
-        type="button"
-      >
-        <div className="grid h-full gap-3 p-3 sm:grid-cols-[8.5rem_minmax(0,1fr)] sm:gap-4">
-          <div className="min-w-0">
-            <VehicleThumbnail photo={photo} title={title} />
+    <article
+      className="cursor-pointer overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
+      onClick={handleOpenVehicle}
+      onKeyDown={handleCardKeyDown}
+      role="button"
+      tabIndex={vehicle.id ? 0 : -1}
+    >
+      <div className="grid h-full gap-3 p-3 sm:grid-cols-[8.5rem_minmax(0,1fr)] sm:gap-4">
+        <div className="min-w-0">
+          <VehicleThumbnail photo={photo} title={title} />
+        </div>
+
+        <div className="flex min-w-0 flex-col">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate whitespace-nowrap text-lg font-black leading-tight text-slate-950">
+                {displayValue(vehicle.stock_number)}
+              </p>
+              <p className="mt-1 truncate text-sm font-semibold text-slate-800">
+                {title}
+                {vehicle.trim ? ` ${vehicle.trim}` : ""}
+              </p>
+            </div>
+
+            <span className="inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-50 hover:text-slate-700">
+              <span className="sr-only">Open vehicle</span>
+              <span aria-hidden="true" className="text-xl leading-none">
+                ...
+              </span>
+            </span>
           </div>
 
-          <div className="flex min-w-0 flex-col">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate whitespace-nowrap text-lg font-black leading-tight text-slate-950">
-                  {displayValue(vehicle.stock_number)}
-                </p>
-                <p className="mt-1 truncate text-sm font-semibold text-slate-800">
-                  {title}
-                  {vehicle.trim ? ` ${vehicle.trim}` : ""}
-                </p>
-              </div>
-
-              <span className="inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-50 hover:text-slate-700">
-                <span className="sr-only">Open vehicle</span>
-                <span aria-hidden="true" className="text-xl leading-none">
-                  ...
-                </span>
-              </span>
-            </div>
-
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <VehicleStatusBadge
-                className="max-w-full truncate px-2.5 text-xs"
-                status={vehicle.status}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <VehicleStatusBadge
+              className="max-w-full truncate px-2.5 text-xs"
+              status={vehicle.status}
+            />
+            {prebooking && (
+              <VehiclePrebookingBadge
+                interactive={canManagePrebooking}
+                onClick={handlePrebookingBadgeClick}
+                prebooking={prebooking}
               />
-              {hasThirdPartyRepair && <ThirdPartyBadge />}
-            </div>
+            )}
+            {hasThirdPartyRepair && <ThirdPartyBadge />}
+          </div>
 
-            <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-slate-100 pt-3 text-sm">
-              <span className="inline-flex min-w-0 items-center gap-1.5">
-                <AppIcon className="text-slate-400" name="mileage" size={15} />
-                <span className="font-semibold text-slate-500">Mileage:</span>
-                <span className="truncate font-semibold text-slate-700">
-                  {mileageLabel}
-                </span>
+          <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-slate-100 pt-3 text-sm">
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <AppIcon className="text-slate-400" name="mileage" size={15} />
+              <span className="font-semibold text-slate-500">Mileage:</span>
+              <span className="truncate font-semibold text-slate-700">
+                {mileageLabel}
               </span>
-              <span className="text-slate-200">|</span>
-              <VehicleColorLabel
-                className="max-w-full"
-                color={vehicle.color}
-                showLabel
-              />
-            </div>
+            </span>
+            <span className="text-slate-200">|</span>
+            <VehicleColorLabel
+              className="max-w-full"
+              color={vehicle.color}
+              showLabel
+            />
           </div>
         </div>
-      </button>
+      </div>
     </article>
   );
 }

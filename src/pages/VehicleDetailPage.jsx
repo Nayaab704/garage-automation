@@ -14,6 +14,7 @@ import SaleWarrantySection from "../components/vehicle-detail/SaleWarrantySectio
 import SellVehicleForm from "../components/vehicle-detail/SellVehicleForm";
 import ServiceWorkSection from "../components/vehicle-detail/ServiceWorkSection";
 import VehicleHeader from "../components/vehicle-detail/VehicleHeader";
+import VehiclePrebookingSection from "../components/vehicle-detail/VehiclePrebookingSection";
 import VehiclePhotosSection from "../components/vehicle-detail/VehiclePhotosSection";
 import { logVehicleActivity } from "../lib/activityLogger";
 import {
@@ -25,6 +26,10 @@ import { markPurchaseOrderReceived } from "../lib/purchaseOrderReceiving";
 import { supabase } from "../lib/supabaseClient";
 import { isThirdPartyRepairActive } from "../lib/thirdPartyRepairWorkflow";
 import { getVehiclePrimaryPhoto } from "../lib/vehicleDisplayPhoto";
+import {
+  activePrebookingBadgeColumns,
+  vehiclePrebookingColumns,
+} from "../lib/vehiclePrebookings";
 import {
   getVehicleStatusAfterFinalCheckChange,
   normalizeVehicleStatus,
@@ -166,7 +171,17 @@ async function fetchFinalChecks(vehicleId) {
     .eq("vehicle_id", vehicleId);
 }
 
-async function fetchVehicleDetails(vehicleId) {
+async function fetchVehicleDetails(vehicleId, { canManagePrebookings = false } = {}) {
+  const prebookingsQuery = canManagePrebookings
+    ? supabase
+        .from("vehicle_prebookings")
+        .select(vehiclePrebookingColumns)
+        .eq("vehicle_id", vehicleId)
+        .order("updated_at", { ascending: false })
+    : supabase
+        .from("active_vehicle_prebooking_badges")
+        .select(activePrebookingBadgeColumns)
+        .eq("vehicle_id", vehicleId);
   const [
     vehicleResponse,
     repairJobsResponse,
@@ -180,6 +195,7 @@ async function fetchVehicleDetails(vehicleId) {
     thirdPartyRepairsResponse,
     purchaseOrdersResponse,
     vendorsResponse,
+    prebookingsResponse,
     salesResponse,
   ] = await Promise.all([
     supabase.from("vehicles").select("*").eq("id", vehicleId).single(),
@@ -218,6 +234,7 @@ async function fetchVehicleDetails(vehicleId) {
       .order("created_at", { ascending: false }),
     supabase.from("purchase_orders").select("*").eq("vehicle_id", vehicleId),
     supabase.from("vendors").select("*"),
+    prebookingsQuery,
     supabase.from("sales").select("*").eq("vehicle_id", vehicleId),
   ]);
 
@@ -266,6 +283,7 @@ async function fetchVehicleDetails(vehicleId) {
     purchaseOrderItemsResponse,
     purchaseOrdersResponse,
     repairJobsResponse,
+    prebookingsResponse,
     salesResponse,
     vendorsResponse,
     vehicleResponse,
@@ -289,6 +307,7 @@ function findFirstError(responses) {
     responses.purchaseOrdersResponse.error ??
     responses.purchaseOrderItemsResponse.error ??
     responses.vendorsResponse.error ??
+    responses.prebookingsResponse.error ??
     responses.salesResponse.error ??
     responses.warrantiesResponse.error ??
     responses.investmentSummaryResponse.error
@@ -314,6 +333,7 @@ function applyVehicleDetails(responses, setters) {
     setters.setPurchaseOrders([]);
     setters.setPurchaseOrderItems([]);
     setters.setVendors([]);
+    setters.setVehiclePrebookings([]);
     setters.setSales([]);
     setters.setWarranties([]);
     setters.setInvestmentSummary(null);
@@ -334,6 +354,7 @@ function applyVehicleDetails(responses, setters) {
   setters.setPurchaseOrders(responses.purchaseOrdersResponse.data ?? []);
   setters.setPurchaseOrderItems(responses.purchaseOrderItemsResponse.data ?? []);
   setters.setVendors(responses.vendorsResponse.data ?? []);
+  setters.setVehiclePrebookings(responses.prebookingsResponse.data ?? []);
   setters.setSales(responses.salesResponse.data ?? []);
   setters.setWarranties(responses.warrantiesResponse.data ?? []);
   setters.setInvestmentSummary(responses.investmentSummaryResponse.data);
@@ -398,6 +419,7 @@ function VehicleDetailPage({
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [purchaseOrderItems, setPurchaseOrderItems] = useState([]);
   const [vendors, setVendors] = useState([]);
+  const [vehiclePrebookings, setVehiclePrebookings] = useState([]);
   const [sales, setSales] = useState([]);
   const [warranties, setWarranties] = useState([]);
   const [investmentSummary, setInvestmentSummary] = useState(null);
@@ -412,6 +434,8 @@ function VehicleDetailPage({
   const [refreshCount, setRefreshCount] = useState(0);
   const serviceWorkRef = useRef(null);
   const vehiclePhotosRef = useRef(null);
+  const role = currentProfile?.role;
+  const canManagePrebookings = hasPermission(role, "sale:manage");
 
   useEffect(() => {
     let isMounted = true;
@@ -428,7 +452,9 @@ function VehicleDetailPage({
       setVehicleStatusError("");
 
       try {
-        const responses = await fetchVehicleDetails(vehicleId);
+        const responses = await fetchVehicleDetails(vehicleId, {
+          canManagePrebookings,
+        });
 
         if (!isMounted) {
           return;
@@ -450,6 +476,7 @@ function VehicleDetailPage({
           setPurchaseOrders,
           setRepairJobs,
           setSales,
+          setVehiclePrebookings,
           setVendors,
           setVehicle,
           setWarranties,
@@ -471,6 +498,7 @@ function VehicleDetailPage({
           setPurchaseOrders([]);
           setPurchaseOrderItems([]);
           setVendors([]);
+          setVehiclePrebookings([]);
           setSales([]);
           setWarranties([]);
           setInvestmentSummary(null);
@@ -487,7 +515,7 @@ function VehicleDetailPage({
     return () => {
       isMounted = false;
     };
-  }, [refreshCount, vehicleId]);
+  }, [canManagePrebookings, refreshCount, vehicleId]);
 
   function refreshVehicleDetails() {
     setRefreshCount((currentCount) => currentCount + 1);
@@ -1110,6 +1138,16 @@ function VehicleDetailPage({
     await refreshInvestmentSummary();
   }
 
+  async function handlePrebookingSaved(prebooking) {
+    if (!prebooking?.id) {
+      return;
+    }
+
+    setVehiclePrebookings((currentPrebookings) =>
+      upsertNewestById(currentPrebookings, prebooking)
+    );
+  }
+
   async function handleVehicleSold(result) {
     if (result?.vehicle?.id) {
       setVehicle((currentVehicle) =>
@@ -1240,7 +1278,6 @@ function VehicleDetailPage({
 
   const isVehicleSold =
     String(vehicle?.status ?? "").toLowerCase() === "sold" || sales.length > 0;
-  const role = currentProfile?.role;
   const canChangeVehicleStatus = hasPermission(role, "vehicle:change_status");
   const canDeleteVehicle = hasPermission(role, "vehicle:delete");
   const canEditVehicle = hasPermission(role, "vehicle:edit");
@@ -1331,6 +1368,14 @@ function VehicleDetailPage({
               {vehicleStatusError}
             </div>
           )}
+
+          <VehiclePrebookingSection
+            canManage={canManagePrebookings}
+            currentProfile={currentProfile}
+            onPrebookingSaved={handlePrebookingSaved}
+            prebookings={vehiclePrebookings}
+            vehicle={vehicle}
+          />
 
           <InvestmentSummary
             currentProfile={currentProfile}
