@@ -796,17 +796,17 @@ function VehiclesPage({ onSelectVehicle }) {
 
             <button
               aria-label="Refresh vehicles"
-              className={`inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 ${
-                isRefreshing ? "w-auto px-4" : "w-12"
-              }`}
+              className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={isLoading || isRefreshing}
               onClick={refreshVehicles}
+              title="Refresh vehicles"
               type="button"
             >
-              <AppIcon name="refresh" size={18} />
-              {isRefreshing && (
-                <span className="text-sm font-bold">Refreshing...</span>
-              )}
+              <AppIcon
+                className={isRefreshing ? "animate-spin" : ""}
+                name="refresh"
+                size={18}
+              />
             </button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AppIcon from "../ui/AppIcon";
 import {
   getPhaseOneServiceCategories,
@@ -46,6 +46,14 @@ function getCategoryMatchKeys(category) {
       .map(normalizeCategoryKey)
       .filter(Boolean)
   );
+}
+
+function getCategorySectionId(category) {
+  const categoryKey = normalizeCategoryKey(
+    category?.slug || category?.name || category?.id
+  );
+
+  return categoryKey ? `service-work-category-${categoryKey}` : undefined;
 }
 
 function workOrderMatchesCategory(workOrder, category) {
@@ -199,7 +207,9 @@ function ServiceWorkSection({
   vendors = [],
 }) {
   const [categoryForForm, setCategoryForForm] = useState(null);
+  const [pendingScrollCategoryId, setPendingScrollCategoryId] = useState(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+  const selectedCategorySectionRef = useRef(null);
   const activeServiceCategories = useMemo(
     () => getPhaseOneServiceCategories(serviceCategories),
     [serviceCategories]
@@ -237,10 +247,35 @@ function ServiceWorkSection({
     setCategoryForForm(null);
   }
 
+  useEffect(() => {
+    if (!pendingScrollCategoryId || selectedCategoryId !== pendingScrollCategoryId) {
+      return undefined;
+    }
+
+    const target = selectedCategorySectionRef.current;
+
+    if (!target) {
+      setPendingScrollCategoryId(null);
+      return undefined;
+    }
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      target.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      setPendingScrollCategoryId(null);
+    });
+
+    return () => window.cancelAnimationFrame(animationFrameId);
+  }, [pendingScrollCategoryId, selectedCategoryId]);
+
   function handleCategorySelect(category) {
-    setSelectedCategoryId((currentCategoryId) =>
-      currentCategoryId === category.id ? null : category.id
-    );
+    const nextCategoryId =
+      selectedCategoryId === category.id ? null : category.id;
+
+    setSelectedCategoryId(nextCategoryId);
+    setPendingScrollCategoryId(nextCategoryId);
   }
 
   return (
@@ -289,48 +324,54 @@ function ServiceWorkSection({
           </div>
 
           {selectedCategory && (
-            <ServiceCategoryCard
-              canManage={canManage}
-              canManageLabor={canManageLabor}
-              canManageParts={canManageParts}
-              canManagePhotos={canManagePhotos}
-              canManageDocuments={canManageDocuments}
-              canManagePurchaseOrders={canManagePurchaseOrders}
-              canManageThirdPartyRepairs={canManageThirdPartyRepairs}
-              canUploadDocuments={canUploadDocuments}
-              category={selectedCategory}
-              currentProfile={currentProfile}
-              documents={documents}
-              laborLogs={laborLogs}
-              key={selectedCategory.id}
-              onAddWorkOrder={setCategoryForForm}
-              onActivityLogged={onActivityLogged}
-              onDocumentAdded={onDocumentAdded}
-              onDocumentDeleted={onDocumentDeleted}
-              onLaborAdded={onLaborAdded}
-              onLaborDeleted={onLaborDeleted}
-              onPartAdded={onPartAdded}
-              onPartApprovalUpdated={onPartApprovalUpdated}
-              onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
-              onPurchaseOrderReceived={onPurchaseOrderReceived}
-              onPurchaseOrderItemUpdated={onPurchaseOrderItemUpdated}
-              onPhotoAdded={onPhotoAdded}
-              onPhotoDeleted={onPhotoDeleted}
-              onThirdPartyRepairAdded={onThirdPartyRepairAdded}
-              onThirdPartyRepairCompleted={onThirdPartyRepairCompleted}
-              onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
-              partRequests={partRequests}
-              profiles={profiles}
-              purchaseOrderItems={purchaseOrderItems}
-              purchaseOrders={purchaseOrders}
-              selectedCategory={selectedCategory}
-              thirdPartyRepairs={thirdPartyRepairs}
-              vehicle={vehicle}
-              vehicleId={vehicleId}
-              vehiclePhotos={vehiclePhotos}
-              vendors={vendors}
-              workOrders={selectedWorkOrders}
-            />
+            <div
+              className="scroll-mt-28 sm:scroll-mt-24"
+              id={getCategorySectionId(selectedCategory)}
+              ref={selectedCategorySectionRef}
+            >
+              <ServiceCategoryCard
+                canManage={canManage}
+                canManageLabor={canManageLabor}
+                canManageParts={canManageParts}
+                canManagePhotos={canManagePhotos}
+                canManageDocuments={canManageDocuments}
+                canManagePurchaseOrders={canManagePurchaseOrders}
+                canManageThirdPartyRepairs={canManageThirdPartyRepairs}
+                canUploadDocuments={canUploadDocuments}
+                category={selectedCategory}
+                currentProfile={currentProfile}
+                documents={documents}
+                laborLogs={laborLogs}
+                key={selectedCategory.id}
+                onAddWorkOrder={setCategoryForForm}
+                onActivityLogged={onActivityLogged}
+                onDocumentAdded={onDocumentAdded}
+                onDocumentDeleted={onDocumentDeleted}
+                onLaborAdded={onLaborAdded}
+                onLaborDeleted={onLaborDeleted}
+                onPartAdded={onPartAdded}
+                onPartApprovalUpdated={onPartApprovalUpdated}
+                onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
+                onPurchaseOrderReceived={onPurchaseOrderReceived}
+                onPurchaseOrderItemUpdated={onPurchaseOrderItemUpdated}
+                onPhotoAdded={onPhotoAdded}
+                onPhotoDeleted={onPhotoDeleted}
+                onThirdPartyRepairAdded={onThirdPartyRepairAdded}
+                onThirdPartyRepairCompleted={onThirdPartyRepairCompleted}
+                onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
+                partRequests={partRequests}
+                profiles={profiles}
+                purchaseOrderItems={purchaseOrderItems}
+                purchaseOrders={purchaseOrders}
+                selectedCategory={selectedCategory}
+                thirdPartyRepairs={thirdPartyRepairs}
+                vehicle={vehicle}
+                vehicleId={vehicleId}
+                vehiclePhotos={vehiclePhotos}
+                vendors={vendors}
+                workOrders={selectedWorkOrders}
+              />
+            </div>
           )}
 
           {legacyWorkOrders.length > 0 && (

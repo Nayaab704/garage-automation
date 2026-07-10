@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import AppIcon from "../components/ui/AppIcon";
-import OperationalSearchBar from "../components/ui/OperationalSearchBar";
+import OperationalSearchBar, {
+  OperationalSearchIconButton,
+} from "../components/ui/OperationalSearchBar";
 import PriorityBadge from "../components/ui/PriorityBadge";
 import StatusBadge from "../components/ui/StatusBadge";
 import { buttonClassNames } from "../components/ui/uiStyles";
@@ -670,19 +672,18 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
               Track open work orders across all vehicles.
             </p>
           </div>
-          <button
-            className={buttonClassNames.secondary}
-            disabled={isLoading}
-            onClick={() => loadRepairsQueue()}
-            type="button"
-          >
-            <AppIcon name="refresh" size={16} />
-            {isLoading ? "Loading..." : "Refresh"}
-          </button>
         </div>
 
         <div className="mt-4">
           <OperationalSearchBar
+            actions={
+              <OperationalSearchIconButton
+                ariaLabel="Refresh repairs"
+                disabled={isLoading}
+                isBusy={isLoading}
+                onClick={() => loadRepairsQueue()}
+              />
+            }
             id="repairs-queue-search"
             label="Search work orders"
             onChange={setSearchTerm}

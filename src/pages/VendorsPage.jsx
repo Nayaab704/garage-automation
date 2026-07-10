@@ -3,7 +3,9 @@ import AddVendorForm from "../components/vendors/AddVendorForm";
 import EditVendorForm from "../components/vendors/EditVendorForm";
 import AppIcon from "../components/ui/AppIcon";
 import ModalShell from "../components/ui/ModalShell";
-import OperationalSearchBar from "../components/ui/OperationalSearchBar";
+import OperationalSearchBar, {
+  OperationalSearchIconButton,
+} from "../components/ui/OperationalSearchBar";
 import { buttonClassNames, formControlClassNames } from "../components/ui/uiStyles";
 import { supabase } from "../lib/supabaseClient";
 import {
@@ -242,14 +244,61 @@ function getDeleteErrorMessage(error) {
   return "Could not delete vendor. Please try again.";
 }
 
-function VendorStatsCard({ label, value }) {
+function VendorStatsCard({ icon, label, value }) {
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm">
-      <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+    <article className="flex min-h-16 min-w-0 items-center gap-2.5 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm">
+      {icon && (
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100">
+          <AppIcon name={icon} size={16} />
+        </span>
+      )}
+      <div className="min-w-0">
+        <p className="truncate text-[0.68rem] font-black uppercase text-slate-400">
+          {label}
+        </p>
+        <p className="mt-0.5 truncate text-lg font-black leading-tight text-slate-950">
+          {value}
+        </p>
+      </div>
+    </article>
+  );
+}
+
+function VendorTypeFilter({ onChange, value }) {
+  return (
+    <label
+      className="inline-flex min-h-9 w-full max-w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm sm:w-auto"
+      htmlFor="vendor-type-filter"
+    >
+      <span className="shrink-0 text-[0.68rem] font-black uppercase text-slate-400">
+        Type
+      </span>
+      <select
+        className="min-w-0 flex-1 bg-transparent pr-1 text-xs font-black text-slate-800 outline-none sm:w-44"
+        id="vendor-type-filter"
+        onChange={onChange}
+        value={value}
+      >
+        {vendorTypeOptions.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function VendorCardMetric({ label, value }) {
+  return (
+    <div className="min-w-0 rounded-xl bg-white px-2.5 py-2 ring-1 ring-inset ring-slate-200">
+      <p className="truncate text-[0.65rem] font-black uppercase text-slate-400">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-black text-slate-950">{value}</p>
-    </article>
+      <p className="mt-0.5 truncate text-sm font-black text-slate-950">
+        {value}
+      </p>
+    </div>
   );
 }
 
@@ -288,21 +337,22 @@ function VendorCard({
   onViewHistory,
   vendor,
 }) {
+  const hasContactInfo = Boolean(vendor.phone || vendor.email);
+
   return (
-    <article className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+      <div className="flex min-w-0 items-start justify-between gap-2.5">
         <div className="min-w-0">
-          <h3 className="truncate text-lg font-black text-slate-950">
+          <h3 className="truncate text-base font-black text-slate-950 sm:text-lg">
             {displayValue(vendor.name)}
           </h3>
-          <p className="mt-1 text-sm font-semibold text-slate-500">
-            {vendor.stats.quoteCount} quotes - {vendor.stats.purchasedCount} purchased - Last used{" "}
-            {formatDate(vendor.stats.lastUsedAt)}
+          <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">
+            Last used {formatDate(vendor.stats.lastUsedAt)}
           </p>
         </div>
 
         <span
-          className={`w-fit shrink-0 rounded-full px-2.5 py-1 text-xs font-black ring-1 ring-inset ${getVendorTypeClassName(
+          className={`max-w-[8.5rem] shrink-0 truncate rounded-full px-2.5 py-1 text-[0.68rem] font-black ring-1 ring-inset sm:max-w-none ${getVendorTypeClassName(
             vendor.vendor_type
           )}`}
         >
@@ -310,45 +360,36 @@ function VendorCard({
         </span>
       </div>
 
-      <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50/80 p-3">
-        <p className="text-sm font-black text-slate-950">
-          Total spend: {formatCurrency(vendor.stats.totalSpend)}
-        </p>
-        <p className="mt-1 text-xs font-semibold text-slate-500">
-          {vendor.history.length > 0
-            ? "Quotes and purchases are available in price history."
-            : "No price history yet."}
-        </p>
+      <div className="mt-2 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-slate-500">
+        {vendor.phone && <span className="truncate">{vendor.phone}</span>}
+        {vendor.email && <span className="truncate">{vendor.email}</span>}
+        {!hasContactInfo && <span>No contact info</span>}
       </div>
 
-      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-        <div>
-          <p className="text-xs font-black uppercase tracking-wide text-slate-400">
-            Phone
-          </p>
-          <p className="mt-1 font-semibold text-slate-700">
-            {displayValue(vendor.phone)}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs font-black uppercase tracking-wide text-slate-400">
-            Email
-          </p>
-          <p className="mt-1 font-semibold text-slate-700">
-            {displayValue(vendor.email)}
-          </p>
-        </div>
+      <div className="mt-3 grid grid-cols-3 gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 p-2">
+        <VendorCardMetric
+          label="Quotes"
+          value={formatNumber(vendor.stats.quoteCount)}
+        />
+        <VendorCardMetric
+          label="Bought"
+          value={formatNumber(vendor.stats.purchasedCount)}
+        />
+        <VendorCardMetric
+          label="Spend"
+          value={formatCurrency(vendor.stats.totalSpend)}
+        />
       </div>
 
       {vendor.notes && (
-        <p className="mt-4 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-slate-500">
+        <p className="mt-3 line-clamp-2 whitespace-pre-wrap text-xs leading-5 text-slate-500">
           {vendor.notes}
         </p>
       )}
 
-      <div className="mt-5 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         <button
-          className={buttonClassNames.primary}
+          className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:flex-none"
           onClick={() => onViewHistory(vendor.id)}
           type="button"
         >
@@ -358,14 +399,14 @@ function VendorCard({
         {canManageVendors && (
           <>
             <button
-              className={buttonClassNames.secondary}
+              className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200 sm:flex-none"
               onClick={() => onEdit(vendor)}
               type="button"
             >
               Edit
             </button>
             <button
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-2.5 text-sm font-black text-red-700 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-black text-red-700 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
               disabled={deletingVendorId === vendor.id}
               onClick={() => onDelete(vendor)}
               type="button"
@@ -613,6 +654,32 @@ function VendorsPage({ currentProfile }) {
     };
   }, []);
 
+  async function refreshVendors() {
+    if (isLoading) {
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMessage("");
+
+    try {
+      const { data, error } = await fetchVendorsWithStats();
+
+      if (error) {
+        console.error("Could not load vendors:", error);
+        setErrorMessage("Could not load vendors. Please try again.");
+        return;
+      }
+
+      setVendors(data.vendors ?? []);
+    } catch (error) {
+      console.error("Could not load vendors:", error);
+      setErrorMessage("Could not load vendors. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   function handleVendorAdded(vendor) {
     if (!vendor?.id) {
       return;
@@ -681,19 +748,21 @@ function VendorsPage({ currentProfile }) {
   }
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm sm:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h2 className="text-2xl font-black text-slate-950">Vendors</h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+    <div className="min-w-0 space-y-3 overflow-x-hidden sm:space-y-4">
+      <section className="rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm sm:p-4">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+          <div className="min-w-0">
+            <h2 className="truncate text-xl font-black text-slate-950 sm:text-2xl">
+              Vendors
+            </h2>
+            <p className="mt-0.5 max-w-2xl text-xs font-semibold leading-5 text-slate-500 sm:text-sm">
               Track vendors, previous part prices, and purchase history.
             </p>
           </div>
 
           {canManageVendors && (
             <button
-              className={buttonClassNames.primary}
+              className={`w-full sm:w-auto ${buttonClassNames.primary}`}
               onClick={() => setIsAddFormOpen(true)}
               type="button"
             >
@@ -703,9 +772,18 @@ function VendorsPage({ currentProfile }) {
           )}
         </div>
 
-        <div className="mt-4">
+        <div className="mt-3">
           <OperationalSearchBar
+            actions={
+              <OperationalSearchIconButton
+                ariaLabel="Refresh vendors"
+                disabled={isLoading}
+                isBusy={isLoading}
+                onClick={refreshVendors}
+              />
+            }
             activeFilterCount={selectedVendorType === "all" ? 0 : 1}
+            dense
             id="vendor-search"
             label="Search vendors"
             onChange={setSearchTerm}
@@ -715,40 +793,33 @@ function VendorsPage({ currentProfile }) {
             totalCount={vendorTypeResultCount}
             value={searchTerm}
           >
-            <label className="block w-full sm:w-56" htmlFor="vendor-type-filter">
-              <span className={formControlClassNames.label}>Type</span>
-              <select
-                className={formControlClassNames.select}
-                id="vendor-type-filter"
-                onChange={(event) => setSelectedVendorType(event.target.value)}
-                value={selectedVendorType}
-              >
-                {vendorTypeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <VendorTypeFilter
+              onChange={(event) => setSelectedVendorType(event.target.value)}
+              value={selectedVendorType}
+            />
           </OperationalSearchBar>
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <VendorStatsCard
+          icon="users"
           label="Total Vendors"
           value={formatNumber(summary.totalVendors)}
         />
         <VendorStatsCard
-          label="Quotes Saved"
+          icon="file"
+          label="Quotes"
           value={formatNumber(summary.quotesSaved)}
         />
         <VendorStatsCard
-          label="Purchased Parts"
+          icon="parts"
+          label="Purchased"
           value={formatNumber(summary.purchasedParts)}
         />
         <VendorStatsCard
-          label="Total Spend"
+          icon="dollar"
+          label="Spend"
           value={formatCurrency(summary.totalSpend)}
         />
       </section>

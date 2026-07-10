@@ -3,10 +3,11 @@ import PartPriceHistoryModal from "../components/parts/PartPriceHistoryModal";
 import PartsQueueCard from "../components/parts/PartsQueueCard";
 import PartsQueueEmptyState from "../components/parts/PartsQueueEmptyState";
 import PartsQueueTabs from "../components/parts/PartsQueueTabs";
-import AppIcon from "../components/ui/AppIcon";
 import CompactRecordFilters from "../components/ui/CompactRecordFilters";
 import ModalShell from "../components/ui/ModalShell";
-import OperationalSearchBar from "../components/ui/OperationalSearchBar";
+import OperationalSearchBar, {
+  OperationalSearchIconButton,
+} from "../components/ui/OperationalSearchBar";
 import { buttonClassNames } from "../components/ui/uiStyles";
 import CreatePurchaseOrderForm from "../components/vehicle-detail/CreatePurchaseOrderForm";
 import { logVehicleActivity } from "../lib/activityLogger";
@@ -569,19 +570,18 @@ function PartsPage({
               Track parts that need purchase orders, review, ordering, or receiving.
             </p>
           </div>
-          <button
-            className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
-            disabled={isLoading}
-            onClick={() => loadPartsQueue()}
-            type="button"
-          >
-            <AppIcon name="refresh" size={15} />
-            Refresh
-          </button>
         </div>
 
         <div className="mt-3 min-w-0">
           <OperationalSearchBar
+            actions={
+              <OperationalSearchIconButton
+                ariaLabel="Refresh parts queue"
+                disabled={isLoading}
+                isBusy={isLoading}
+                onClick={() => loadPartsQueue()}
+              />
+            }
             activeFilterCount={activeFilterCount}
             clearLabel={hasActiveFilters ? "Clear Filters" : "Clear Search"}
             dense

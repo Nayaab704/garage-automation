@@ -3,7 +3,9 @@ import MarkReceivedModal from "../components/parts/MarkReceivedModal";
 import MarkReturnedModal from "../components/parts/MarkReturnedModal";
 import AppIcon from "../components/ui/AppIcon";
 import CompactRecordFilters from "../components/ui/CompactRecordFilters";
-import OperationalSearchBar from "../components/ui/OperationalSearchBar";
+import OperationalSearchBar, {
+  OperationalSearchIconButton,
+} from "../components/ui/OperationalSearchBar";
 import { buttonClassNames } from "../components/ui/uiStyles";
 import DocumentsList from "../components/vehicle-detail/DocumentsList";
 import StatusDropdown from "../components/vehicle-detail/StatusDropdown";
@@ -1522,6 +1524,48 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
     };
   }, []);
 
+  async function refreshPurchaseOrders() {
+    if (isLoading) {
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMessage("");
+
+    try {
+      const { data, error } = await fetchPurchaseOrdersData();
+
+      if (error) {
+        console.error("Could not load purchase orders:", error);
+        setErrorMessage("Unable to load purchase orders.");
+        return;
+      }
+
+      setPartRequestsById(
+        Object.fromEntries(
+          (data.partRequests ?? []).map((partRequest) => [
+            partRequest.id,
+            partRequest,
+          ])
+        )
+      );
+      setProfilesById(data.profilesById);
+      setPurchaseOrders(data.purchaseOrders);
+      setPurchaseOrderItems(data.purchaseOrderItems);
+      setRepairJobsById(data.repairJobsById);
+      setSelectedQuotesById(data.selectedQuotesById);
+      setServiceCategoriesById(data.serviceCategoriesById);
+      setVehicleDocuments(data.vehicleDocuments);
+      setVehiclesById(data.vehiclesById);
+      setVendorsById(data.vendorsById);
+    } catch (error) {
+      console.error("Could not load purchase orders:", error);
+      setErrorMessage("Unable to load purchase orders.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   async function handlePurchaseOrderStatusChange(
     purchaseOrder,
     newStatus,
@@ -1938,6 +1982,14 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
 
         <div className="mt-3 min-w-0">
           <OperationalSearchBar
+            actions={
+              <OperationalSearchIconButton
+                ariaLabel="Refresh purchase orders"
+                disabled={isLoading}
+                isBusy={isLoading}
+                onClick={refreshPurchaseOrders}
+              />
+            }
             activeFilterCount={activeFilterCount}
             clearLabel={hasActiveFilters ? "Clear Filters" : "Clear Search"}
             dense

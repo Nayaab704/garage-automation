@@ -22,11 +22,11 @@ function Topbar({
 
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-      <div className="flex min-h-14 items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:px-8">
-        <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-h-14 min-w-0 items-center justify-between gap-2 overflow-hidden px-3 py-2.5 sm:gap-3 sm:px-6 lg:px-8">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           {showBackButton && (
             <button
-              className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
+              className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 sm:min-h-10 sm:gap-1.5 sm:px-3 sm:py-2 sm:text-sm"
               onClick={onBack}
               type="button"
             >
@@ -35,13 +35,18 @@ function Topbar({
             </button>
           )}
 
-          <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
             <BrandLogo
-              className="max-w-[190px] sm:max-w-none lg:hidden"
+              className="sm:hidden"
+              mode="icon"
+              size="compact"
+            />
+            <BrandLogo
+              className="hidden max-w-[190px] sm:flex sm:max-w-none lg:hidden"
               size="compact"
             />
             {showTitle && (
-              <h1 className="truncate text-lg font-black text-slate-950 sm:text-xl">
+              <h1 className="hidden truncate text-lg font-black text-slate-950 sm:block sm:text-xl">
                 {title}
               </h1>
             )}

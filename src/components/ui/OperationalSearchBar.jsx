@@ -19,8 +19,35 @@ function getResultSummary(resultCount, totalCount) {
   return `${resultCount} of ${totalCount} ${recordLabel}`;
 }
 
+export function OperationalSearchIconButton({
+  ariaLabel,
+  disabled = false,
+  icon = "refresh",
+  isBusy = false,
+  onClick,
+  title,
+}) {
+  return (
+    <button
+      aria-label={ariaLabel}
+      className={buttonClassNames.icon}
+      disabled={disabled}
+      onClick={onClick}
+      title={title ?? ariaLabel}
+      type="button"
+    >
+      <AppIcon
+        className={isBusy ? "animate-spin" : ""}
+        name={icon}
+        size={18}
+      />
+    </button>
+  );
+}
+
 function OperationalSearchBar({
   activeFilterCount = 0,
+  actions = null,
   children,
   className = "",
   clearLabel = "",
@@ -31,13 +58,18 @@ function OperationalSearchBar({
   onClear,
   placeholder,
   resultCount,
+  showResultSummary = false,
   totalCount,
   value,
 }) {
   const hasSearch = String(value ?? "").trim().length > 0;
   const hasFilters = activeFilterCount > 0;
   const canClear = hasSearch || hasFilters;
-  const resultSummary = getResultSummary(resultCount, totalCount);
+  const resultSummary = showResultSummary
+    ? getResultSummary(resultCount, totalCount)
+    : "";
+  const hasTools = Boolean(resultSummary) || (canClear && onClear);
+  const hasTopControls = Boolean(actions) || hasTools;
   const shellClassName = dense
     ? "rounded-2xl border border-slate-200 bg-slate-50/80 p-2 shadow-inner sm:p-3"
     : "rounded-3xl border border-slate-200 bg-slate-50/80 p-3 shadow-inner sm:p-4";
@@ -55,16 +87,17 @@ function OperationalSearchBar({
     : buttonClassNames.secondary;
   const clearButtonLabel = clearLabel || (hasFilters ? "Clear Filters" : "Clear Search");
   const toolsClassName = dense
-    ? "flex flex-wrap items-center gap-2 lg:justify-end"
-    : "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between lg:justify-end";
+    ? "flex shrink-0 flex-wrap items-center justify-end gap-2"
+    : "flex shrink-0 flex-wrap items-center justify-end gap-2";
+  const topRowClassName = hasTopControls
+    ? `grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center ${
+        dense ? "gap-2" : "gap-3"
+      }`
+    : `grid min-w-0 ${dense ? "gap-2" : "gap-3"}`;
 
   return (
     <div className={`${shellClassName} ${className}`}>
-      <div
-        className={`grid min-w-0 ${
-          dense ? "gap-2" : "gap-3"
-        } lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center`}
-      >
+      <div className={topRowClassName}>
         <label className="relative block" htmlFor={id}>
           <span className="sr-only">{label}</span>
           <AppIcon
@@ -82,23 +115,27 @@ function OperationalSearchBar({
           />
         </label>
 
-        <div className={toolsClassName}>
-          {resultSummary && (
-            <div className={resultChipClassName}>
-              {resultSummary}
-            </div>
-          )}
+        {hasTopControls && (
+          <div className={toolsClassName}>
+            {actions}
 
-          {canClear && onClear && (
-            <button
-              className={clearButtonClassName}
-              onClick={onClear}
-              type="button"
-            >
-              {clearButtonLabel}
-            </button>
-          )}
-        </div>
+            {resultSummary && (
+              <div className={resultChipClassName}>
+                {resultSummary}
+              </div>
+            )}
+
+            {canClear && onClear && (
+              <button
+                className={clearButtonClassName}
+                onClick={onClear}
+                type="button"
+              >
+                {clearButtonLabel}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {children && (
