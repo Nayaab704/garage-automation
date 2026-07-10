@@ -10,6 +10,7 @@ import RepairsPage from "./pages/RepairsPage";
 import SettingsPage from "./pages/SettingsPage";
 import TeamManagementPage from "./pages/TeamManagementPage";
 import VehicleDetailPage from "./pages/VehicleDetailPage";
+import VehicleFilePage from "./pages/VehicleFilePage";
 import VehiclesPage from "./pages/VehiclesPage";
 import VendorsPage from "./pages/VendorsPage";
 import { MAIN_NAV_PAGES } from "./config/appConfig";
@@ -20,11 +21,12 @@ import { supabase } from "./lib/supabaseClient";
 const APP_HISTORY_ROUTE_KEY = "garageAppRoute";
 const APP_HISTORY_DEPTH_KEY = "garageAppHistoryDepth";
 const FALLBACK_PAGE = "Vehicles";
+const vehicleScopedPages = new Set(["vehicleDetail", "vehicleFile"]);
 
 function createAppRoute(page, vehicleId = null) {
   return {
     page,
-    vehicleId: page === "vehicleDetail" ? vehicleId : null,
+    vehicleId: vehicleScopedPages.has(page) ? vehicleId : null,
   };
 }
 
@@ -132,6 +134,10 @@ const pageDetails = {
     title: "Vehicle Detail",
     description: "Review vehicle information, repairs, parts, and investment totals.",
   },
+  vehicleFile: {
+    title: "Vehicle File",
+    description: "Complete work, parts, labor, costs, activity, and documents for this vehicle.",
+  },
 };
 
 function PlaceholderPage({ title }) {
@@ -201,8 +207,9 @@ function App() {
         : activePage;
   const currentPage = pageDetails[effectiveActivePage];
   const showShellTitle = !MAIN_NAV_PAGES.includes(effectiveActivePage);
-  const navigationPage =
-    effectiveActivePage === "vehicleDetail" ? "Vehicles" : effectiveActivePage;
+  const navigationPage = vehicleScopedPages.has(effectiveActivePage)
+    ? "Vehicles"
+    : effectiveActivePage;
   const userEmail = session?.user?.email ?? "";
   const userMetadata = session?.user?.user_metadata ?? null;
   const showAppBackButton =
@@ -344,7 +351,7 @@ function App() {
         return createAppRoute(FALLBACK_PAGE);
       }
 
-      if (route.page === "vehicleDetail" && !route.vehicleId) {
+      if (vehicleScopedPages.has(route.page) && !route.vehicleId) {
         return createAppRoute(FALLBACK_PAGE);
       }
 
@@ -375,6 +382,14 @@ function App() {
     navigateToRoute("vehicleDetail", vehicleId);
   }
 
+  function handleOpenVehicleFile(vehicleId) {
+    navigateToRoute("vehicleFile", vehicleId);
+  }
+
+  function handleOpenVehicleDetail(vehicleId) {
+    navigateToRoute("vehicleDetail", vehicleId);
+  }
+
   function normalizeAppRoute(pageName, vehicleId = null) {
     if (pageName === "Dashboard" && !canViewDashboard) {
       return createAppRoute(FALLBACK_PAGE);
@@ -384,7 +399,7 @@ function App() {
       return createAppRoute(FALLBACK_PAGE);
     }
 
-    if (pageName === "vehicleDetail" && !vehicleId) {
+    if (vehicleScopedPages.has(pageName) && !vehicleId) {
       return createAppRoute(FALLBACK_PAGE);
     }
 
@@ -419,6 +434,20 @@ function App() {
   function handleAppBack() {
     if (appHistoryDepth > 0 && typeof window !== "undefined") {
       window.history.back();
+      return;
+    }
+
+    navigateToFallback();
+  }
+
+  function handleVehicleFileBack() {
+    if (appHistoryDepth > 0 && typeof window !== "undefined") {
+      window.history.back();
+      return;
+    }
+
+    if (selectedVehicleId) {
+      navigateToRoute("vehicleDetail", selectedVehicleId);
       return;
     }
 
@@ -467,6 +496,7 @@ function App() {
       return (
         <VehiclesPage
           currentProfile={currentProfile}
+          onOpenVehicleFile={handleOpenVehicleFile}
           onSelectVehicle={handleSelectVehicle}
         />
       );
@@ -531,6 +561,18 @@ function App() {
         <VehicleDetailPage
           currentProfile={currentProfile}
           onBack={handleAppBack}
+          onOpenVehicleFile={handleOpenVehicleFile}
+          vehicleId={selectedVehicleId}
+        />
+      );
+    }
+
+    if (effectiveActivePage === "vehicleFile") {
+      return (
+        <VehicleFilePage
+          currentProfile={currentProfile}
+          onBack={handleVehicleFileBack}
+          onOpenVehicleDetail={handleOpenVehicleDetail}
           vehicleId={selectedVehicleId}
         />
       );

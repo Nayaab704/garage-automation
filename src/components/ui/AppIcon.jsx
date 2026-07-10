@@ -77,6 +77,13 @@ const iconPaths = {
       <path d="M17 7.5A4 4 0 0 0 12 6c-2.4 0-4 1.2-4 3s1.6 2.5 4 3 4 1.2 4 3-1.6 3-4 3a5 5 0 0 1-5-2" />
     </>
   ),
+  edit: (
+    <>
+      <path d="M4 20h4.5L19 9.5a2.1 2.1 0 0 0 0-3L17.5 5a2.1 2.1 0 0 0-3 0L4 15.5V20Z" />
+      <path d="m13.5 6 4.5 4.5" />
+      <path d="M4 15.5 8.5 20" />
+    </>
+  ),
   file: (
     <>
       <path d="M7 3h7l5 5v13H7V3Z" />
@@ -246,6 +253,8 @@ const aliases = {
   "chart-up": "chart-up",
   document: "file",
   electrical: "lightning",
+  pencil: "edit",
+  edit: "edit",
   filter: "filter",
   glass: "windshield",
   interior: "seat",

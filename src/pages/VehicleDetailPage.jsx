@@ -403,6 +403,7 @@ function mergeVehicleState(currentVehicle, nextVehicle) {
 function VehicleDetailPage({
   currentProfile,
   onBack,
+  onOpenVehicleFile,
   vehicleId,
 }) {
   const [vehicle, setVehicle] = useState(null);
@@ -1354,6 +1355,7 @@ function VehicleDetailPage({
             canMarkReady={canChangeVehicleStatus}
             isStatusUpdating={isVehicleStatusUpdating}
             onEdit={() => setIsEditFormOpen(true)}
+            onOpenVehicleFile={() => onOpenVehicleFile?.(vehicleId)}
             onMarkReady={() => handleVehicleStatusChange("ready_for_sale")}
             onQuickAddWorkOrder={() => scrollToSection(serviceWorkRef)}
             onQuickPhotos={handleHeroPhotoClick}

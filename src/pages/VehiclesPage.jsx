@@ -617,7 +617,11 @@ function getEmptyStateMessage({ activeStatusFilter, activeTab, hasFilters }) {
   };
 }
 
-function VehiclesPage({ currentProfile, onSelectVehicle }) {
+function VehiclesPage({
+  currentProfile,
+  onOpenVehicleFile,
+  onSelectVehicle,
+}) {
   const [vehicles, setVehicles] = useState([]);
   const [vehiclePhotosByVehicleId, setVehiclePhotosByVehicleId] = useState({});
   const [prebookingsByVehicleId, setPrebookingsByVehicleId] = useState({});
@@ -1173,6 +1177,7 @@ function VehiclesPage({ currentProfile, onSelectVehicle }) {
               <VehicleCard
                 key={vehicle.id}
                 canManagePrebooking={canManagePrebooking}
+                onOpenVehicleFile={onOpenVehicleFile}
                 onSelectVehicle={onSelectVehicle}
                 onPrebookingClick={handlePrebookingClick}
                 hasThirdPartyRepair={

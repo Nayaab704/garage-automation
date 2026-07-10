@@ -64,10 +64,12 @@ function QuickActionButton({ icon, label, onClick, primary = false }) {
 }
 
 function CompactActionButton({
+  ariaLabel,
   disabled = false,
   icon,
   label,
   onClick,
+  title,
   tone = "default",
 }) {
   const toneClassName =
@@ -77,9 +79,11 @@ function CompactActionButton({
 
   return (
     <button
-      className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${toneClassName}`}
+      aria-label={ariaLabel ?? label}
+      className={`inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-bold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 sm:h-auto sm:min-h-9 sm:w-auto sm:px-3 ${toneClassName}`}
       disabled={disabled}
       onClick={onClick}
+      title={title ?? label}
       type="button"
     >
       <AppIcon name={icon} size={15} />
@@ -178,6 +182,7 @@ function VehicleHeader({
   isStatusUpdating,
   onEdit,
   onMarkReady,
+  onOpenVehicleFile,
   onQuickAddWorkOrder,
   onQuickPhotos,
   onStatusChange,
@@ -238,20 +243,33 @@ function VehicleHeader({
                     {stockNumber}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                   {canEdit && (
                     <CompactActionButton
-                      icon="checklist"
+                      ariaLabel="Edit Vehicle"
+                      icon="edit"
                       label="Edit"
                       onClick={onEdit}
+                      title="Edit Vehicle"
+                    />
+                  )}
+                  {onOpenVehicleFile && (
+                    <CompactActionButton
+                      ariaLabel="Open Vehicle File"
+                      icon="file"
+                      label="Vehicle File"
+                      onClick={onOpenVehicleFile}
+                      title="Open Vehicle File"
                     />
                   )}
                   {shouldShowReadyAction && (
                     <CompactActionButton
+                      ariaLabel="Mark Ready"
                       disabled={isStatusUpdating}
                       icon="check"
                       label="Ready"
                       onClick={onMarkReady}
+                      title="Mark Ready"
                       tone="blue"
                     />
                   )}

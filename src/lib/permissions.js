@@ -20,6 +20,7 @@ export const ROLE_PERMISSIONS = {
   owner: ALL_PERMISSIONS,
   admin: ALL_PERMISSIONS,
   technician: [
+    "vehicle:edit",
     "repair:manage",
     "repair_process:manage",
     "labor:manage",

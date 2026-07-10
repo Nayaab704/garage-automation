@@ -68,6 +68,7 @@ function ThirdPartyBadge() {
 function VehicleCard({
   canManagePrebooking = false,
   hasThirdPartyRepair = false,
+  onOpenVehicleFile,
   onPrebookingClick,
   onSelectVehicle,
   photo,
@@ -99,6 +100,14 @@ function VehicleCard({
     onPrebookingClick?.(vehicle, prebooking);
   }
 
+  function handleVehicleFileClick(event) {
+    event.stopPropagation();
+
+    if (vehicle.id) {
+      onOpenVehicleFile?.(vehicle.id);
+    }
+  }
+
   return (
     <article
       className="cursor-pointer overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
@@ -124,12 +133,26 @@ function VehicleCard({
               </p>
             </div>
 
-            <span className="inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-50 hover:text-slate-700">
-              <span className="sr-only">Open vehicle</span>
-              <span aria-hidden="true" className="text-xl leading-none">
-                ...
+            <div className="flex shrink-0 items-center gap-1">
+              {onOpenVehicleFile && (
+                <button
+                  aria-label="Open Vehicle File"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-50 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  onClick={handleVehicleFileClick}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  title="Open Vehicle File"
+                  type="button"
+                >
+                  <AppIcon name="file" size={17} />
+                </button>
+              )}
+              <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-50 hover:text-slate-700">
+                <span className="sr-only">Open vehicle</span>
+                <span aria-hidden="true" className="text-xl leading-none">
+                  ...
+                </span>
               </span>
-            </span>
+            </div>
           </div>
 
           <div className="mt-2 flex flex-wrap gap-1.5">
