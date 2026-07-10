@@ -19,6 +19,7 @@ export const MAIN_NAV_ITEMS = [
     page: "Dashboard",
     permission: "dashboard:view",
   },
+  { icon: "checklist", label: "My Work", page: "My Work" },
   {
     icon: "car",
     label: "Intake",

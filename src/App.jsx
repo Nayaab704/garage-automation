@@ -3,6 +3,7 @@ import AppLayout from "./layouts/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import IntakePage from "./pages/IntakePage";
 import LoginPage from "./pages/LoginPage";
+import MyWorkPage from "./pages/MyWorkPage";
 import PartsPage from "./pages/PartsPage";
 import PurchaseOrdersPage from "./pages/PurchaseOrdersPage";
 import RepairsPage from "./pages/RepairsPage";
@@ -90,6 +91,10 @@ const pageDetails = {
   Intake: {
     title: "Intake",
     description: "Start a new vehicle record with a VIN-first intake workflow.",
+  },
+  "My Work": {
+    title: "My Work",
+    description: "Track your active work, labor, and recent activity.",
   },
   Vehicles: {
     title: "Vehicles",
@@ -461,6 +466,15 @@ function App() {
     if (effectiveActivePage === "Vehicles") {
       return (
         <VehiclesPage
+          onSelectVehicle={handleSelectVehicle}
+        />
+      );
+    }
+
+    if (effectiveActivePage === "My Work") {
+      return (
+        <MyWorkPage
+          currentProfile={currentProfile}
           onSelectVehicle={handleSelectVehicle}
         />
       );
