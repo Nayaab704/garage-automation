@@ -14,7 +14,7 @@ export const prebookingPaymentMethods = [
 ];
 
 export const activePrebookingBadgeColumns =
-  "id, vehicle_id, status, deposit_amount, created_at";
+  "id, vehicle_id, status, created_at";
 
 export const vehiclePrebookingColumns =
   "id, vehicle_id, customer_name, customer_phone, customer_email, deposit_amount, payment_method, deposit_date, status, notes, receipt_url, created_by, created_at, updated_at, cancelled_by, cancelled_at, refund_amount, refund_date";

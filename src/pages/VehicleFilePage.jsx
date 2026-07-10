@@ -112,14 +112,6 @@ function getVehicleSubtitle(vehicle) {
     .join(" · ");
 }
 
-function getServiceCategoryName(serviceCategories, repairJob) {
-  const category = serviceCategories.find(
-    (serviceCategory) => serviceCategory.id === repairJob?.service_category_id
-  );
-
-  return category?.name ?? formatLabel(repairJob?.category, "Service Work");
-}
-
 function getRecordById(records, id) {
   return records.find((record) => record?.id === id) ?? null;
 }
@@ -157,6 +149,112 @@ function getPartItemTotal(item) {
   return Math.max(0, subtotal + additions - returns);
 }
 
+function hasDisplayValue(value) {
+  return value !== null && value !== undefined && value !== "";
+}
+
+function numberOrNull(value) {
+  if (!hasDisplayValue(value)) {
+    return null;
+  }
+
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function getPartVendorName(vendors, partRequest, purchaseOrderItem, purchaseOrder) {
+  return (
+    getVendorName(vendors, purchaseOrderItem?.vendor_id) ||
+    getVendorName(vendors, purchaseOrderItem?.purchase_order_vendor_id) ||
+    getVendorName(vendors, purchaseOrder?.vendor_id) ||
+    getVendorName(vendors, partRequest?.selected_vendor_id) ||
+    "No vendor"
+  );
+}
+
+function getPartCurrentStatus(partRequest, purchaseOrderItem) {
+  return (
+    purchaseOrderItem?.return_status ||
+    purchaseOrderItem?.status ||
+    partRequest?.status ||
+    partRequest?.approval_status ||
+    "pending"
+  );
+}
+
+function getPartQuantity(partRequest, purchaseOrderItem) {
+  return (
+    numberOrNull(purchaseOrderItem?.quantity) ??
+    numberOrNull(partRequest?.quantity)
+  );
+}
+
+function getPartUnitCost(partRequest, purchaseOrderItem) {
+  return (
+    numberOrNull(purchaseOrderItem?.unit_cost) ??
+    numberOrNull(partRequest?.unit_cost) ??
+    numberOrNull(partRequest?.quoted_unit_cost)
+  );
+}
+
+function getPartDisplayTotal(partRequest, purchaseOrderItem) {
+  const itemTotal = getPartItemTotal(purchaseOrderItem);
+
+  if (itemTotal !== null) {
+    return itemTotal;
+  }
+
+  const quotedTotal = numberOrNull(partRequest?.quoted_total_cost);
+
+  if (quotedTotal !== null) {
+    return quotedTotal;
+  }
+
+  const quantity = getPartQuantity(partRequest, purchaseOrderItem);
+  const unitCost = getPartUnitCost(partRequest, purchaseOrderItem);
+
+  return quantity !== null && unitCost !== null ? quantity * unitCost : null;
+}
+
+function getPurchaseOrderLabel(purchaseOrder) {
+  if (!purchaseOrder) {
+    return "";
+  }
+
+  return (
+    purchaseOrder.po_number ||
+    purchaseOrder.purchase_order_number ||
+    purchaseOrder.order_number ||
+    (purchaseOrder.id ? `PO-${String(purchaseOrder.id).slice(0, 8)}` : "")
+  );
+}
+
+function getPurchaseOrderDocumentLinks(documents, purchaseOrder) {
+  if (!purchaseOrder?.id) {
+    return [];
+  }
+
+  return documents.filter(
+    (documentRecord) =>
+      documentRecord.purchase_order_id === purchaseOrder.id &&
+      documentRecord.file_url
+  );
+}
+
+function getDocumentActionLabel(documentRecord) {
+  const normalizedType = String(documentRecord?.document_type ?? "").toLowerCase();
+
+  if (normalizedType.includes("invoice") || normalizedType.includes("receipt")) {
+    return "View Invoice / Receipt";
+  }
+
+  if (normalizedType.includes("purchase") || normalizedType.includes("po")) {
+    return "View PO";
+  }
+
+  return "View Document";
+}
+
 function getThirdPartyTotal(thirdPartyRepair) {
   return (
     numberOrZero(thirdPartyRepair?.repair_cost) +
@@ -181,6 +279,20 @@ function getStatusClassName(status) {
 
   if (["ordered", "in_progress", "partial_received"].includes(normalizedStatus)) {
     return "bg-blue-50 text-blue-700 ring-blue-200";
+  }
+
+  if (
+    [
+      "needs_po",
+      "needs to buy",
+      "not_ordered",
+      "pending",
+      "pending_review",
+      "requested",
+      "waiting",
+    ].includes(normalizedStatus)
+  ) {
+    return "bg-amber-50 text-amber-700 ring-amber-200";
   }
 
   if (["returned", "cancelled", "rejected", "issue"].includes(normalizedStatus)) {
@@ -298,12 +410,421 @@ function VehicleFileHeader({
   );
 }
 
+function NestedItemLabel({ children, tone = "blue" }) {
+  const toneClassName =
+    tone === "purple"
+      ? "bg-indigo-50 text-indigo-700 ring-indigo-200"
+      : "bg-blue-50 text-blue-700 ring-blue-200";
+
+  return (
+    <span
+      className={`inline-flex h-5 shrink-0 items-center rounded-full px-1.5 text-[10px] font-black uppercase tracking-wide ring-1 ring-inset ${toneClassName}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function DetailField({ label, value }) {
+  if (!hasDisplayValue(value)) {
+    return null;
+  }
+
+  return (
+    <div>
+      <dt className="text-xs font-black uppercase tracking-wide text-slate-400">
+        {label}
+      </dt>
+      <dd className="mt-1 text-sm font-bold text-slate-900">{value}</dd>
+    </div>
+  );
+}
+
+function buildPartCostRows(partRequest, purchaseOrderItem) {
+  const quantity = getPartQuantity(partRequest, purchaseOrderItem);
+  const unitCost = getPartUnitCost(partRequest, purchaseOrderItem);
+  const subtotal = quantity !== null && unitCost !== null ? quantity * unitCost : null;
+  const shipping = numberOrNull(purchaseOrderItem?.shipping_cost);
+  const tax = numberOrNull(purchaseOrderItem?.tax);
+  const returnDeduction =
+    numberOrZero(purchaseOrderItem?.returned_amount) +
+    numberOrZero(purchaseOrderItem?.returned_shipping_amount);
+  const total = getPartDisplayTotal(partRequest, purchaseOrderItem);
+
+  return [
+    unitCost !== null
+      ? { label: "Unit cost", value: formatCurrency(unitCost) }
+      : null,
+    quantity !== null ? { label: "Quantity", value: formatNumber(quantity) } : null,
+    subtotal !== null ? { label: "Subtotal", value: formatCurrency(subtotal) } : null,
+    shipping !== null ? { label: "Shipping", value: formatCurrency(shipping) } : null,
+    tax !== null ? { label: "Tax", value: formatCurrency(tax) } : null,
+    returnDeduction > 0
+      ? { label: "Return deduction", value: `-${formatCurrency(returnDeduction)}` }
+      : null,
+    total !== null ? { label: "Total", value: formatCurrency(total) } : null,
+  ].filter(Boolean);
+}
+
+function buildActivityLabel(action, profileName, dateValue) {
+  const parts = [
+    profileName ? `${action} by ${profileName}` : action,
+    dateValue ? formatDateTime(dateValue) : "",
+  ].filter(Boolean);
+
+  return parts.join(" - ");
+}
+
+function buildPartActivityRows({
+  partRequest,
+  profiles,
+  purchaseOrder,
+  purchaseOrderItem,
+}) {
+  return [
+    hasDisplayValue(partRequest?.created_by) || hasDisplayValue(partRequest?.created_at)
+      ? buildActivityLabel(
+          "Added",
+          getProfileName(profiles, partRequest?.created_by),
+          partRequest?.created_at
+        )
+      : null,
+    hasDisplayValue(partRequest?.approved_by) || hasDisplayValue(partRequest?.approved_at)
+      ? buildActivityLabel(
+          "Approved",
+          getProfileName(profiles, partRequest?.approved_by),
+          partRequest?.approved_at
+        )
+      : null,
+    purchaseOrder &&
+    (hasDisplayValue(purchaseOrder.ordered_by) ||
+      hasDisplayValue(purchaseOrder.ordered_at) ||
+      hasDisplayValue(purchaseOrder.created_at))
+      ? buildActivityLabel(
+          "Ordered",
+          getProfileName(profiles, purchaseOrder.ordered_by),
+          purchaseOrder.ordered_at ?? purchaseOrder.created_at
+        )
+      : null,
+    purchaseOrder &&
+    (hasDisplayValue(purchaseOrder.received_by) ||
+      hasDisplayValue(purchaseOrder.received_at))
+      ? buildActivityLabel(
+          "Received",
+          getProfileName(profiles, purchaseOrder.received_by),
+          purchaseOrder.received_at
+        )
+      : null,
+    purchaseOrderItem &&
+    (hasDisplayValue(purchaseOrderItem.returned_by) ||
+      hasDisplayValue(purchaseOrderItem.returned_at))
+      ? buildActivityLabel(
+          "Returned",
+          getProfileName(profiles, purchaseOrderItem.returned_by),
+          purchaseOrderItem.returned_at
+        )
+      : null,
+    purchaseOrder &&
+    (hasDisplayValue(purchaseOrder.cancelled_by) ||
+      hasDisplayValue(purchaseOrder.cancelled_at))
+      ? buildActivityLabel(
+          "Cancelled",
+          getProfileName(profiles, purchaseOrder.cancelled_by),
+          purchaseOrder.cancelled_at
+        )
+      : null,
+  ].filter(Boolean);
+}
+
+function PartDetailsModal({
+  documents,
+  onClose,
+  partRequest,
+  profiles,
+  purchaseOrder,
+  purchaseOrderItem,
+  vendors,
+}) {
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  const vendorName = getPartVendorName(
+    vendors,
+    partRequest,
+    purchaseOrderItem,
+    purchaseOrder
+  );
+  const currentStatus = getPartCurrentStatus(partRequest, purchaseOrderItem);
+  const purchaseOrderLabel = getPurchaseOrderLabel(purchaseOrder);
+  const total = getPartDisplayTotal(partRequest, purchaseOrderItem);
+  const costRows = buildPartCostRows(partRequest, purchaseOrderItem);
+  const activityRows = buildPartActivityRows({
+    partRequest,
+    profiles,
+    purchaseOrder,
+    purchaseOrderItem,
+  });
+  const documentLinks = getPurchaseOrderDocumentLinks(documents, purchaseOrder);
+
+  function handleBackdropMouseDown(event) {
+    if (event.target === event.currentTarget) {
+      onClose();
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-3 backdrop-blur-sm sm:items-center sm:p-4"
+      onMouseDown={handleBackdropMouseDown}
+    >
+      <section
+        aria-modal="true"
+        className="max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+        role="dialog"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+              Part Details
+            </p>
+            <h3 className="mt-1 break-words text-lg font-black text-slate-950">
+              {getPartName(partRequest)}
+            </h3>
+          </div>
+          <button
+            className={`shrink-0 px-3 py-2 ${buttonClassNames.secondary}`}
+            onClick={onClose}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="max-h-[calc(92vh-5.5rem)] space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
+          <section className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusPill status={currentStatus} />
+              {!purchaseOrder && (
+                <span className="inline-flex h-7 items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-200">
+                  PO not created yet
+                </span>
+              )}
+            </div>
+            <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+              <DetailField label="Vendor" value={vendorName} />
+              <DetailField label="PO" value={purchaseOrderLabel} />
+              <DetailField
+                label="Approval"
+                value={formatLabel(partRequest?.approval_status, "")}
+              />
+              <DetailField
+                label="Total"
+                value={total === null ? "" : formatCurrency(total)}
+              />
+            </dl>
+          </section>
+
+          {costRows.length > 0 && (
+            <section className="rounded-2xl border border-slate-100 bg-white p-4">
+              <h4 className="text-sm font-black text-slate-950">
+                Cost Breakdown
+              </h4>
+              <dl className="mt-3 divide-y divide-slate-100">
+                {costRows.map((row) => (
+                  <div
+                    className="flex items-center justify-between gap-3 py-2 text-sm"
+                    key={row.label}
+                  >
+                    <dt className="font-semibold text-slate-500">{row.label}</dt>
+                    <dd className="font-black text-slate-900">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
+
+          <section className="rounded-2xl border border-slate-100 bg-white p-4">
+            <h4 className="text-sm font-black text-slate-950">
+              Purchase Activity
+            </h4>
+            {activityRows.length > 0 ? (
+              <ul className="mt-3 space-y-2">
+                {activityRows.map((activityText) => (
+                  <li
+                    className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700"
+                    key={activityText}
+                  >
+                    {activityText}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-3 text-sm font-semibold text-slate-500">
+                No purchase activity recorded yet.
+              </p>
+            )}
+          </section>
+
+          {documentLinks.length > 0 && (
+            <section className="rounded-2xl border border-slate-100 bg-white p-4">
+              <h4 className="text-sm font-black text-slate-950">
+                Documents / PO
+              </h4>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {documentLinks.map((documentRecord) => (
+                  <a
+                    className={`inline-flex min-h-10 items-center justify-center px-3 ${buttonClassNames.secondary}`}
+                    href={documentRecord.file_url}
+                    key={documentRecord.id}
+                    rel="noreferrer"
+                    title={
+                      documentRecord.file_name ||
+                      formatLabel(documentRecord.document_type, "Document")
+                    }
+                    target="_blank"
+                  >
+                    {getDocumentActionLabel(documentRecord)}
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PartSummaryRow({
+  documents = [],
+  onViewDetails,
+  partRequest,
+  profiles = [],
+  purchaseOrder,
+  purchaseOrderItem,
+  vendors,
+}) {
+  const vendorName = getPartVendorName(
+    vendors,
+    partRequest,
+    purchaseOrderItem,
+    purchaseOrder
+  );
+  const status = getPartCurrentStatus(partRequest, purchaseOrderItem);
+  const total = getPartDisplayTotal(partRequest, purchaseOrderItem);
+
+  function handleDetailsClick() {
+    onViewDetails?.({
+      documents,
+      partRequest,
+      profiles,
+      purchaseOrder,
+      purchaseOrderItem,
+      vendors,
+    });
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 border-l-4 border-l-blue-200 bg-slate-50/80 p-3">
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center">
+        <div className="flex min-w-0 items-start justify-between gap-2 sm:block">
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <NestedItemLabel>Part</NestedItemLabel>
+              <p className="min-w-0 truncate text-sm font-black text-slate-900">
+                {getPartName(partRequest)}
+              </p>
+            </div>
+            <p className="mt-1 truncate text-xs font-semibold text-slate-500">
+              {vendorName}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
+            <StatusPill status={status} />
+            <button
+              aria-label="View part details"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
+              onClick={handleDetailsClick}
+              title="View part details"
+              type="button"
+            >
+              <AppIcon name="info" size={15} />
+            </button>
+          </div>
+        </div>
+        <div className="hidden sm:block">
+          <StatusPill status={status} />
+        </div>
+        <p className="text-right text-sm font-black text-slate-900">
+          {total === null ? "No cost" : formatCurrency(total)}
+        </p>
+        <button
+          aria-label="View part details"
+          className="hidden h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 sm:inline-flex"
+          onClick={handleDetailsClick}
+          title="View part details"
+          type="button"
+        >
+          <AppIcon name="info" size={15} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ThirdPartySummaryRow({ thirdPartyRepair, vendors }) {
+  const vendorName = getVendorName(vendors, thirdPartyRepair.vendor_id) || "No vendor";
+  const total = getThirdPartyTotal(thirdPartyRepair);
+
+  return (
+    <div className="rounded-xl border border-indigo-100 border-l-4 border-l-indigo-300 bg-indigo-50/40 p-3">
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+        <div className="flex min-w-0 items-start justify-between gap-2 sm:block">
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <NestedItemLabel tone="purple">3rd-Party</NestedItemLabel>
+              <p className="min-w-0 truncate text-sm font-black text-slate-900">
+                {thirdPartyRepair.service_rendered || "Third-party repair"}
+              </p>
+            </div>
+            <p className="mt-1 truncate text-xs font-semibold text-slate-500">
+              {vendorName}
+            </p>
+          </div>
+          <div className="shrink-0 sm:hidden">
+            <StatusPill status={thirdPartyRepair.status} />
+          </div>
+        </div>
+        <div className="hidden sm:block">
+          <StatusPill status={thirdPartyRepair.status} />
+        </div>
+        <p className="text-right text-sm font-black text-slate-900">
+          {formatCurrency(total)}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function WorkOrderCard({
+  documents,
+  onViewPartDetails,
   partRequests,
+  profiles,
   purchaseOrderItemsByPartRequestId,
   purchaseOrdersById,
   repairJob,
-  serviceCategories,
   thirdPartyRepairs,
   vendors,
 }) {
@@ -313,19 +834,16 @@ function WorkOrderCard({
   const thirdPartyForJob = thirdPartyRepairs.filter(
     (thirdPartyRepair) => thirdPartyRepair.repair_job_id === repairJob.id
   );
-  const categoryName = getServiceCategoryName(serviceCategories, repairJob);
   const hasActiveOutsideWork = thirdPartyForJob.some(isThirdPartyRepairActive);
+  const hasNestedItems = partsForJob.length > 0 || thirdPartyForJob.length > 0;
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+    <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h3 className="truncate text-base font-black text-slate-950">
+          <h3 className="break-words text-base font-black leading-snug text-slate-950 sm:text-lg">
             {displayValue(repairJob.title, "Work order")}
           </h3>
-          <p className="mt-1 text-sm font-semibold text-slate-500">
-            {categoryName}
-          </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
           <StatusPill status={getWorkOrderStatusLabel(repairJob.status)} />
@@ -340,59 +858,53 @@ function WorkOrderCard({
         </div>
       </div>
 
-      {partsForJob.length > 0 && (
-        <div className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100">
+      {hasNestedItems ? (
+        <div className="mt-3 space-y-2 border-l border-slate-200 pl-3">
           {partsForJob.map((partRequest) => {
             const item = purchaseOrderItemsByPartRequestId[partRequest.id];
             const purchaseOrder = purchaseOrdersById[item?.purchase_order_id];
-            const vendorName =
-              getVendorName(vendors, item?.vendor_id) ||
-              getVendorName(vendors, item?.purchase_order_vendor_id) ||
-              getVendorName(vendors, purchaseOrder?.vendor_id) ||
-              getVendorName(vendors, partRequest.selected_vendor_id) ||
-              "No vendor";
-            const status =
-              item?.return_status ||
-              item?.status ||
-              partRequest.status ||
-              partRequest.approval_status;
-            const total = getPartItemTotal(item);
 
             return (
-              <div
-                className="grid gap-2 bg-white p-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
+              <PartSummaryRow
+                documents={documents}
                 key={partRequest.id}
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-black text-slate-800">
-                    {getPartName(partRequest)}
-                  </p>
-                  <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">
-                    {vendorName}
-                  </p>
-                </div>
-                <StatusPill status={status} />
-                <p className="text-sm font-black text-slate-800">
-                  {total === null ? "No cost" : formatCurrency(total)}
-                </p>
-              </div>
+                onViewDetails={onViewPartDetails}
+                partRequest={partRequest}
+                profiles={profiles}
+                purchaseOrder={purchaseOrder}
+                purchaseOrderItem={item}
+                vendors={vendors}
+              />
             );
           })}
+          {thirdPartyForJob.map((thirdPartyRepair) => (
+            <ThirdPartySummaryRow
+              key={thirdPartyRepair.id}
+              thirdPartyRepair={thirdPartyRepair}
+              vendors={vendors}
+            />
+          ))}
         </div>
+      ) : (
+        <p className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-500">
+          No parts or third-party work recorded for this work order.
+        </p>
       )}
     </article>
   );
 }
 
 function WorkPartsTab({
+  documents = [],
   partRequests,
+  profiles = [],
   purchaseOrderItems,
   purchaseOrders,
   repairJobs,
-  serviceCategories,
   thirdPartyRepairs,
   vendors,
 }) {
+  const [selectedPartDetails, setSelectedPartDetails] = useState(null);
   const purchaseOrderItemsByPartRequestId = useMemo(
     () =>
       Object.fromEntries(
@@ -414,6 +926,12 @@ function WorkPartsTab({
   const unassignedParts = partRequests.filter(
     (partRequest) => !partRequest.repair_job_id
   );
+  const repairJobIds = new Set(repairJobs.map((repairJob) => repairJob.id));
+  const unassignedThirdPartyRepairs = thirdPartyRepairs.filter(
+    (thirdPartyRepair) =>
+      !thirdPartyRepair.repair_job_id ||
+      !repairJobIds.has(thirdPartyRepair.repair_job_id)
+  );
   const partsTotal = purchaseOrderItems.reduce(
     (total, item) => total + numberOrZero(getPartItemTotal(item)),
     0
@@ -427,17 +945,21 @@ function WorkPartsTab({
 
   return (
     <div className="space-y-3">
-      {repairJobs.length === 0 && unassignedParts.length === 0 ? (
+      {repairJobs.length === 0 &&
+      unassignedParts.length === 0 &&
+      unassignedThirdPartyRepairs.length === 0 ? (
         <EmptyState>No work orders or parts are recorded for this vehicle yet.</EmptyState>
       ) : (
         repairJobs.map((repairJob) => (
           <WorkOrderCard
+            documents={documents}
             key={repairJob.id}
+            onViewPartDetails={setSelectedPartDetails}
             partRequests={partRequests}
+            profiles={profiles}
             purchaseOrderItemsByPartRequestId={purchaseOrderItemsByPartRequestId}
             purchaseOrdersById={purchaseOrdersById}
             repairJob={repairJob}
-            serviceCategories={serviceCategories}
             thirdPartyRepairs={thirdPartyRepairs}
             vendors={vendors}
           />
@@ -447,20 +969,53 @@ function WorkPartsTab({
       {unassignedParts.length > 0 && (
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <h3 className="text-sm font-black text-slate-950">Unassigned Parts</h3>
-          <div className="mt-3 divide-y divide-slate-100">
-            {unassignedParts.map((partRequest) => (
-              <div
-                className="flex flex-wrap items-center justify-between gap-2 py-2"
-                key={partRequest.id}
-              >
-                <span className="text-sm font-bold text-slate-800">
-                  {getPartName(partRequest)}
-                </span>
-                <StatusPill status={partRequest.status} />
-              </div>
+          <div className="mt-3 space-y-2">
+            {unassignedParts.map((partRequest) => {
+              const item = purchaseOrderItemsByPartRequestId[partRequest.id];
+              const purchaseOrder = purchaseOrdersById[item?.purchase_order_id];
+
+              return (
+                <PartSummaryRow
+                  documents={documents}
+                  key={partRequest.id}
+                  onViewDetails={setSelectedPartDetails}
+                  partRequest={partRequest}
+                  profiles={profiles}
+                  purchaseOrder={purchaseOrder}
+                  purchaseOrderItem={item}
+                  vendors={vendors}
+                />
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {unassignedThirdPartyRepairs.length > 0 && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <h3 className="text-sm font-black text-slate-950">Third-Party Work</h3>
+          <div className="mt-3 space-y-2">
+            {unassignedThirdPartyRepairs.map((thirdPartyRepair) => (
+              <ThirdPartySummaryRow
+                key={thirdPartyRepair.id}
+                thirdPartyRepair={thirdPartyRepair}
+                vendors={vendors}
+              />
             ))}
           </div>
         </section>
+      )}
+
+      {selectedPartDetails && (
+        <PartDetailsModal
+          documents={selectedPartDetails.documents}
+          onClose={() => setSelectedPartDetails(null)}
+          partRequest={selectedPartDetails.partRequest}
+          profiles={selectedPartDetails.profiles}
+          purchaseOrder={selectedPartDetails.purchaseOrder}
+          purchaseOrderItem={selectedPartDetails.purchaseOrderItem}
+          vendors={selectedPartDetails.vendors}
+        />
       )}
 
       {shouldShowTotals && (
@@ -1048,11 +1603,12 @@ function VehicleFilePage({
 
           {activeTab === "work_parts" && (
             <WorkPartsTab
+              documents={data.documents}
               partRequests={data.partRequests}
+              profiles={data.profiles}
               purchaseOrderItems={data.purchaseOrderItems}
               purchaseOrders={data.purchaseOrders}
               repairJobs={data.repairJobs}
-              serviceCategories={data.serviceCategories}
               thirdPartyRepairs={data.thirdPartyRepairs}
               vendors={data.vendors}
             />

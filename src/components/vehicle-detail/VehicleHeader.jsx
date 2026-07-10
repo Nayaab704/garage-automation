@@ -1,6 +1,7 @@
 import AppIcon from "../ui/AppIcon";
 import HeroBadge from "../ui/HeroBadge";
 import VehicleColorLabel from "../VehicleColorLabel";
+import VehiclePrebookingBadge from "../VehiclePrebookingBadge";
 import VehicleStatusBadge from "../VehicleStatusBadge";
 import { normalizeVehicleStatus } from "../../lib/vehicleStatus";
 import VehicleStatusDropdown from "./VehicleStatusDropdown";
@@ -186,6 +187,7 @@ function VehicleHeader({
   onQuickAddWorkOrder,
   onQuickPhotos,
   onStatusChange,
+  prebooking,
   primaryPhoto,
   vehicle,
 }) {
@@ -299,6 +301,13 @@ function VehicleHeader({
                   />
                 )}
                 <HeroBadge value={vehicle.title_status ?? "unknown"} />
+                {prebooking && (
+                  <VehiclePrebookingBadge
+                    prebooking={prebooking}
+                    showAmount={false}
+                    showIcon={false}
+                  />
+                )}
                 {vehicleOriginLabel && (
                   <HeroBadge
                     label={vehicleOriginLabel}

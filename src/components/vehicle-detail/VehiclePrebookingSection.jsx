@@ -37,14 +37,15 @@ function VehiclePrebookingSection({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const prebooking = getActivePrebooking(prebookings);
   const hasPrebooking = Boolean(prebooking);
+
+  if (!canManage) {
+    return null;
+  }
+
   const statusLabel = getPrebookingStatusLabel(prebooking?.status);
   const depositLabel =
     formatPrebookingCurrency(prebooking?.deposit_amount, { detailed: true }) ||
     "$0.00";
-
-  if (!hasPrebooking && !canManage) {
-    return null;
-  }
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">

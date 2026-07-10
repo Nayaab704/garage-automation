@@ -1,9 +1,17 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import FormActions from "./ui/FormActions";
 import FormMessage from "./ui/FormMessage";
 import ModalShell from "./ui/ModalShell";
+import VehicleAutocompleteInput from "./VehicleAutocompleteInput";
 import { formControlClassNames } from "./ui/uiStyles";
 import { supabase } from "../lib/supabaseClient";
+import {
+  fetchVehicleCatalogEntries,
+  getMakeSuggestions,
+  getModelSuggestions,
+  getTrimSuggestions,
+  recordVehicleCatalogEntrySafely,
+} from "../lib/vehicleCatalog";
 import { vehicleOriginOptions } from "../lib/vehicleOrigin";
 
 const titleStatusOptions = [
@@ -38,6 +46,8 @@ const numberFields = [
     step: "0.01",
   },
 ];
+
+const catalogFieldNames = new Set(["make", "model", "trim"]);
 
 function emptyToNull(value) {
   const trimmedValue = value.trim();
@@ -106,12 +116,74 @@ function buildVehiclePayload(formData) {
 
 function EditVehicleForm({ onClose, onVehicleUpdated, vehicle }) {
   const [formData, setFormData] = useState(() => getInitialFormData(vehicle));
+  const [vehicleCatalogEntries, setVehicleCatalogEntries] = useState([]);
+  const [isCatalogLoading, setIsCatalogLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadVehicleCatalogEntries() {
+      setIsCatalogLoading(true);
+
+      try {
+        const entries = await fetchVehicleCatalogEntries();
+
+        if (isMounted) {
+          setVehicleCatalogEntries(entries);
+        }
+      } catch (error) {
+        console.warn("Could not load vehicle catalog suggestions:", error);
+      } finally {
+        if (isMounted) {
+          setIsCatalogLoading(false);
+        }
+      }
+    }
+
+    loadVehicleCatalogEntries();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const makeSuggestions = useMemo(
+    () => getMakeSuggestions(vehicleCatalogEntries, formData.make),
+    [formData.make, vehicleCatalogEntries]
+  );
+  const modelSuggestions = useMemo(
+    () =>
+      getModelSuggestions(vehicleCatalogEntries, formData.make, formData.model),
+    [formData.make, formData.model, vehicleCatalogEntries]
+  );
+  const trimSuggestions = useMemo(
+    () =>
+      getTrimSuggestions(
+        vehicleCatalogEntries,
+        formData.make,
+        formData.model,
+        formData.trim
+      ),
+    [formData.make, formData.model, formData.trim, vehicleCatalogEntries]
+  );
+  const catalogSuggestionsByField = {
+    make: makeSuggestions,
+    model: modelSuggestions,
+    trim: trimSuggestions,
+  };
 
   function handleChange(event) {
     const { name, value } = event.target;
 
+    setFormData((currentFormData) => ({
+      ...currentFormData,
+      [name]: value,
+    }));
+  }
+
+  function handleCatalogFieldChange(name, value) {
     setFormData((currentFormData) => ({
       ...currentFormData,
       [name]: value,
@@ -148,6 +220,8 @@ function EditVehicleForm({ onClose, onVehicleUpdated, vehicle }) {
         return;
       }
 
+      void recordVehicleCatalogEntrySafely(vehiclePayload);
+
       await onVehicleUpdated(data ?? { ...vehicle, ...vehiclePayload });
       onClose();
     } catch (error) {
@@ -172,26 +246,45 @@ function EditVehicleForm({ onClose, onVehicleUpdated, vehicle }) {
               Basic Details
             </legend>
           <div className="grid gap-4 sm:grid-cols-2">
-            {textFields.map((field) => (
-              <label
-                className="block"
-                htmlFor={`edit-${field.name}`}
-                key={field.name}
-              >
-                <span className={formControlClassNames.label}>
-                  {field.label}
-                </span>
-                <input
-                  className={formControlClassNames.input}
-                  id={`edit-${field.name}`}
-                  name={field.name}
-                  onChange={handleChange}
-                  required={field.required}
-                  type="text"
-                  value={formData[field.name]}
-                />
-              </label>
-            ))}
+            {textFields.map((field) => {
+              if (catalogFieldNames.has(field.name)) {
+                return (
+                  <VehicleAutocompleteInput
+                    id={`edit-${field.name}`}
+                    inputClassName={formControlClassNames.input}
+                    key={field.name}
+                    label={field.label}
+                    loading={isCatalogLoading}
+                    name={field.name}
+                    onValueChange={handleCatalogFieldChange}
+                    required={field.required}
+                    suggestions={catalogSuggestionsByField[field.name]}
+                    value={formData[field.name]}
+                  />
+                );
+              }
+
+              return (
+                <label
+                  className="block"
+                  htmlFor={`edit-${field.name}`}
+                  key={field.name}
+                >
+                  <span className={formControlClassNames.label}>
+                    {field.label}
+                  </span>
+                  <input
+                    className={formControlClassNames.input}
+                    id={`edit-${field.name}`}
+                    name={field.name}
+                    onChange={handleChange}
+                    required={field.required}
+                    type="text"
+                    value={formData[field.name]}
+                  />
+                </label>
+              );
+            })}
           </div>
           </fieldset>
 

@@ -5,11 +5,19 @@ import {
   formControlClassNames,
 } from "./ui/uiStyles";
 import AppIcon from "./ui/AppIcon";
+import VehicleAutocompleteInput from "./VehicleAutocompleteInput";
 import {
   compressImageFile,
   defaultPhotoCompressionOptions,
 } from "../lib/imageCompression";
 import { supabase } from "../lib/supabaseClient";
+import {
+  fetchVehicleCatalogEntries,
+  getMakeSuggestions,
+  getModelSuggestions,
+  getTrimSuggestions,
+  recordVehicleCatalogEntrySafely,
+} from "../lib/vehicleCatalog";
 import { vehicleOriginOptions } from "../lib/vehicleOrigin";
 import {
   buildPrebookingPayload,
@@ -117,6 +125,7 @@ const titleStatusOptions = [
 
 const allowedTitleStatuses = titleStatusOptions.map((option) => option.value);
 const allowedVehicleOrigins = vehicleOriginOptions.map((option) => option.value);
+const catalogFieldNames = new Set(["make", "model", "trim"]);
 
 const intakeInputClassName =
   "mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100";
@@ -366,6 +375,8 @@ function AddVehicleForm({
   );
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [photoInputKey, setPhotoInputKey] = useState(0);
+  const [vehicleCatalogEntries, setVehicleCatalogEntries] = useState([]);
+  const [isCatalogLoading, setIsCatalogLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -385,6 +396,59 @@ function AddVehicleForm({
     };
   }, [photoPreviewUrl]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadVehicleCatalogEntries() {
+      setIsCatalogLoading(true);
+
+      try {
+        const entries = await fetchVehicleCatalogEntries();
+
+        if (isMounted) {
+          setVehicleCatalogEntries(entries);
+        }
+      } catch (error) {
+        console.warn("Could not load vehicle catalog suggestions:", error);
+      } finally {
+        if (isMounted) {
+          setIsCatalogLoading(false);
+        }
+      }
+    }
+
+    loadVehicleCatalogEntries();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const makeSuggestions = useMemo(
+    () => getMakeSuggestions(vehicleCatalogEntries, formData.make),
+    [formData.make, vehicleCatalogEntries]
+  );
+  const modelSuggestions = useMemo(
+    () =>
+      getModelSuggestions(vehicleCatalogEntries, formData.make, formData.model),
+    [formData.make, formData.model, vehicleCatalogEntries]
+  );
+  const trimSuggestions = useMemo(
+    () =>
+      getTrimSuggestions(
+        vehicleCatalogEntries,
+        formData.make,
+        formData.model,
+        formData.trim
+      ),
+    [formData.make, formData.model, formData.trim, vehicleCatalogEntries]
+  );
+  const catalogSuggestionsByField = {
+    make: makeSuggestions,
+    model: modelSuggestions,
+    trim: trimSuggestions,
+  };
+
   function handleChange(event) {
     const { name, value } = event.target;
     const nextValue = name === "vin" ? normalizeVin(value) : value;
@@ -392,6 +456,13 @@ function AddVehicleForm({
     setFormData((currentFormData) => ({
       ...currentFormData,
       [name]: nextValue,
+    }));
+  }
+
+  function handleCatalogFieldChange(name, value) {
+    setFormData((currentFormData) => ({
+      ...currentFormData,
+      [name]: value,
     }));
   }
 
@@ -485,6 +556,8 @@ function AddVehicleForm({
       } else {
         let savedVehicle = data;
         let savedPrebooking = null;
+
+        void recordVehicleCatalogEntrySafely(vehiclePayload);
 
         if (isPrebooked) {
           setSubmitStatus("Saving prebooking...");
@@ -608,32 +681,55 @@ function AddVehicleForm({
             title="Basic Details"
           >
             <IntakeFieldGrid>
-              {basicFields.map((field) => (
-                <label
-                  className={`block ${field.layoutClassName ?? ""}`}
-                  htmlFor={field.name}
-                  key={field.name}
-                >
-                  <span className={formControlClassNames.label}>
-                    {field.label}
-                  </span>
-                  <input
-                    className={`${intakeInputClassName} ${
-                      field.inputClassName ?? ""
-                    }`}
-                    id={field.name}
-                    maxLength={field.maxLength}
-                    min={field.min}
-                    name={field.name}
-                    onChange={handleChange}
-                    placeholder={field.placeholder}
-                    required={field.required}
-                    step={field.step}
-                    type={field.type}
-                    value={formData[field.name]}
-                  />
-                </label>
-              ))}
+              {basicFields.map((field) => {
+                if (catalogFieldNames.has(field.name)) {
+                  return (
+                    <VehicleAutocompleteInput
+                      className={field.layoutClassName ?? ""}
+                      id={field.name}
+                      inputClassName={`${intakeInputClassName} ${
+                        field.inputClassName ?? ""
+                      }`}
+                      key={field.name}
+                      label={field.label}
+                      loading={isCatalogLoading}
+                      name={field.name}
+                      onValueChange={handleCatalogFieldChange}
+                      placeholder={field.placeholder}
+                      required={field.required}
+                      suggestions={catalogSuggestionsByField[field.name]}
+                      value={formData[field.name]}
+                    />
+                  );
+                }
+
+                return (
+                  <label
+                    className={`block ${field.layoutClassName ?? ""}`}
+                    htmlFor={field.name}
+                    key={field.name}
+                  >
+                    <span className={formControlClassNames.label}>
+                      {field.label}
+                    </span>
+                    <input
+                      className={`${intakeInputClassName} ${
+                        field.inputClassName ?? ""
+                      }`}
+                      id={field.name}
+                      maxLength={field.maxLength}
+                      min={field.min}
+                      name={field.name}
+                      onChange={handleChange}
+                      placeholder={field.placeholder}
+                      required={field.required}
+                      step={field.step}
+                      type={field.type}
+                      value={formData[field.name]}
+                    />
+                  </label>
+                );
+              })}
             </IntakeFieldGrid>
           </IntakeFormSection>
 

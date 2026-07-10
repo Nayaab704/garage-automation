@@ -97,6 +97,13 @@ const iconPaths = {
       <path d="M4 5h16l-6.5 7.4V18l-3 1.5v-7.1L4 5Z" />
     </>
   ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 10.5v5" />
+      <path d="M12 7.5h.01" />
+    </>
+  ),
   lightning: (
     <>
       <path d="M13 3 5.8 13h5.6L10.6 21 18.2 10.2h-5.6L13 3Z" />
@@ -256,7 +263,9 @@ const aliases = {
   pencil: "edit",
   edit: "edit",
   filter: "filter",
+  details: "info",
   glass: "windshield",
+  info: "info",
   interior: "seat",
   labor: "clock",
   mechanical: "wrench",

@@ -28,6 +28,7 @@ import { isThirdPartyRepairActive } from "../lib/thirdPartyRepairWorkflow";
 import { getVehiclePrimaryPhoto } from "../lib/vehicleDisplayPhoto";
 import {
   activePrebookingBadgeColumns,
+  getActivePrebooking,
   vehiclePrebookingColumns,
 } from "../lib/vehiclePrebookings";
 import {
@@ -1295,6 +1296,7 @@ function VehicleDetailPage({
   const canManageDocuments = canManagePhotos;
   const canSellVehicle = hasPermission(role, "sale:manage");
   const primaryVehiclePhoto = getVehiclePrimaryPhoto(vehicle, vehiclePhotos);
+  const activeVehiclePrebooking = getActivePrebooking(vehiclePrebookings);
   const hasActiveThirdPartyRepair = thirdPartyRepairs.some(
     isThirdPartyRepairActive
   );
@@ -1361,6 +1363,7 @@ function VehicleDetailPage({
             onQuickPhotos={handleHeroPhotoClick}
             onStatusChange={handleVehicleStatusChange}
             hasActiveThirdPartyRepair={hasActiveThirdPartyRepair}
+            prebooking={activeVehiclePrebooking}
             primaryPhoto={primaryVehiclePhoto}
             vehicle={vehicle}
           />
@@ -1371,13 +1374,15 @@ function VehicleDetailPage({
             </div>
           )}
 
-          <VehiclePrebookingSection
-            canManage={canManagePrebookings}
-            currentProfile={currentProfile}
-            onPrebookingSaved={handlePrebookingSaved}
-            prebookings={vehiclePrebookings}
-            vehicle={vehicle}
-          />
+          {canManagePrebookings && (
+            <VehiclePrebookingSection
+              canManage={canManagePrebookings}
+              currentProfile={currentProfile}
+              onPrebookingSaved={handlePrebookingSaved}
+              prebookings={vehiclePrebookings}
+              vehicle={vehicle}
+            />
+          )}
 
           <InvestmentSummary
             currentProfile={currentProfile}
