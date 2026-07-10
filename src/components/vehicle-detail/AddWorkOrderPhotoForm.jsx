@@ -4,6 +4,10 @@ import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
 import { buttonClassNames, formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
+import {
+  compressImageFile,
+  defaultPhotoCompressionOptions,
+} from "../../lib/imageCompression";
 import { supabase } from "../../lib/supabaseClient";
 
 const emptyForm = {
@@ -44,6 +48,7 @@ function AddWorkOrderPhotoForm({
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -88,16 +93,23 @@ function AddWorkOrderPhotoForm({
     }
 
     setIsSubmitting(true);
+    setSubmitStatus("Compressing photo...");
     setErrorMessage("");
     setSuccessMessage("");
 
-    const photoPath = buildPhotoPath(vehicleId, workOrder.id, selectedFile.name);
-
     try {
+      const uploadFile = await compressImageFile(
+        selectedFile,
+        defaultPhotoCompressionOptions
+      );
+      setSubmitStatus("Uploading photo...");
+      const photoPath = buildPhotoPath(vehicleId, workOrder.id, uploadFile.name);
+
       const uploadResponse = await supabase.storage
         .from("vehicle-photos")
-        .upload(photoPath, selectedFile, {
+        .upload(photoPath, uploadFile, {
           cacheControl: "3600",
+          contentType: uploadFile.type,
           upsert: false,
         });
 
@@ -153,6 +165,7 @@ function AddWorkOrderPhotoForm({
       setErrorMessage("Could not upload photo.");
     } finally {
       setIsSubmitting(false);
+      setSubmitStatus("");
     }
   }
 
@@ -217,7 +230,7 @@ function AddWorkOrderPhotoForm({
             isSubmitting={isSubmitting}
             onCancel={onClose}
             submitLabel="Add Photo"
-            submittingLabel="Uploading..."
+            submittingLabel={submitStatus || "Uploading..."}
           />
         </form>
     </ModalShell>

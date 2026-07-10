@@ -4,6 +4,11 @@ import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
 import { buttonClassNames, formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
+import {
+  compressImageFile,
+  documentImageCompressionOptions,
+  isImageFile,
+} from "../../lib/imageCompression";
 import { supabase } from "../../lib/supabaseClient";
 
 const documentTypeLabels = {
@@ -59,6 +64,7 @@ function AddDocumentUploadForm({
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -103,16 +109,22 @@ function AddDocumentUploadForm({
     }
 
     setIsSubmitting(true);
+    setSubmitStatus(isImageFile(selectedFile) ? "Compressing image..." : "Uploading document...");
     setErrorMessage("");
     setSuccessMessage("");
 
-    const filePath = buildDocumentPath(vehicleId, selectedFile.name);
-
     try {
+      const uploadFile = isImageFile(selectedFile)
+        ? await compressImageFile(selectedFile, documentImageCompressionOptions)
+        : selectedFile;
+      setSubmitStatus("Uploading document...");
+      const filePath = buildDocumentPath(vehicleId, uploadFile.name);
+
       const uploadResponse = await supabase.storage
         .from("vehicle-documents")
-        .upload(filePath, selectedFile, {
+        .upload(filePath, uploadFile, {
           cacheControl: "3600",
+          contentType: uploadFile.type || "application/octet-stream",
           upsert: false,
         });
 
@@ -135,9 +147,9 @@ function AddDocumentUploadForm({
         document_type: documentType,
         file_url: fileUrl,
         file_path: filePath,
-        file_name: selectedFile.name,
-        file_mime_type: selectedFile.type || "application/octet-stream",
-        file_size_bytes: selectedFile.size ?? 0,
+        file_name: uploadFile.name,
+        file_mime_type: uploadFile.type || "application/octet-stream",
+        file_size_bytes: uploadFile.size ?? 0,
         notes: emptyToNull(formData.notes),
         uploaded_by: currentProfile?.id ?? null,
       };
@@ -164,7 +176,7 @@ function AddDocumentUploadForm({
         action: "Document uploaded",
         details: {
           document_type: getDocumentTypeLabel(documentType),
-          file_name: selectedFile.name,
+          file_name: uploadFile.name,
         },
       });
       onActivityLogged?.();
@@ -174,6 +186,7 @@ function AddDocumentUploadForm({
       setErrorMessage("Could not upload document. Please try again.");
     } finally {
       setIsSubmitting(false);
+      setSubmitStatus("");
     }
   }
 
@@ -236,7 +249,7 @@ function AddDocumentUploadForm({
             isSubmitting={isSubmitting}
             onCancel={onClose}
             submitLabel="Upload Document"
-            submittingLabel="Uploading..."
+            submittingLabel={submitStatus || "Uploading..."}
           />
         </form>
     </ModalShell>

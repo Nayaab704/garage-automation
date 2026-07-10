@@ -4,6 +4,10 @@ import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
 import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
+import {
+  compressImageFile,
+  defaultPhotoCompressionOptions,
+} from "../../lib/imageCompression";
 import { supabase } from "../../lib/supabaseClient";
 
 const photoTypeOptions = [
@@ -53,6 +57,7 @@ function AddVehiclePhotoForm({
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -97,16 +102,23 @@ function AddVehiclePhotoForm({
     }
 
     setIsSubmitting(true);
+    setSubmitStatus("Compressing photo...");
     setErrorMessage("");
     setSuccessMessage("");
 
-    const photoPath = buildPhotoPath(vehicleId, selectedFile.name);
-
     try {
+      const uploadFile = await compressImageFile(
+        selectedFile,
+        defaultPhotoCompressionOptions
+      );
+      setSubmitStatus("Uploading photo...");
+      const photoPath = buildPhotoPath(vehicleId, uploadFile.name);
+
       const uploadResponse = await supabase.storage
         .from("vehicle-photos")
-        .upload(photoPath, selectedFile, {
+        .upload(photoPath, uploadFile, {
           cacheControl: "3600",
+          contentType: uploadFile.type,
           upsert: false,
         });
 
@@ -152,7 +164,7 @@ function AddVehiclePhotoForm({
         details: {
           photo_type: photo.photo_type,
           caption: photo.caption,
-          file_name: selectedFile.name,
+          file_name: uploadFile.name,
         },
       });
       onActivityLogged?.();
@@ -166,6 +178,7 @@ function AddVehiclePhotoForm({
       setErrorMessage(failureMessage);
     } finally {
       setIsSubmitting(false);
+      setSubmitStatus("");
     }
   }
 
@@ -226,7 +239,7 @@ function AddVehiclePhotoForm({
             isSubmitting={isSubmitting}
             onCancel={onClose}
             submitLabel={submitLabel}
-            submittingLabel="Uploading..."
+            submittingLabel={submitStatus || "Uploading..."}
           />
         </form>
     </ModalShell>

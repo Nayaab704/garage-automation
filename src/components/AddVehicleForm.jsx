@@ -5,6 +5,10 @@ import {
   formControlClassNames,
 } from "./ui/uiStyles";
 import AppIcon from "./ui/AppIcon";
+import {
+  compressImageFile,
+  defaultPhotoCompressionOptions,
+} from "../lib/imageCompression";
 import { supabase } from "../lib/supabaseClient";
 import { vehicleOriginOptions } from "../lib/vehicleOrigin";
 
@@ -191,13 +195,24 @@ async function cleanupUploadedFile(photoPath) {
   await supabase.storage.from("vehicle-photos").remove([photoPath]);
 }
 
-async function saveMainVehiclePhoto(vehicle, selectedPhoto) {
-  const photoPath = buildPhotoPath(vehicle.id, selectedPhoto.name);
+async function saveMainVehiclePhoto(
+  vehicle,
+  selectedPhoto,
+  { onStatusChange } = {}
+) {
+  onStatusChange?.("Compressing photo...");
+  const uploadPhoto = await compressImageFile(
+    selectedPhoto,
+    defaultPhotoCompressionOptions
+  );
+  onStatusChange?.("Uploading photo...");
+  const photoPath = buildPhotoPath(vehicle.id, uploadPhoto.name);
 
   const uploadResponse = await supabase.storage
     .from("vehicle-photos")
-    .upload(photoPath, selectedPhoto, {
+    .upload(photoPath, uploadPhoto, {
       cacheControl: "3600",
+      contentType: uploadPhoto.type,
       upsert: false,
     });
 
@@ -299,6 +314,7 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [photoInputKey, setPhotoInputKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const photoPreviewUrl = useMemo(
@@ -372,6 +388,7 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
     }
 
     setIsSubmitting(true);
+    setSubmitStatus("Creating vehicle...");
     setErrorMessage("");
     setSuccessMessage("");
 
@@ -392,7 +409,9 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
         let savedVehicle = data;
 
         try {
-          const photoResult = await saveMainVehiclePhoto(data, selectedPhoto);
+          const photoResult = await saveMainVehiclePhoto(data, selectedPhoto, {
+            onStatusChange: setSubmitStatus,
+          });
           savedVehicle = {
             ...data,
             ...photoResult.vehicle,
@@ -424,6 +443,7 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
       );
     } finally {
       setIsSubmitting(false);
+      setSubmitStatus("");
     }
   }
 
@@ -710,7 +730,7 @@ function AddVehicleForm({ initialValues = {}, onBack, onVehicleAdded }) {
                 disabled={isSubmitting}
                 type="submit"
               >
-                {isSubmitting ? "Creating vehicle..." : "Create Vehicle"}
+                {isSubmitting ? submitStatus || "Creating vehicle..." : "Create Vehicle"}
               </button>
             </div>
           </div>
