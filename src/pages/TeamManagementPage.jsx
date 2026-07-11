@@ -3,6 +3,7 @@ import {
   formatProfileRole,
   getProfileRoleClassName,
 } from "../lib/currentUserProfile";
+import { formatHourlyRate, numberOrZero } from "../lib/laborCost";
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 
@@ -45,6 +46,12 @@ function displayValue(value) {
   return value === null || value === undefined || value === ""
     ? "Not available"
     : value;
+}
+
+function numberToInputValue(value) {
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) ? String(numberValue) : "0";
 }
 
 function formatDate(value) {
@@ -161,17 +168,24 @@ function TeamMemberCard({
   currentProfile,
   isUpdating,
   onActiveChange,
+  onHourlyRateChange,
   onRoleChange,
   profile,
 }) {
+  const [hourlyRateValue, setHourlyRateValue] = useState(() =>
+    numberToInputValue(profile.hourly_rate)
+  );
   const isCurrentUser = profile.id === currentProfile?.id;
   const actionLabel = getActionLabel(profile, activeTab);
   const nextActiveState = !profile.is_active;
   const currentRole = profile.role || "technician";
+  const savedHourlyRate = numberOrZero(profile.hourly_rate);
+  const nextHourlyRate = numberOrZero(hourlyRateValue);
+  const hasHourlyRateChange = nextHourlyRate !== savedHourlyRate;
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(180px,0.55fr)_minmax(190px,0.7fr)_auto] lg:items-center">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(180px,0.55fr)_minmax(170px,0.62fr)_minmax(190px,0.7fr)_auto] lg:items-center">
         <div className="min-w-0">
           <h3 className="truncate text-base font-black text-slate-950">
             {displayValue(profile.full_name)}
@@ -199,6 +213,37 @@ function TeamMemberCard({
           >
             {getProfileStatus(profile)}
           </span>
+        </div>
+
+        <div>
+          <label className="block" htmlFor={`team-hourly-rate-${profile.id}`}>
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              Labor Rate
+            </span>
+            <div className="mt-1 flex gap-2">
+              <input
+                className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900 shadow-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isUpdating}
+                id={`team-hourly-rate-${profile.id}`}
+                min="0"
+                onChange={(event) => setHourlyRateValue(event.target.value)}
+                step="0.01"
+                type="number"
+                value={hourlyRateValue}
+              />
+              <button
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isUpdating || !hasHourlyRateChange}
+                onClick={() => onHourlyRateChange(profile, nextHourlyRate)}
+                type="button"
+              >
+                Save
+              </button>
+            </div>
+          </label>
+          <p className="mt-1 truncate text-xs font-semibold text-slate-500">
+            {formatHourlyRate(profile.hourly_rate || 0)}
+          </p>
         </div>
 
         <label className="block" htmlFor={`team-role-${profile.id}`}>
@@ -371,6 +416,38 @@ function TeamManagementPage({ currentProfile }) {
     }
   }
 
+  async function handleHourlyRateChange(profile, nextHourlyRate) {
+    if (!Number.isFinite(nextHourlyRate) || nextHourlyRate < 0) {
+      setErrorMessage("Hourly rate must be 0 or greater.");
+      return;
+    }
+
+    setUpdatingProfileId(profile.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({ hourly_rate: nextHourlyRate })
+        .eq("id", profile.id)
+        .select(profileSelectFields)
+        .single();
+
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
+
+      updateProfileInState(data);
+      setSuccessMessage("Hourly rate updated.");
+    } catch (error) {
+      setErrorMessage(error.message ?? "Unable to update hourly rate.");
+    } finally {
+      setUpdatingProfileId(null);
+    }
+  }
+
   async function handleActiveChange(profile, nextIsActive) {
     if (profile.id === currentProfile?.id && nextIsActive === false) {
       setErrorMessage("You cannot deactivate your own account.");
@@ -524,6 +601,7 @@ function TeamManagementPage({ currentProfile }) {
               isUpdating={updatingProfileId === profile.id}
               key={profile.id}
               onActiveChange={handleActiveChange}
+              onHourlyRateChange={handleHourlyRateChange}
               onRoleChange={handleRoleChange}
               profile={profile}
             />

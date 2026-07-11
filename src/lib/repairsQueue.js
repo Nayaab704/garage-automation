@@ -12,7 +12,7 @@ const partRequestColumns =
   "id, vehicle_id, repair_job_id, part_name, quantity, status, notes, part_source, approval_status, unit_cost, selected_vendor_id, selected_quote_id, quoted_unit_cost, quoted_total_cost, created_by, created_at";
 
 const laborLogColumns =
-  "id, vehicle_id, repair_job_id, technician_id, hours, hourly_rate, notes, created_at";
+  "id, vehicle_id, repair_job_id, technician_id, hours, hourly_rate, labor_cost, notes, created_at";
 
 const vehiclePhotoColumns =
   "id, vehicle_id, repair_job_id, photo_url, photo_path, caption, photo_type, created_at";

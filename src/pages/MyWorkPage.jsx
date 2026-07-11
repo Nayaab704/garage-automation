@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import VehicleStatusBadge from "../components/VehicleStatusBadge";
 import AppIcon from "../components/ui/AppIcon";
 import StatusBadge from "../components/ui/StatusBadge";
+import { formatCurrency, getLaborLogCost } from "../lib/laborCost";
 import { supabase } from "../lib/supabaseClient";
 import { formatUserFirstName } from "../lib/userDisplay";
 import { getWorkOrderStatusLabel } from "../lib/workOrderStatus";
@@ -10,7 +11,7 @@ const repairJobColumns =
   "id, vehicle_id, service_category_id, title, category, priority, status, assigned_to, created_by, notes, created_at, completed_at";
 
 const laborLogColumns =
-  "id, vehicle_id, repair_job_id, technician_id, hours, hourly_rate, notes, created_at";
+  "id, vehicle_id, repair_job_id, technician_id, hours, hourly_rate, labor_cost, notes, created_at";
 
 const partRequestColumns =
   "id, vehicle_id, repair_job_id, part_name, quantity, status, notes, part_source, approval_status, selected_vendor_id, created_by, created_at";
@@ -752,9 +753,15 @@ function buildMyWorkViewModel(records, currentProfile) {
   const todayLaborHours = records.laborLogs
     .filter((laborLog) => isToday(laborLog.created_at, referenceDate))
     .reduce((total, laborLog) => total + Number(laborLog.hours || 0), 0);
+  const todayLaborEarnings = records.laborLogs
+    .filter((laborLog) => isToday(laborLog.created_at, referenceDate))
+    .reduce((total, laborLog) => total + getLaborLogCost(laborLog), 0);
   const weekLaborHours = records.laborLogs
     .filter((laborLog) => isOnOrAfter(laborLog.created_at, startOfWeek))
     .reduce((total, laborLog) => total + Number(laborLog.hours || 0), 0);
+  const weekLaborEarnings = records.laborLogs
+    .filter((laborLog) => isOnOrAfter(laborLog.created_at, startOfWeek))
+    .reduce((total, laborLog) => total + getLaborLogCost(laborLog), 0);
   const vehiclesTouchedToday = uniqueValues(
     todayActivities.map((activity) => activity.vehicle?.id)
   ).length;
@@ -777,8 +784,10 @@ function buildMyWorkViewModel(records, currentProfile) {
     recentVehicles,
     serviceCategoriesById,
     summary: {
+      todayLaborEarnings,
       todayLaborHours,
       vehiclesTouchedToday,
+      weekLaborEarnings,
       weekLaborHours,
     },
     todayActivities,
@@ -811,16 +820,16 @@ function SummaryCard({ icon, label, value, helper }) {
 function MobileSummaryStrip({ summary }) {
   const stats = [
     {
-      helper: "Today",
       icon: "clock",
       label: "Today",
       value: formatHours(summary.todayLaborHours),
+      helper: `${formatCurrency(summary.todayLaborEarnings)} earned`,
     },
     {
-      helper: "Week",
       icon: "labor",
       label: "Week",
       value: formatHours(summary.weekLaborHours),
+      helper: `${formatCurrency(summary.weekLaborEarnings)} earned`,
     },
     {
       helper: "Touched",
@@ -1189,9 +1198,14 @@ function MyWorkPage({ currentProfile, onSelectVehicle }) {
                 icon="clock"
                 label="Today's Hours"
                 value={formatHours(viewModel.summary.todayLaborHours)}
+                helper={`${formatCurrency(
+                  viewModel.summary.todayLaborEarnings
+                )} earned`}
               />
               <SummaryCard
-                helper="Since Sunday"
+                helper={`${formatCurrency(
+                  viewModel.summary.weekLaborEarnings
+                )} earned since Sunday`}
                 icon="labor"
                 label="This Week"
                 value={formatHours(viewModel.summary.weekLaborHours)}

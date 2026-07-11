@@ -4,6 +4,12 @@ import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
 import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
+import {
+  calculateLaborCost,
+  formatCurrency,
+  formatHourlyRate,
+  getProfileHourlyRate,
+} from "../../lib/laborCost";
 import { supabase } from "../../lib/supabaseClient";
 
 const emptyForm = {
@@ -55,6 +61,16 @@ function parsePositiveNumber(value, label) {
   return { error: "", value: numberValue };
 }
 
+function parseNonnegativeNumber(value, label) {
+  const numberValue = Number(value || 0);
+
+  if (!Number.isFinite(numberValue) || numberValue < 0) {
+    return { error: `${label} must be 0 or greater.`, value: null };
+  }
+
+  return { error: "", value: numberValue };
+}
+
 function AddLaborLogForm({
   onClose,
   onActivityLogged,
@@ -74,12 +90,24 @@ function AddLaborLogForm({
     setFormData((currentFormData) => ({
       ...currentFormData,
       [name]: value,
+      ...(name === "technician_id"
+        ? {
+            hourly_rate: String(
+              getProfileHourlyRate(
+                profiles.find((profile) => profile.id === value)
+              )
+            ),
+          }
+        : {}),
     }));
   }
 
   function validateForm() {
     const hours = parsePositiveNumber(formData.hours, "Hours");
-    const hourlyRate = parsePositiveNumber(formData.hourly_rate, "Hourly rate");
+    const hourlyRate = parseNonnegativeNumber(
+      formData.hourly_rate,
+      "Hourly rate"
+    );
 
     if (!formData.repair_job_id) {
       return { error: "Repair job is required." };
@@ -127,6 +155,10 @@ function AddLaborLogForm({
         technician_id: formData.technician_id,
         hours: validation.values.hours,
         hourly_rate: validation.values.hourlyRate,
+        labor_cost: calculateLaborCost(
+          validation.values.hours,
+          validation.values.hourlyRate
+        ),
         notes: emptyToNull(formData.notes),
       };
 
@@ -153,6 +185,7 @@ function AddLaborLogForm({
             ),
             hours: laborLog.hours,
             hourly_rate: laborLog.hourly_rate,
+            labor_cost: laborLog.labor_cost,
           },
         });
         onActivityLogged?.();
@@ -173,6 +206,28 @@ function AddLaborLogForm({
       title="Add Labor Log"
     >
       <form className="space-y-5" onSubmit={handleSubmit}>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+              Labor Cost Preview
+            </p>
+            <p className="mt-1 text-sm font-bold text-slate-800">
+              {Number(formData.hours || 0) > 0
+                ? `${Number(formData.hours || 0)}h x ${formatHourlyRate(
+                    formData.hourly_rate
+                  )} = ${formatCurrency(
+                    calculateLaborCost(formData.hours, formData.hourly_rate)
+                  )}`
+                : `${formatHourlyRate(formData.hourly_rate)} rate selected`}
+            </p>
+            {formData.technician_id &&
+              Number(formData.hourly_rate || 0) === 0 &&
+              Number(formData.hours || 0) > 0 && (
+                <p className="mt-2 text-xs font-semibold text-amber-700">
+                  No hourly rate set for this technician. Labor cost will save as $0.00.
+                </p>
+              )}
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block" htmlFor="labor-repair-job">
               <span className={formControlClassNames.label}>
@@ -239,10 +294,10 @@ function AddLaborLogForm({
               </span>
               <input
                 className={formControlClassNames.input}
+                disabled
                 id="labor-hourly-rate"
-                min="0.01"
+                min="0"
                 name="hourly_rate"
-                onChange={handleChange}
                 required
                 step="0.01"
                 type="number"

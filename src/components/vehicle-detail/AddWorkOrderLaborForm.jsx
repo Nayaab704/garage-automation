@@ -4,6 +4,12 @@ import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
 import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
+import {
+  calculateLaborCost,
+  formatCurrency,
+  formatHourlyRate,
+  getProfileHourlyRate,
+} from "../../lib/laborCost";
 import { supabase } from "../../lib/supabaseClient";
 
 const emptyForm = {
@@ -43,6 +49,15 @@ function AddWorkOrderLaborForm({
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const canPickTechnician = isAdminRole(currentProfile?.role);
+  const selectedTechnician = getSelectedTechnician();
+  const previewHours = Number(formData.hours || 0);
+  const selectedHourlyRate = getProfileHourlyRate(selectedTechnician);
+  const previewLaborCost = calculateLaborCost(previewHours, selectedHourlyRate);
+  const shouldShowRateWarning =
+    Boolean(selectedTechnician?.id) &&
+    selectedHourlyRate === 0 &&
+    Number.isFinite(previewHours) &&
+    previewHours > 0;
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -68,9 +83,9 @@ function AddWorkOrderLaborForm({
       return;
     }
 
-    const selectedTechnician = getSelectedTechnician();
     const hours = Number(formData.hours || 0);
-    const hourlyRate = Number(selectedTechnician?.hourly_rate || 0);
+    const hourlyRate = getProfileHourlyRate(selectedTechnician);
+    const laborCost = calculateLaborCost(hours, hourlyRate);
 
     if (!vehicleId || !workOrder?.id) {
       setErrorMessage("Unable to add labor without a work order.");
@@ -103,6 +118,7 @@ function AddWorkOrderLaborForm({
         technician_id: selectedTechnician.id,
         hours,
         hourly_rate: hourlyRate,
+        labor_cost: laborCost,
         notes: emptyToNull(formData.notes),
       };
 
@@ -128,6 +144,7 @@ function AddWorkOrderLaborForm({
           technician: getTechnicianName(selectedTechnician),
           hours: laborLog.hours,
           hourly_rate: laborLog.hourly_rate,
+          labor_cost: laborLog.labor_cost,
         },
       });
       onActivityLogged?.();
@@ -183,6 +200,24 @@ function AddWorkOrderLaborForm({
               value={formData.hours}
             />
           </label>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+              Labor Cost Preview
+            </p>
+            <p className="mt-1 text-sm font-bold text-slate-800">
+              {Number.isFinite(previewHours) && previewHours > 0
+                ? `${previewHours}h x ${formatHourlyRate(
+                    selectedHourlyRate
+                  )} = ${formatCurrency(previewLaborCost)}`
+                : `${formatHourlyRate(selectedHourlyRate)} rate selected`}
+            </p>
+            {shouldShowRateWarning && (
+              <p className="mt-2 text-xs font-semibold text-amber-700">
+                No hourly rate set for this technician. Labor cost will save as $0.00.
+              </p>
+            )}
+          </div>
 
           <label className="block" htmlFor="work-order-labor-notes">
             <span className={formControlClassNames.label}>Notes</span>

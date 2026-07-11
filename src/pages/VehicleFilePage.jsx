@@ -4,6 +4,7 @@ import { buttonClassNames } from "../components/ui/uiStyles";
 import VehicleColorLabel from "../components/VehicleColorLabel";
 import VehiclePrebookingBadge from "../components/VehiclePrebookingBadge";
 import VehicleStatusBadge from "../components/VehicleStatusBadge";
+import { getLaborLogCost, formatHourlyRate } from "../lib/laborCost";
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 import { isThirdPartyRepairActive } from "../lib/thirdPartyRepairWorkflow";
@@ -263,7 +264,7 @@ function getThirdPartyTotal(thirdPartyRepair) {
 }
 
 function getLaborTotal(laborLog) {
-  return numberOrZero(laborLog?.hours) * numberOrZero(laborLog?.hourly_rate);
+  return getLaborLogCost(laborLog);
 }
 
 function getExtraCostAmount(costEntry) {
@@ -1042,7 +1043,6 @@ function WorkPartsTab({
 function FinancialTab({
   costEntries,
   currentProfile,
-  investmentSummary,
   laborLogs,
   profiles,
   purchaseOrderItems,
@@ -1066,12 +1066,15 @@ function FinancialTab({
     (total, laborLog) => total + getLaborTotal(laborLog),
     0
   );
+  const laborHoursTotal = visibleLaborLogs.reduce(
+    (total, laborLog) => total + numberOrZero(laborLog.hours),
+    0
+  );
   const extraCostsTotal = costEntries.reduce(
     (total, costEntry) => total + getExtraCostAmount(costEntry),
     0
   );
   const totalInvestment =
-    investmentSummary?.total_invested ??
     partsTotal + thirdPartyTotal + laborTotal + extraCostsTotal;
 
   if (!canViewAdminFinancial && currentProfile?.role !== "technician") {
@@ -1083,9 +1086,10 @@ function FinancialTab({
   return (
     <div className="space-y-3">
       {canViewAdminFinancial ? (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
           <MetricCard label="Parts" value={formatCurrency(partsTotal)} />
           <MetricCard label="Third-Party" value={formatCurrency(thirdPartyTotal)} />
+          <MetricCard label="Labor Hours" value={formatNumber(laborHoursTotal)} />
           <MetricCard label="Labor" value={formatCurrency(laborTotal)} />
           <MetricCard label="Extra Costs" value={formatCurrency(extraCostsTotal)} />
           <MetricCard label="Total Investment" value={formatCurrency(totalInvestment)} />
@@ -1133,7 +1137,8 @@ function FinancialTab({
                     </p>
                   </div>
                   <span className="text-sm font-semibold text-slate-600">
-                    {formatNumber(laborLog.hours)} hr
+                    {formatNumber(laborLog.hours)}h x{" "}
+                    {formatHourlyRate(laborLog.hourly_rate)}
                   </span>
                   <span className="text-sm font-black text-slate-800">
                     {formatCurrency(getLaborTotal(laborLog))}
@@ -1622,7 +1627,6 @@ function VehicleFilePage({
             <FinancialTab
               costEntries={data.costEntries}
               currentProfile={currentProfile}
-              investmentSummary={data.investmentSummary}
               laborLogs={data.laborLogs}
               profiles={data.profiles}
               purchaseOrderItems={data.purchaseOrderItems}

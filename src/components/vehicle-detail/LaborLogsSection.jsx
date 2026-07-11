@@ -1,6 +1,7 @@
 import { useState } from "react";
 import AddLaborLogForm from "./AddLaborLogForm";
 import { logVehicleActivity } from "../../lib/activityLogger";
+import { getLaborLogCost } from "../../lib/laborCost";
 import { supabase } from "../../lib/supabaseClient";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -70,17 +71,6 @@ function getTechnicianName(profile) {
   );
 }
 
-function getLaborCost(laborLog) {
-  const hours = Number(laborLog.hours);
-  const hourlyRate = Number(laborLog.hourly_rate);
-
-  if (!Number.isFinite(hours) || !Number.isFinite(hourlyRate)) {
-    return null;
-  }
-
-  return hours * hourlyRate;
-}
-
 function getRecordById(records, id) {
   return records.find((record) => record.id === id);
 }
@@ -105,7 +95,7 @@ function LaborLogCard({
   const repairJob = getRecordById(repairJobs, laborLog.repair_job_id);
   const technician = getRecordById(profiles, laborLog.technician_id);
   const notes = getFirstValue(laborLog, ["notes", "description"]);
-  const laborCost = getLaborCost(laborLog);
+  const laborCost = getLaborLogCost(laborLog);
 
   return (
     <article className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
@@ -214,6 +204,7 @@ function LaborLogsSection({
           technician: technician ? getTechnicianName(technician) : null,
           hours: laborLog?.hours,
           hourly_rate: laborLog?.hourly_rate,
+          labor_cost: laborLog ? getLaborLogCost(laborLog) : null,
         },
       });
       onActivityLogged?.();
