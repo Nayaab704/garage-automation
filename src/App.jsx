@@ -164,11 +164,8 @@ function AccountPendingApproval({ isLoggingOut, onLogout }) {
           Account Pending Approval
         </p>
         <h1 className="mt-3 text-2xl font-bold text-zinc-950">
-          Your account is waiting for admin approval.
+          Your account is pending admin approval. Please contact the admin.
         </h1>
-        <p className="mt-3 text-sm leading-6 text-zinc-600">
-          Please contact an admin or owner to activate your account.
-        </p>
         <button
           className="mt-6 w-full rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={isLoggingOut}

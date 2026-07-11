@@ -186,10 +186,13 @@ function FilterDropdown({
 }
 
 function CompactRecordFilters({
+  onServiceCategoryChange,
   onVendorChange,
   onVehicleChange,
+  selectedServiceCategoryId = "",
   selectedVehicleId = "",
   selectedVendorId = "",
+  serviceCategoryOptions = [],
   vehicleOptions = [],
   vendorOptions = [],
 }) {
@@ -199,27 +202,45 @@ function CompactRecordFilters({
   const selectedVehicle = vehicleOptions.find(
     (option) => option.id === selectedVehicleId
   );
+  const selectedServiceCategory = serviceCategoryOptions.find(
+    (option) => option.id === selectedServiceCategoryId
+  );
 
   return (
     <div className="relative z-20 flex max-w-full flex-wrap gap-2 overflow-visible pb-1">
-      <FilterDropdown
-        emptyMessage="No vendors found."
-        label="Vendor"
-        onChange={onVendorChange}
-        options={vendorOptions}
-        placeholder="All vendors"
-        searchPlaceholder="Search vendors..."
-        selectedOption={selectedVendor}
-      />
-      <FilterDropdown
-        emptyMessage="No vehicles found."
-        label="Vehicle"
-        onChange={onVehicleChange}
-        options={vehicleOptions}
-        placeholder="All vehicles"
-        searchPlaceholder="Search vehicles..."
-        selectedOption={selectedVehicle}
-      />
+      {onVendorChange && (
+        <FilterDropdown
+          emptyMessage="No vendors found."
+          label="Vendor"
+          onChange={onVendorChange}
+          options={vendorOptions}
+          placeholder="All vendors"
+          searchPlaceholder="Search vendors..."
+          selectedOption={selectedVendor}
+        />
+      )}
+      {onVehicleChange && (
+        <FilterDropdown
+          emptyMessage="No vehicles found."
+          label="Vehicle"
+          onChange={onVehicleChange}
+          options={vehicleOptions}
+          placeholder="All vehicles"
+          searchPlaceholder="Search vehicles..."
+          selectedOption={selectedVehicle}
+        />
+      )}
+      {onServiceCategoryChange && (
+        <FilterDropdown
+          emptyMessage="No service categories found."
+          label="Service"
+          onChange={onServiceCategoryChange}
+          options={serviceCategoryOptions}
+          placeholder="All service categories"
+          searchPlaceholder="Search service..."
+          selectedOption={selectedServiceCategory}
+        />
+      )}
     </div>
   );
 }

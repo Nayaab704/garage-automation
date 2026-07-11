@@ -54,6 +54,10 @@ function numberToInputValue(value) {
   return Number.isFinite(numberValue) ? String(numberValue) : "0";
 }
 
+function normalizeFullName(value) {
+  return String(value ?? "").trim().replace(/\s+/g, " ");
+}
+
 function formatDate(value) {
   if (!value) {
     return "Not available";
@@ -168,10 +172,14 @@ function TeamMemberCard({
   currentProfile,
   isUpdating,
   onActiveChange,
+  onFullNameChange,
   onHourlyRateChange,
   onRoleChange,
   profile,
 }) {
+  const [fullNameValue, setFullNameValue] = useState(
+    () => profile.full_name ?? ""
+  );
   const [hourlyRateValue, setHourlyRateValue] = useState(() =>
     numberToInputValue(profile.hourly_rate)
   );
@@ -182,17 +190,49 @@ function TeamMemberCard({
   const savedHourlyRate = numberOrZero(profile.hourly_rate);
   const nextHourlyRate = numberOrZero(hourlyRateValue);
   const hasHourlyRateChange = nextHourlyRate !== savedHourlyRate;
+  const savedFullName = normalizeFullName(profile.full_name);
+  const nextFullName = normalizeFullName(fullNameValue);
+  const hasFullNameChange = nextFullName !== savedFullName;
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(180px,0.55fr)_minmax(170px,0.62fr)_minmax(190px,0.7fr)_auto] lg:items-center">
         <div className="min-w-0">
-          <h3 className="truncate text-base font-black text-slate-950">
-            {displayValue(profile.full_name)}
-          </h3>
-          <p className="mt-1 truncate text-sm font-medium text-slate-500">
-            {displayValue(profile.email)}
-          </p>
+          <label className="block" htmlFor={`team-full-name-${profile.id}`}>
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              Full Name
+            </span>
+            <div className="mt-1 flex gap-2">
+              <input
+                className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900 shadow-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isUpdating}
+                id={`team-full-name-${profile.id}`}
+                onChange={(event) => setFullNameValue(event.target.value)}
+                placeholder="Full name"
+                type="text"
+                value={fullNameValue}
+              />
+              <button
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isUpdating || !hasFullNameChange || !nextFullName}
+                onClick={() => {
+                  setFullNameValue(nextFullName);
+                  onFullNameChange(profile, nextFullName);
+                }}
+                type="button"
+              >
+                Save
+              </button>
+            </div>
+          </label>
+          <div className="mt-2 min-w-0">
+            <p className="truncate text-sm font-medium text-slate-500">
+              {displayValue(profile.email)}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-slate-400">
+              Email is used for login and cannot be edited here.
+            </p>
+          </div>
           <p className="mt-2 text-xs font-semibold text-slate-500">
             Joined {formatDate(profile.created_at)}
           </p>
@@ -416,6 +456,38 @@ function TeamManagementPage({ currentProfile }) {
     }
   }
 
+  async function handleFullNameChange(profile, nextFullName) {
+    if (!nextFullName) {
+      setErrorMessage("Full name is required.");
+      return;
+    }
+
+    setUpdatingProfileId(profile.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({ full_name: nextFullName })
+        .eq("id", profile.id)
+        .select(profileSelectFields)
+        .single();
+
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
+
+      updateProfileInState(data);
+      setSuccessMessage("Full name updated.");
+    } catch (error) {
+      setErrorMessage(error.message ?? "Unable to update full name.");
+    } finally {
+      setUpdatingProfileId(null);
+    }
+  }
+
   async function handleHourlyRateChange(profile, nextHourlyRate) {
     if (!Number.isFinite(nextHourlyRate) || nextHourlyRate < 0) {
       setErrorMessage("Hourly rate must be 0 or greater.");
@@ -601,6 +673,7 @@ function TeamManagementPage({ currentProfile }) {
               isUpdating={updatingProfileId === profile.id}
               key={profile.id}
               onActiveChange={handleActiveChange}
+              onFullNameChange={handleFullNameChange}
               onHourlyRateChange={handleHourlyRateChange}
               onRoleChange={handleRoleChange}
               profile={profile}

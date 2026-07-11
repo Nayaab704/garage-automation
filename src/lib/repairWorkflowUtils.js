@@ -1,3 +1,4 @@
+import { normalizeServiceCategoryKey } from "./partWorkflowUtils";
 import {
   isWorkOrderStatusWaitingForParts,
   workOrderStatusLabels,
@@ -66,6 +67,21 @@ export function formatRepairLabel(value, labels = {}) {
 
 function formatSearchLabel(value, labels = {}) {
   return value ? formatRepairLabel(value, labels) : "";
+}
+
+export function getRepairServiceCategoryFilterValues(job) {
+  const serviceCategory =
+    job?.serviceCategory ?? job?.service_category ?? job?.service_categories;
+  const serviceCategoryId =
+    serviceCategory?.id ?? job?.service_category_id ?? "";
+  const serviceCategoryKey = normalizeServiceCategoryKey(
+    serviceCategory?.slug ?? serviceCategory?.name ?? job?.category
+  );
+
+  return {
+    serviceCategoryId: serviceCategoryId ? String(serviceCategoryId) : "",
+    serviceCategoryKey,
+  };
 }
 
 export function getRepairVehicleName(vehicle) {
@@ -277,11 +293,67 @@ export function getRepairJobSearchText(job) {
   ].filter(Boolean).join(" "));
 }
 
-export function filterRepairsQueue(jobs = [], { search = "", tab = "open" } = {}) {
+function repairJobMatchesVehicleFilter(job, vehicleId = "") {
+  const normalizedVehicleId = String(vehicleId ?? "").trim();
+
+  if (!normalizedVehicleId) {
+    return true;
+  }
+
+  return String(job?.vehicle_id ?? job?.vehicle?.id ?? "") === normalizedVehicleId;
+}
+
+function repairJobMatchesServiceCategoryFilter(
+  job,
+  serviceCategoryId = "",
+  serviceCategoryKey = ""
+) {
+  const normalizedServiceCategoryId = String(serviceCategoryId ?? "").trim();
+  const normalizedServiceCategoryKey =
+    normalizeServiceCategoryKey(serviceCategoryKey);
+
+  if (!normalizedServiceCategoryId && !normalizedServiceCategoryKey) {
+    return true;
+  }
+
+  const jobServiceCategory = getRepairServiceCategoryFilterValues(job);
+
+  return (
+    (normalizedServiceCategoryId &&
+      jobServiceCategory.serviceCategoryId === normalizedServiceCategoryId) ||
+    (normalizedServiceCategoryKey &&
+      jobServiceCategory.serviceCategoryKey === normalizedServiceCategoryKey)
+  );
+}
+
+export function filterRepairsQueue(
+  jobs = [],
+  {
+    search = "",
+    tab = "open",
+    vehicleId = "",
+    serviceCategoryId = "",
+    serviceCategoryKey = "",
+  } = {}
+) {
   const normalizedSearch = normalizeSearch(search);
 
   return jobs.filter((job) => {
     if (!repairJobMatchesTab(job, tab)) {
+      return false;
+    }
+
+    if (!repairJobMatchesVehicleFilter(job, vehicleId)) {
+      return false;
+    }
+
+    if (
+      !repairJobMatchesServiceCategoryFilter(
+        job,
+        serviceCategoryId,
+        serviceCategoryKey
+      )
+    ) {
       return false;
     }
 

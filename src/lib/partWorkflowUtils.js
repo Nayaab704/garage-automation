@@ -69,6 +69,43 @@ function formatSearchLabel(value, labels = {}) {
   return value ? formatPartLabel(value, labels) : "";
 }
 
+export function normalizeServiceCategoryKey(value) {
+  const normalizedValue = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  if (normalizedValue === "a_c" || normalizedValue === "air_conditioning") {
+    return "ac";
+  }
+
+  return normalizedValue;
+}
+
+export function getPartServiceCategoryFilterValues(part) {
+  const workOrder = part?.repairJob ?? part?.repair_job ?? part?.repair_jobs;
+  const serviceCategory =
+    workOrder?.serviceCategory ??
+    workOrder?.service_category ??
+    workOrder?.service_categories ??
+    null;
+  const serviceCategoryId =
+    serviceCategory?.id ?? workOrder?.service_category_id ?? "";
+  const serviceCategoryKey = normalizeServiceCategoryKey(
+    serviceCategory?.slug ??
+      serviceCategory?.name ??
+      workOrder?.category ??
+      part?.category
+  );
+
+  return {
+    serviceCategoryId: serviceCategoryId ? String(serviceCategoryId) : "",
+    serviceCategoryKey,
+  };
+}
+
 function getVehicleNameSearchValues(vehicle) {
   return [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim]
     .filter(Boolean)
@@ -194,6 +231,29 @@ function partMatchesVehicleFilter(part, vehicleId) {
   }
 
   return getPartVehicleIds(part).includes(normalizedVehicleId);
+}
+
+function partMatchesServiceCategoryFilter(
+  part,
+  serviceCategoryId = "",
+  serviceCategoryKey = ""
+) {
+  const normalizedServiceCategoryId = String(serviceCategoryId ?? "").trim();
+  const normalizedServiceCategoryKey =
+    normalizeServiceCategoryKey(serviceCategoryKey);
+
+  if (!normalizedServiceCategoryId && !normalizedServiceCategoryKey) {
+    return true;
+  }
+
+  const partServiceCategory = getPartServiceCategoryFilterValues(part);
+
+  return (
+    (normalizedServiceCategoryId &&
+      partServiceCategory.serviceCategoryId === normalizedServiceCategoryId) ||
+    (normalizedServiceCategoryKey &&
+      partServiceCategory.serviceCategoryKey === normalizedServiceCategoryKey)
+  );
 }
 
 export function getVehicleName(vehicle) {
@@ -690,6 +750,8 @@ export function filterPartsQueue(
     tab = "needs_po",
     vehicleId = "",
     vehicleSearchIndex = [],
+    serviceCategoryId = "",
+    serviceCategoryKey = "",
     vendorId = "",
     vendorName = "",
   } = {}
@@ -707,6 +769,16 @@ export function filterPartsQueue(
     }
 
     if (!partMatchesVehicleFilter(part, vehicleId)) {
+      return false;
+    }
+
+    if (
+      !partMatchesServiceCategoryFilter(
+        part,
+        serviceCategoryId,
+        serviceCategoryKey
+      )
+    ) {
       return false;
     }
 

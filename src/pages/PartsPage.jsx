@@ -26,6 +26,7 @@ import {
 import {
   getActiveFilterCount,
   getOptionById,
+  getPartsServiceCategoryFilterOptions,
   getPartsVehicleFilterOptions,
   getPartsVendorFilterOptions,
 } from "../lib/operationalFilterOptions";
@@ -119,8 +120,11 @@ function PartsPage({
   const [partQueue, setPartQueue] = useState([]);
   const [priceHistoryPart, setPriceHistoryPart] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedServiceCategoryFilterId, setSelectedServiceCategoryFilterId] =
+    useState("");
   const [selectedVehicleFilterId, setSelectedVehicleFilterId] = useState("");
   const [selectedVendorFilterId, setSelectedVendorFilterId] = useState("");
+  const [serviceCategories, setServiceCategories] = useState([]);
   const [selectedPartForPurchaseOrder, setSelectedPartForPurchaseOrder] =
     useState(null);
   const [successMessage, setSuccessMessage] = useState("");
@@ -150,6 +154,10 @@ function PartsPage({
     () => getPartsVehicleFilterOptions(partQueue),
     [partQueue]
   );
+  const serviceCategoryFilterOptions = useMemo(
+    () => getPartsServiceCategoryFilterOptions(partQueue, serviceCategories),
+    [partQueue, serviceCategories]
+  );
   const selectedVendorFilter = useMemo(
     () => getOptionById(vendorFilterOptions, selectedVendorFilterId),
     [selectedVendorFilterId, vendorFilterOptions]
@@ -158,7 +166,16 @@ function PartsPage({
     () => getOptionById(vehicleFilterOptions, selectedVehicleFilterId),
     [selectedVehicleFilterId, vehicleFilterOptions]
   );
+  const selectedServiceCategoryFilter = useMemo(
+    () =>
+      getOptionById(
+        serviceCategoryFilterOptions,
+        selectedServiceCategoryFilterId
+      ),
+    [selectedServiceCategoryFilterId, serviceCategoryFilterOptions]
+  );
   const activeFilterCount = getActiveFilterCount([
+    selectedServiceCategoryFilter?.id,
     selectedVendorFilter?.id,
     selectedVehicleFilter?.id,
   ]);
@@ -171,6 +188,10 @@ function PartsPage({
         tab: activeTab,
         vehicleId: selectedVehicleFilter?.vehicleId ?? "",
         vehicleSearchIndex,
+        serviceCategoryId:
+          selectedServiceCategoryFilter?.serviceCategoryId ?? "",
+        serviceCategoryKey:
+          selectedServiceCategoryFilter?.serviceCategoryKey ?? "",
         vendorId: selectedVendorFilter?.vendorId ?? "",
         vendorName: selectedVendorFilter?.label ?? "",
       }),
@@ -178,6 +199,7 @@ function PartsPage({
       activeTab,
       debouncedSearchTerm,
       partQueue,
+      selectedServiceCategoryFilter,
       selectedVehicleFilter,
       selectedVendorFilter,
       vehicleSearchIndex,
@@ -201,6 +223,7 @@ function PartsPage({
       }
 
       setPartQueue(data.parts);
+      setServiceCategories(data.serviceCategories ?? []);
       setVehicleSearchIndex(data.vehicleSearchIndex ?? []);
       setVendors(data.vendors);
     } catch (error) {
@@ -554,6 +577,7 @@ function PartsPage({
 
   function clearSearch() {
     setSearchTerm("");
+    setSelectedServiceCategoryFilterId("");
     setSelectedVehicleFilterId("");
     setSelectedVendorFilterId("");
   }
@@ -595,10 +619,13 @@ function PartsPage({
             value={searchTerm}
           >
             <CompactRecordFilters
+              onServiceCategoryChange={setSelectedServiceCategoryFilterId}
               onVehicleChange={setSelectedVehicleFilterId}
               onVendorChange={setSelectedVendorFilterId}
+              selectedServiceCategoryId={selectedServiceCategoryFilterId}
               selectedVehicleId={selectedVehicleFilterId}
               selectedVendorId={selectedVendorFilterId}
+              serviceCategoryOptions={serviceCategoryFilterOptions}
               vehicleOptions={vehicleFilterOptions}
               vendorOptions={vendorFilterOptions}
             />

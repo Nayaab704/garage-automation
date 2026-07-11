@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import CompactRecordFilters from "../components/ui/CompactRecordFilters";
 import AppIcon from "../components/ui/AppIcon";
 import OperationalSearchBar, {
   OperationalSearchIconButton,
@@ -16,6 +17,12 @@ import {
   fetchRepairsQueue,
   filterRepairsQueueResults,
 } from "../lib/repairsQueue";
+import {
+  getActiveFilterCount,
+  getOptionById,
+  getRepairsServiceCategoryFilterOptions,
+  getRepairsVehicleFilterOptions,
+} from "../lib/operationalFilterOptions";
 import {
   formatRepairJobVehicleLabel,
   formatRepairLabel,
@@ -107,11 +114,11 @@ function RepairsQueueTabs({ activeTab, counts = {}, onChange }) {
   );
 }
 
-function RepairJobEmptyState({ activeTab, hasSearch, onClearSearch }) {
-  const message = hasSearch
+function RepairJobEmptyState({ activeTab, hasFilters, hasSearch, onClearSearch }) {
+  const message = hasSearch || hasFilters
     ? {
-        body: "Try searching by VIN, stock number, vehicle, part, or vendor.",
-        title: "No matching records found.",
+        body: "Try clearing search or adjusting the selected vehicle and service category.",
+        title: "No repairs match these filters.",
       }
     : activeTab === "waiting_parts"
       ? {
@@ -144,7 +151,7 @@ function RepairJobEmptyState({ activeTab, hasSearch, onClearSearch }) {
       <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
         {message.body}
       </p>
-      {hasSearch && onClearSearch && (
+      {(hasSearch || hasFilters) && onClearSearch && (
         <button
           className={`mt-4 ${buttonClassNames.secondary}`}
           onClick={onClearSearch}
@@ -368,6 +375,10 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
   const [jobs, setJobs] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedServiceCategoryFilterId, setSelectedServiceCategoryFilterId] =
+    useState("");
+  const [selectedVehicleFilterId, setSelectedVehicleFilterId] = useState("");
+  const [serviceCategories, setServiceCategories] = useState([]);
   const [statusErrorMessage, setStatusErrorMessage] = useState("");
   const [statusSuccessMessage, setStatusSuccessMessage] = useState("");
   const [updatingStatusId, setUpdatingStatusId] = useState(null);
@@ -383,17 +394,55 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
   const canManageWorkOrderParts = canManageRepairJobs || canManagePartRequests;
 
   const countsByTab = useMemo(() => getRepairQueueCounts(jobs), [jobs]);
+  const vehicleFilterOptions = useMemo(
+    () => getRepairsVehicleFilterOptions(jobs),
+    [jobs]
+  );
+  const serviceCategoryFilterOptions = useMemo(
+    () => getRepairsServiceCategoryFilterOptions(jobs, serviceCategories),
+    [jobs, serviceCategories]
+  );
+  const selectedVehicleFilter = useMemo(
+    () => getOptionById(vehicleFilterOptions, selectedVehicleFilterId),
+    [selectedVehicleFilterId, vehicleFilterOptions]
+  );
+  const selectedServiceCategoryFilter = useMemo(
+    () =>
+      getOptionById(
+        serviceCategoryFilterOptions,
+        selectedServiceCategoryFilterId
+      ),
+    [selectedServiceCategoryFilterId, serviceCategoryFilterOptions]
+  );
+  const activeFilterCount = getActiveFilterCount([
+    selectedVehicleFilter?.id,
+    selectedServiceCategoryFilter?.id,
+  ]);
+  const hasActiveFilters = activeFilterCount > 0;
   const filteredJobs = useMemo(
     () =>
       filterRepairsQueueResults(jobs, {
         search: debouncedSearchTerm,
+        serviceCategoryId:
+          selectedServiceCategoryFilter?.serviceCategoryId ?? "",
+        serviceCategoryKey:
+          selectedServiceCategoryFilter?.serviceCategoryKey ?? "",
         tab: activeTab,
+        vehicleId: selectedVehicleFilter?.vehicleId ?? "",
       }),
-    [activeTab, debouncedSearchTerm, jobs]
+    [
+      activeTab,
+      debouncedSearchTerm,
+      jobs,
+      selectedServiceCategoryFilter,
+      selectedVehicleFilter,
+    ]
   );
 
   function clearSearch() {
     setSearchTerm("");
+    setSelectedServiceCategoryFilterId("");
+    setSelectedVehicleFilterId("");
   }
 
   async function loadRepairsQueue({ showLoading = true } = {}) {
@@ -414,6 +463,7 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
 
       setJobs(data.jobs);
       setProfiles(data.profiles);
+      setServiceCategories(data.serviceCategories ?? []);
       setVendors(data.vendors);
     } catch (error) {
       console.error("Could not load repairs:", error);
@@ -447,6 +497,7 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
 
         setJobs(data.jobs);
         setProfiles(data.profiles);
+        setServiceCategories(data.serviceCategories ?? []);
         setVendors(data.vendors);
       } catch (error) {
         if (isMounted) {
@@ -684,6 +735,8 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
                 onClick={() => loadRepairsQueue()}
               />
             }
+            activeFilterCount={activeFilterCount}
+            clearLabel={hasActiveFilters ? "Clear Filters" : "Clear Search"}
             id="repairs-queue-search"
             label="Search work orders"
             onChange={setSearchTerm}
@@ -692,7 +745,16 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
             resultCount={filteredJobs.length}
             totalCount={countsByTab[activeTab] ?? jobs.length}
             value={searchTerm}
-          />
+          >
+            <CompactRecordFilters
+              onServiceCategoryChange={setSelectedServiceCategoryFilterId}
+              onVehicleChange={setSelectedVehicleFilterId}
+              selectedServiceCategoryId={selectedServiceCategoryFilterId}
+              selectedVehicleId={selectedVehicleFilterId}
+              serviceCategoryOptions={serviceCategoryFilterOptions}
+              vehicleOptions={vehicleFilterOptions}
+            />
+          </OperationalSearchBar>
         </div>
 
         <div className="mt-4">
@@ -731,6 +793,7 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
       {!isLoading && !errorMessage && filteredJobs.length === 0 && (
         <RepairJobEmptyState
           activeTab={activeTab}
+          hasFilters={hasActiveFilters}
           hasSearch={Boolean(debouncedSearchTerm.trim())}
           onClearSearch={clearSearch}
         />

@@ -3,6 +3,12 @@ import {
   getVehicleContext,
   getVehicleSearchValues,
 } from "./searchText";
+import {
+  formatPartLabel,
+  getPartServiceCategoryFilterValues,
+  normalizeServiceCategoryKey,
+} from "./partWorkflowUtils";
+import { getRepairServiceCategoryFilterValues } from "./repairWorkflowUtils";
 import { getVehicleColorDisplay } from "./vehicleColorDisplay";
 
 function uniqueValues(values) {
@@ -89,6 +95,76 @@ function getVehicleOptionColorStyles(color, colorHex) {
 
 function createVendorKey({ id, name }) {
   return id ? String(id) : `vendor:${name.toLowerCase()}`;
+}
+
+const preferredServiceCategoryOrder = {
+  mechanical: 10,
+  body: 20,
+  body_shop: 20,
+  paint: 30,
+  paint_cosmetic: 30,
+  glass: 40,
+  tires: 50,
+  tires_wheels: 50,
+  alignment: 60,
+  ac: 70,
+  audio: 80,
+  interior: 90,
+  interior_detailing: 90,
+  electrical: 100,
+};
+
+function getServiceCategoryLabel(category, fallbackValue = "") {
+  return (
+    String(category?.name ?? "").trim() ||
+    formatPartLabel(category?.slug ?? fallbackValue, {})
+  );
+}
+
+function getServiceCategorySortOrder(categoryKey, category) {
+  const sortOrder = Number(category?.sort_order);
+
+  if (Number.isFinite(sortOrder)) {
+    return sortOrder;
+  }
+
+  return preferredServiceCategoryOrder[categoryKey] ?? Number.MAX_SAFE_INTEGER;
+}
+
+function addServiceCategoryOption(optionMap, { category, date, fallbackValue }) {
+  const categoryKey = normalizeServiceCategoryKey(
+    category?.slug ?? category?.name ?? fallbackValue
+  );
+  const label = getServiceCategoryLabel(category, fallbackValue);
+
+  if (!categoryKey || !label) {
+    return;
+  }
+
+  const existingOption = optionMap.get(categoryKey);
+  const serviceCategoryId =
+    existingOption?.serviceCategoryId ||
+    (category?.id ? String(category.id) : "");
+
+  optionMap.set(categoryKey, {
+    description: "",
+    id: categoryKey,
+    label,
+    lastUsedAt: Math.max(existingOption?.lastUsedAt ?? 0, getTime(date)),
+    searchText: buildSearchText([
+      existingOption?.searchText,
+      label,
+      category?.slug,
+      fallbackValue,
+    ]),
+    serviceCategoryId,
+    serviceCategoryKey: categoryKey,
+    shortLabel: label,
+    sortOrder: Math.min(
+      existingOption?.sortOrder ?? Number.MAX_SAFE_INTEGER,
+      getServiceCategorySortOrder(categoryKey, category)
+    ),
+  });
 }
 
 function addVendorOption(optionMap, { date, email, id, name, phone }) {
@@ -254,6 +330,89 @@ export function getPartsVehicleFilterOptions(parts = []) {
   }
 
   return finalizeOptions(optionMap);
+}
+
+export function getPartsServiceCategoryFilterOptions(
+  parts = [],
+  serviceCategories = []
+) {
+  const optionMap = new Map();
+
+  for (const category of serviceCategories) {
+    if (category?.is_active === false) {
+      continue;
+    }
+
+    addServiceCategoryOption(optionMap, { category });
+  }
+
+  for (const part of parts) {
+    const workOrder = part?.repairJob ?? part?.repair_job ?? part?.repair_jobs;
+    const serviceCategory = workOrder?.serviceCategory ?? null;
+    const { serviceCategoryKey } = getPartServiceCategoryFilterValues(part);
+    const fallbackValue = workOrder?.category ?? part?.category ?? serviceCategoryKey;
+
+    addServiceCategoryOption(optionMap, {
+      category: serviceCategory,
+      date: part?.created_at ?? workOrder?.created_at,
+      fallbackValue,
+    });
+  }
+
+  return [...optionMap.values()].sort((left, right) => {
+    if (left.sortOrder !== right.sortOrder) {
+      return left.sortOrder - right.sortOrder;
+    }
+
+    return left.label.localeCompare(right.label);
+  });
+}
+
+export function getRepairsVehicleFilterOptions(jobs = []) {
+  const optionMap = new Map();
+
+  for (const job of jobs) {
+    addVehicleOption(optionMap, {
+      date: job?.created_at,
+      vehicle: job?.vehicle,
+    });
+  }
+
+  return finalizeOptions(optionMap);
+}
+
+export function getRepairsServiceCategoryFilterOptions(
+  jobs = [],
+  serviceCategories = []
+) {
+  const optionMap = new Map();
+
+  for (const category of serviceCategories) {
+    if (category?.is_active === false) {
+      continue;
+    }
+
+    addServiceCategoryOption(optionMap, { category });
+  }
+
+  for (const job of jobs) {
+    const { serviceCategoryKey } = getRepairServiceCategoryFilterValues(job);
+    const fallbackValue = job?.category ?? serviceCategoryKey;
+
+    addServiceCategoryOption(optionMap, {
+      category: job?.serviceCategory,
+      date: job?.created_at,
+      fallbackValue,
+    });
+  }
+
+  return [...optionMap.values()].sort((left, right) => {
+    if (left.sortOrder !== right.sortOrder) {
+      return left.sortOrder - right.sortOrder;
+    }
+
+    return left.label.localeCompare(right.label);
+  });
 }
 
 export function getPurchaseOrderVendorFilterOptions(

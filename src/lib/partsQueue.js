@@ -368,6 +368,7 @@ export async function fetchPartsQueue() {
     data: {
       counts: getPartQueueCounts(parts),
       parts,
+      serviceCategories: serviceCategoriesResponse.data ?? [],
       vehicleSearchIndex: buildVehicleSearchIndex(vehiclesResponse.data ?? []),
       vendors,
     },
