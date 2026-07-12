@@ -399,6 +399,7 @@ function WorkOrderCard({
   canManagePhotos,
   canManageDocuments,
   canManageThirdPartyRepairs,
+  canManageWorkOrders = false,
   canUploadDocuments,
   currentProfile,
   documents,
@@ -421,6 +422,7 @@ function WorkOrderCard({
   onThirdPartyRepairAdded,
   onThirdPartyRepairCompleted,
   onThirdPartyRepairDeleted,
+  onWorkOrderStatusChange,
   parts,
   photos,
   profiles,
@@ -451,6 +453,8 @@ function WorkOrderCard({
   const linkedPurchaseOrders = purchaseOrders.filter((purchaseOrder) =>
     linkedPurchaseOrderIds.has(purchaseOrder.id)
   );
+  const isCompleted = workOrder.status === "completed";
+  const canMarkComplete = canManageWorkOrders && !isCompleted;
 
   function toggleSection(sectionName) {
     setOpenSection((currentSection) =>
@@ -464,10 +468,14 @@ function WorkOrderCard({
 
   return (
     <article
-      className={`rounded-2xl border bg-white shadow-sm transition ${
+      className={`rounded-2xl border shadow-sm transition ${
         isOpen
-          ? "border-blue-500 shadow-[0_10px_26px_rgba(37,99,235,0.14)]"
-        : "border-slate-200 hover:border-blue-200"
+          ? isCompleted
+            ? "border-emerald-400 bg-emerald-50/20 shadow-[0_10px_26px_rgba(16,185,129,0.14)]"
+            : "border-blue-500 shadow-[0_10px_26px_rgba(37,99,235,0.14)]"
+          : isCompleted
+            ? "border-emerald-200 bg-emerald-50/20 hover:border-emerald-300"
+            : "border-slate-200 hover:border-blue-200"
       }`}
     >
       <button
@@ -546,12 +554,26 @@ function WorkOrderCard({
           {(canManageLabor ||
             canManageParts ||
             canManagePhotos ||
-            canManageThirdPartyRepairs) && (
+            canManageThirdPartyRepairs ||
+            canMarkComplete) && (
             <div className="mb-3">
               <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">
                 Quick Actions
               </p>
               <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                {canMarkComplete && (
+                  <button
+                    className="flex min-h-14 items-center justify-center gap-2 rounded-xl border-2 border-emerald-200 bg-emerald-50 px-3 py-3 text-sm font-bold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-1"
+                    onClick={() =>
+                      onWorkOrderStatusChange?.(workOrder, "completed")
+                    }
+                    type="button"
+                  >
+                    <AppIcon name="check" size={20} />
+                    <span>Mark Complete</span>
+                  </button>
+                )}
+
                 {canManagePhotos && (
                   <ActionTile
                     icon="camera"

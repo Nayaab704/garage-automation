@@ -257,6 +257,7 @@ function PartsPage({
         }
 
         setPartQueue(data.parts);
+        setServiceCategories(data.serviceCategories ?? []);
         setVehicleSearchIndex(data.vehicleSearchIndex ?? []);
         setVendors(data.vendors);
       } catch (error) {

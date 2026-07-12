@@ -13,15 +13,16 @@ import {
 
 export const PART_QUEUE_TABS = [
   { key: "needs_po", label: "Needs PO" },
-  { key: "pending_review", label: "Pending Review" },
   { key: "ordered", label: "Ordered" },
   { key: "received", label: "Received" },
   { key: "returned", label: "Returned" },
+  { key: "in_house", label: "In-House" },
+  { key: "pending_review", label: "Pending Review" },
   { key: "all", label: "All" },
 ];
 
 export const partSourceLabels = {
-  in_house: "In-house / Available",
+  in_house: "In-House",
   needs_to_buy: "Needs to Buy",
 };
 
@@ -315,6 +316,10 @@ export function isPartReturned(part) {
   );
 }
 
+export function isPartInHouse(part) {
+  return part?.part_source === "in_house";
+}
+
 function numberOrNull(value) {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : null;
@@ -396,7 +401,7 @@ export function isPartPendingReview(part) {
 }
 
 export function isPartReceived(part) {
-  if (isPartReturned(part)) {
+  if (isPartReturned(part) || isPartInHouse(part)) {
     return false;
   }
 
@@ -413,7 +418,7 @@ export function isPartReceived(part) {
 }
 
 export function isPartOrdered(part) {
-  if (isPartReturned(part) || isPartReceived(part)) {
+  if (isPartReturned(part) || isPartInHouse(part) || isPartReceived(part)) {
     return false;
   }
 
@@ -437,6 +442,10 @@ export function isPartIssue(part) {
 export function getPartQueueStatus(part) {
   if (isPartReturned(part)) {
     return "returned";
+  }
+
+  if (isPartInHouse(part)) {
+    return "in_house";
   }
 
   if (isPartReceived(part)) {
@@ -469,6 +478,15 @@ function getPartLifecycleBadge(part) {
       kind: "status",
       label: "Returned",
       value: "returned",
+    };
+  }
+
+  if (isPartInHouse(part)) {
+    return {
+      key: "status-in-house",
+      kind: "status",
+      label: "In-House",
+      value: "in_house",
     };
   }
 
@@ -584,6 +602,14 @@ export function partMatchesQueueTab(part, tabKey) {
     return false;
   }
 
+  if (tabKey === "in_house") {
+    return isPartInHouse(part);
+  }
+
+  if (isPartInHouse(part)) {
+    return false;
+  }
+
   if (tabKey === "needs_po") {
     return isPartNeedsPo(part);
   }
@@ -627,7 +653,7 @@ export function getPartQueueBadge(status) {
 
   if (status === "pending_review") {
     return {
-      className: "bg-blue-50 text-blue-700 ring-blue-200",
+      className: "bg-amber-50 text-amber-800 ring-amber-200",
       label: "Pending Review",
     };
   }
@@ -650,6 +676,13 @@ export function getPartQueueBadge(status) {
     return {
       className: "bg-red-50 text-red-700 ring-red-200",
       label: "Returned",
+    };
+  }
+
+  if (status === "in_house") {
+    return {
+      className: "bg-indigo-50 text-indigo-700 ring-indigo-200",
+      label: "In-House",
     };
   }
 

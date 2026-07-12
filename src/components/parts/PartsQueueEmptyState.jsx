@@ -13,6 +13,10 @@ const emptyMessages = {
     body: "Parts with linked purchase orders will appear here.",
     title: "No ordered parts found.",
   },
+  in_house: {
+    body: "Parts available from shop inventory will appear here.",
+    title: "No in-house parts found.",
+  },
   pending_review: {
     body: "Needs-to-buy parts waiting for review will appear here.",
     title: "No parts are pending review.",

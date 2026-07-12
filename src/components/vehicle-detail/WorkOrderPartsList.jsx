@@ -126,12 +126,20 @@ function statusClassName(status) {
     return "bg-amber-50 text-amber-800 ring-amber-200";
   }
 
+  if (status === "in_house") {
+    return "bg-indigo-50 text-indigo-700 ring-indigo-200";
+  }
+
   return "bg-zinc-100 text-zinc-700 ring-zinc-200";
 }
 
 function sourceClassName(partSource) {
   if (partSource === "needs_to_buy") {
-    return "bg-blue-50 text-blue-700 ring-blue-200";
+    return "bg-amber-50 text-amber-800 ring-amber-200";
+  }
+
+  if (partSource === "in_house") {
+    return "bg-indigo-50 text-indigo-700 ring-indigo-200";
   }
 
   return "bg-zinc-100 text-zinc-700 ring-zinc-200";

@@ -696,7 +696,13 @@ function VehicleDetailPage({
     try {
       const { data, error } = await supabase
         .from("repair_jobs")
-        .update({ status: nextStatus })
+        .update({
+          completed_at:
+            nextStatus === "completed"
+              ? new Date().toISOString()
+              : workOrder?.completed_at,
+          status: nextStatus,
+        })
         .eq("id", workOrderId)
         .select("*")
         .single();
@@ -782,6 +788,29 @@ function VehicleDetailPage({
       upsertNewestById(currentRepairJobs, workOrder)
     );
     await moveVehicleToRepairIfNeeded("work_order_added");
+  }
+
+  async function handleWorkOrderStatusChange(workOrder, nextStatus) {
+    if (!canManageRepairJobs) {
+      setVehicleStatusError("Your role cannot update work orders.");
+      return false;
+    }
+
+    const didUpdate = await persistWorkOrderStatusIfNeeded(
+      workOrder?.id,
+      nextStatus,
+      {
+        trigger: "manual_status_action",
+      }
+    );
+
+    if (!didUpdate) {
+      setVehicleStatusError(
+        "Could not update work order status. Please try again."
+      );
+    }
+
+    return didUpdate;
   }
 
   async function handleWorkOrderLaborAdded(laborLog) {
@@ -1418,6 +1447,7 @@ function VehicleDetailPage({
               onThirdPartyRepairAdded={handleThirdPartyRepairAdded}
               onThirdPartyRepairCompleted={handleThirdPartyRepairCompleted}
               onThirdPartyRepairDeleted={handleThirdPartyRepairDeleted}
+              onWorkOrderStatusChange={handleWorkOrderStatusChange}
               onWorkOrderAdded={handleWorkOrderAdded}
               partRequests={partRequests}
               profiles={profiles}

@@ -17,7 +17,7 @@ const emptyForm = {
 };
 
 const partSourceOptions = [
-  { value: "in_house", label: "In-house / Available" },
+  { value: "in_house", label: "In-House" },
   { value: "needs_to_buy", label: "Needs to Buy" },
 ];
 

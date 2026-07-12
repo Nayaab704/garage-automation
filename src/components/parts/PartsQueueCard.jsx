@@ -178,9 +178,9 @@ function getSecondaryBadge(part, queueStatus) {
     };
   }
 
-  if (part.part_source === "in_house") {
+  if (part.part_source === "in_house" && queueStatus !== "in_house") {
     return {
-      className: "bg-slate-100 text-slate-700 ring-slate-200",
+      className: "bg-indigo-50 text-indigo-700 ring-indigo-200",
       label: formatPartLabel(part.part_source, partSourceLabels),
     };
   }
@@ -260,7 +260,15 @@ function PartsQueueCard({
   const sourceLabel = formatPartLabel(part.part_source, partSourceLabels);
 
   return (
-    <article className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+    <article
+      className={`min-w-0 overflow-hidden rounded-2xl border bg-white p-3 shadow-sm sm:p-4 ${
+        queueStatus === "in_house"
+          ? "border-l-4 border-l-indigo-300 border-slate-200"
+          : queueStatus === "needs_po"
+            ? "border-l-4 border-l-amber-300 border-slate-200"
+            : "border-slate-200"
+      }`}
+    >
       <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <div className="min-w-0">
           <div className="flex min-w-0 items-start justify-between gap-3">

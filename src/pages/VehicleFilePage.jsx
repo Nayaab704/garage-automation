@@ -91,6 +91,10 @@ function formatDate(value) {
 }
 
 function formatLabel(value, fallback = "Not available") {
+  if (value === "in_house") {
+    return "In-House";
+  }
+
   const label = String(value ?? "")
     .trim()
     .split("_")
@@ -174,6 +178,10 @@ function getPartVendorName(vendors, partRequest, purchaseOrderItem, purchaseOrde
 }
 
 function getPartCurrentStatus(partRequest, purchaseOrderItem) {
+  if (partRequest?.part_source === "in_house") {
+    return "in_house";
+  }
+
   return (
     purchaseOrderItem?.return_status ||
     purchaseOrderItem?.status ||
@@ -300,6 +308,10 @@ function getStatusClassName(status) {
     return "bg-red-50 text-red-700 ring-red-200";
   }
 
+  if (["in_house", "in-house"].includes(normalizedStatus)) {
+    return "bg-indigo-50 text-indigo-700 ring-indigo-200";
+  }
+
   return "bg-slate-100 text-slate-700 ring-slate-200";
 }
 
@@ -323,13 +335,20 @@ function EmptyState({ children }) {
   );
 }
 
-function MetricCard({ label, value }) {
+function MetricCard({ className = "", label, subtitle = "", value }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+    <div className={`rounded-xl border border-slate-100 bg-slate-50 p-2.5 ${className}`}>
       <p className="text-xs font-black uppercase tracking-wide text-slate-400">
         {label}
       </p>
-      <p className="mt-1 text-lg font-black text-slate-950">{value}</p>
+      <p className="mt-0.5 text-base font-black text-slate-950 sm:text-lg">
+        {value}
+      </p>
+      {subtitle && (
+        <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">
+          {subtitle}
+        </p>
+      )}
     </div>
   );
 }
@@ -841,9 +860,16 @@ function WorkOrderCard({
   );
   const hasActiveOutsideWork = thirdPartyForJob.some(isThirdPartyRepairActive);
   const hasNestedItems = partsForJob.length > 0 || thirdPartyForJob.length > 0;
+  const isCompleted = repairJob.status === "completed";
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+    <article
+      className={`rounded-2xl border p-3 shadow-sm sm:p-4 ${
+        isCompleted
+          ? "border-emerald-200 bg-emerald-50/30"
+          : "border-slate-200 bg-white"
+      }`}
+    >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h3 className="break-words text-base font-black leading-snug text-slate-950 sm:text-lg">
@@ -1086,16 +1112,19 @@ function FinancialTab({
   return (
     <div className="space-y-3">
       {canViewAdminFinancial ? (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
           <MetricCard label="Parts" value={formatCurrency(partsTotal)} />
+          <MetricCard label="Labor" subtitle={`${formatNumber(laborHoursTotal)}h`} value={formatCurrency(laborTotal)} />
           <MetricCard label="Third-Party" value={formatCurrency(thirdPartyTotal)} />
-          <MetricCard label="Labor Hours" value={formatNumber(laborHoursTotal)} />
-          <MetricCard label="Labor" value={formatCurrency(laborTotal)} />
           <MetricCard label="Extra Costs" value={formatCurrency(extraCostsTotal)} />
-          <MetricCard label="Total Investment" value={formatCurrency(totalInvestment)} />
+          <MetricCard
+            className="col-span-2 sm:col-span-1"
+            label="Total Investment"
+            value={formatCurrency(totalInvestment)}
+          />
         </div>
       ) : (
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-2">
           <MetricCard
             label="My Hours"
             value={formatNumber(
@@ -1110,38 +1139,42 @@ function FinancialTab({
       )}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-        <h3 className="text-sm font-black text-slate-950">
-          {canViewAdminFinancial ? "Labor Entries" : "My Labor Entries"}
-        </h3>
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-black text-slate-950">
+            {canViewAdminFinancial ? "Labor Entries" : "My Labor Entries"}
+          </h3>
+          <span className="rounded-full bg-slate-50 px-2 py-1 text-xs font-black text-slate-500 ring-1 ring-inset ring-slate-100">
+            {visibleLaborLogs.length}
+          </span>
+        </div>
         {visibleLaborLogs.length === 0 ? (
           <p className="mt-3 text-sm font-semibold text-slate-500">
             No labor entries found.
           </p>
         ) : (
-          <div className="mt-3 divide-y divide-slate-100">
+          <div className="mt-2 divide-y divide-slate-100">
             {visibleLaborLogs.map((laborLog) => {
               const repairJob = getRecordById(repairJobs, laborLog.repair_job_id);
               const technicianName = getProfileName(profiles, laborLog.technician_id);
 
               return (
                 <div
-                  className="grid gap-2 py-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
+                  className="grid gap-1.5 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                   key={laborLog.id}
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-black text-slate-800">
-                      {technicianName || "Technician"}
-                    </p>
-                    <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">
-                      {repairJob?.title ?? "Work order unavailable"}
+                      {[technicianName || "Technician", repairJob?.title]
+                        .filter(Boolean)
+                        .join(" - ")}
                     </p>
                   </div>
-                  <span className="text-sm font-semibold text-slate-600">
+                  <span className="text-sm font-semibold text-slate-600 sm:text-right">
                     {formatNumber(laborLog.hours)}h x{" "}
-                    {formatHourlyRate(laborLog.hourly_rate)}
-                  </span>
-                  <span className="text-sm font-black text-slate-800">
-                    {formatCurrency(getLaborTotal(laborLog))}
+                    {formatHourlyRate(laborLog.hourly_rate)} ={" "}
+                    <span className="font-black text-slate-800">
+                      {formatCurrency(getLaborTotal(laborLog))}
+                    </span>
                   </span>
                 </div>
               );

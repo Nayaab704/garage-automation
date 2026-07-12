@@ -130,15 +130,10 @@ function RepairJobEmptyState({ activeTab, hasFilters, hasSearch, onClearSearch }
             body: "High and urgent work orders will appear here.",
             title: "No urgent work orders right now.",
           }
-        : activeTab === "open"
-          ? {
-              body: "Work orders created from Vehicle Detail will appear here.",
-              title: "No open work orders.",
-            }
-          : {
-              body: "Work orders matching this queue tab will appear here.",
-              title: "No work orders found.",
-            };
+        : {
+            body: "Work orders matching this queue tab will appear here.",
+            title: "No work orders found.",
+          };
 
   return (
     <section className="rounded-3xl border border-dashed border-slate-300 bg-white/90 p-8 text-center shadow-sm">
@@ -186,6 +181,7 @@ function RepairJobCard({
   onAddLabor,
   onAddPart,
   onAddPhoto,
+  onMarkComplete,
   onOpenVehicle,
   onStatusChange,
   onToggleDetails,
@@ -194,9 +190,17 @@ function RepairJobCard({
   const counts = getRepairJobCounts(job);
   const vehicleLabel = formatRepairJobVehicleLabel(job);
   const serviceCategory = getServiceCategoryLabel(job);
+  const isCompleted = job.status === "completed";
+  const canMarkComplete = canManageRepairJobs && !isCompleted;
 
   return (
-    <article className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+    <article
+      className={`rounded-3xl border p-4 shadow-sm sm:p-5 ${
+        isCompleted
+          ? "border-emerald-200 bg-emerald-50/30"
+          : "border-slate-200 bg-white"
+      }`}
+    >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
@@ -321,6 +325,18 @@ function RepairJobCard({
             Open Vehicle
           </button>
 
+          {canMarkComplete && (
+            <button
+              className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 lg:w-full"
+              disabled={isUpdating}
+              onClick={() => onMarkComplete(job)}
+              type="button"
+            >
+              <AppIcon name="check" size={16} />
+              {isUpdating ? "Saving..." : "Mark Complete"}
+            </button>
+          )}
+
           {canManageParts && (
             <button
               className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
@@ -365,7 +381,7 @@ function RepairJobCard({
 }
 
 function RepairsPage({ currentProfile, onSelectVehicle }) {
-  const [activeTab, setActiveTab] = useState("open");
+  const [activeTab, setActiveTab] = useState("all");
   const [activeLaborJob, setActiveLaborJob] = useState(null);
   const [activePartJob, setActivePartJob] = useState(null);
   const [activePhotoJob, setActivePhotoJob] = useState(null);
@@ -393,7 +409,6 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
   const canManagePhotos = hasPermission(role, "photo:manage");
   const canManageWorkOrderParts = canManageRepairJobs || canManagePartRequests;
 
-  const countsByTab = useMemo(() => getRepairQueueCounts(jobs), [jobs]);
   const vehicleFilterOptions = useMemo(
     () => getRepairsVehicleFilterOptions(jobs),
     [jobs]
@@ -419,7 +434,7 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
     selectedServiceCategoryFilter?.id,
   ]);
   const hasActiveFilters = activeFilterCount > 0;
-  const filteredJobs = useMemo(
+  const filterBase = useMemo(
     () =>
       filterRepairsQueueResults(jobs, {
         search: debouncedSearchTerm,
@@ -427,15 +442,28 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
           selectedServiceCategoryFilter?.serviceCategoryId ?? "",
         serviceCategoryKey:
           selectedServiceCategoryFilter?.serviceCategoryKey ?? "",
-        tab: activeTab,
+        tab: "all",
         vehicleId: selectedVehicleFilter?.vehicleId ?? "",
       }),
     [
-      activeTab,
       debouncedSearchTerm,
       jobs,
       selectedServiceCategoryFilter,
       selectedVehicleFilter,
+    ]
+  );
+  const countsByTab = useMemo(
+    () => getRepairQueueCounts(filterBase),
+    [filterBase]
+  );
+  const filteredJobs = useMemo(
+    () =>
+      filterRepairsQueueResults(filterBase, {
+        tab: activeTab,
+      }),
+    [
+      activeTab,
+      filterBase,
     ]
   );
 
@@ -720,7 +748,7 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
           <div>
             <h2 className="text-2xl font-black text-slate-950">Repairs</h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-              Track open work orders across all vehicles.
+              Track work orders across all vehicles.
             </p>
           </div>
         </div>
@@ -814,6 +842,9 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
               onAddLabor={setActiveLaborJob}
               onAddPart={setActivePartJob}
               onAddPhoto={setActivePhotoJob}
+              onMarkComplete={(currentJob) =>
+                handleStatusChange(currentJob, "completed")
+              }
               onOpenVehicle={onSelectVehicle}
               onStatusChange={handleStatusChange}
               onToggleDetails={toggleDetails}

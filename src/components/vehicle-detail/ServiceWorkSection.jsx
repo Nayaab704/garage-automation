@@ -194,6 +194,7 @@ function ServiceWorkSection({
   onThirdPartyRepairCompleted,
   onThirdPartyRepairDeleted,
   onWorkOrderAdded,
+  onWorkOrderStatusChange,
   partRequests = [],
   profiles = [],
   purchaseOrderItems = [],
@@ -359,6 +360,7 @@ function ServiceWorkSection({
                 onThirdPartyRepairAdded={onThirdPartyRepairAdded}
                 onThirdPartyRepairCompleted={onThirdPartyRepairCompleted}
                 onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
+                onWorkOrderStatusChange={onWorkOrderStatusChange}
                 partRequests={partRequests}
                 profiles={profiles}
                 purchaseOrderItems={purchaseOrderItems}
@@ -408,6 +410,7 @@ function ServiceWorkSection({
               onThirdPartyRepairAdded={onThirdPartyRepairAdded}
               onThirdPartyRepairCompleted={onThirdPartyRepairCompleted}
               onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
+              onWorkOrderStatusChange={onWorkOrderStatusChange}
               partRequests={partRequests}
               profiles={profiles}
               purchaseOrderItems={purchaseOrderItems}

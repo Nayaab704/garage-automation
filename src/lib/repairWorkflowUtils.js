@@ -5,12 +5,11 @@ import {
 } from "./workOrderStatus";
 
 export const REPAIR_QUEUE_TABS = [
-  { key: "open", label: "Open" },
+  { key: "all", label: "All" },
+  { key: "in_progress", label: "In Progress" },
   { key: "waiting_parts", label: "Waiting Parts" },
   { key: "urgent", label: "Urgent" },
-  { key: "in_progress", label: "In Progress" },
   { key: "completed", label: "Completed" },
-  { key: "all", label: "All" },
 ];
 
 export const repairStatusLabels = workOrderStatusLabels;
@@ -330,7 +329,7 @@ export function filterRepairsQueue(
   jobs = [],
   {
     search = "",
-    tab = "open",
+    tab = "all",
     vehicleId = "",
     serviceCategoryId = "",
     serviceCategoryKey = "",

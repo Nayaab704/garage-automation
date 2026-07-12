@@ -80,6 +80,7 @@ function ServiceCategoryCard({
   onThirdPartyRepairAdded,
   onThirdPartyRepairCompleted,
   onThirdPartyRepairDeleted,
+  onWorkOrderStatusChange,
   partRequests = [],
   profiles = [],
   purchaseOrderItems = [],
@@ -168,6 +169,7 @@ function ServiceCategoryCard({
                 canManageParts={canManageParts}
                 canManagePhotos={canManagePhotos}
                 canManageDocuments={canManageDocuments}
+                canManageWorkOrders={canManage}
                 canManageThirdPartyRepairs={canManageThirdPartyRepairs}
                 canUploadDocuments={canUploadDocuments}
                 currentProfile={currentProfile}
@@ -191,6 +193,7 @@ function ServiceCategoryCard({
                 onThirdPartyRepairAdded={onThirdPartyRepairAdded}
                 onThirdPartyRepairCompleted={onThirdPartyRepairCompleted}
                 onThirdPartyRepairDeleted={onThirdPartyRepairDeleted}
+                onWorkOrderStatusChange={onWorkOrderStatusChange}
                 onToggle={() =>
                   setOpenWorkOrderId((currentId) =>
                     currentId === workOrder.id ? null : workOrder.id
