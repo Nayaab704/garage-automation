@@ -3,7 +3,9 @@ import AppIcon from "../components/ui/AppIcon";
 import { buttonClassNames } from "../components/ui/uiStyles";
 import VehicleColorLabel from "../components/VehicleColorLabel";
 import VehiclePrebookingBadge from "../components/VehiclePrebookingBadge";
+import VehicleSaleSummary from "../components/VehicleSaleSummary";
 import VehicleStatusBadge from "../components/VehicleStatusBadge";
+import SellVehicleForm from "../components/vehicle-detail/SellVehicleForm";
 import { logVehicleActivity } from "../lib/activityLogger";
 import { getLaborLogCost, formatHourlyRate } from "../lib/laborCost";
 import { hasPermission } from "../lib/permissions";
@@ -12,6 +14,7 @@ import { isThirdPartyRepairActive } from "../lib/thirdPartyRepairWorkflow";
 import { formatUserFirstName } from "../lib/userDisplay";
 import { getVehiclePrimaryPhoto } from "../lib/vehicleDisplayPhoto";
 import { activePrebookingBadgeColumns } from "../lib/vehiclePrebookings";
+import { isReadyForSaleStatus } from "../lib/vehicleStatus";
 import { getWorkOrderStatusLabel } from "../lib/workOrderStatus";
 import useActiveTabScroll from "../hooks/useActiveTabScroll";
 
@@ -390,7 +393,7 @@ function MetricCard({ className = "", label, subtitle = "", value }) {
       <p className="text-xs font-black uppercase tracking-wide text-slate-400">
         {label}
       </p>
-      <p className="mt-0.5 text-base font-black text-slate-950 sm:text-lg">
+      <p className="mt-0.5 text-base font-black tabular-nums text-slate-950 sm:text-lg">
         {value}
       </p>
       {subtitle && (
@@ -404,12 +407,17 @@ function MetricCard({ className = "", label, subtitle = "", value }) {
 
 function VehicleFileHeader({
   activePrebooking,
+  canMarkSold = false,
+  canViewSaleDetails = false,
   hasActiveThirdPartyRepair,
+  onMarkSold,
   photo,
+  sale,
   vehicle,
 }) {
   const title = getVehicleTitle(vehicle);
   const subtitle = getVehicleSubtitle(vehicle);
+  const isSold = vehicle?.sale_status === "sold" || Boolean(sale);
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
@@ -429,9 +437,21 @@ function VehicleFileHeader({
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-black text-slate-500">
-            {displayValue(vehicle.stock_number, "No stock number")}
-          </p>
+          <div className="flex min-w-0 items-start justify-between gap-3">
+            <p className="truncate text-sm font-black text-slate-500">
+              {displayValue(vehicle.stock_number, "No stock number")}
+            </p>
+            {canMarkSold && (
+              <button
+                className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700 shadow-sm transition hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                onClick={onMarkSold}
+                type="button"
+              >
+                <AppIcon name="dollar" size={15} />
+                <span className="hidden sm:inline">Mark Sold</span>
+              </button>
+            )}
+          </div>
           <h2 className="mt-0.5 truncate text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
             {title}
           </h2>
@@ -453,6 +473,13 @@ function VehicleFileHeader({
                 showIcon={false}
               />
             )}
+            {isSold && (
+              <VehicleSaleSummary
+                canViewDetails={canViewSaleDetails}
+                compact
+                sale={sale}
+              />
+            )}
             {hasActiveThirdPartyRepair && (
               <span className="inline-flex h-7 items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
                 3rd-Party
@@ -462,7 +489,7 @@ function VehicleFileHeader({
 
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs leading-5 text-slate-600 sm:text-sm">
             {vehicle.mileage !== null && vehicle.mileage !== undefined && (
-              <span className="font-semibold">
+              <span className="font-semibold tabular-nums">
                 {formatNumber(vehicle.mileage)} mi
               </span>
             )}
@@ -508,7 +535,9 @@ function DetailField({ label, value }) {
       <dt className="text-xs font-black uppercase tracking-wide text-slate-400">
         {label}
       </dt>
-      <dd className="mt-1 text-sm font-bold text-slate-900">{value}</dd>
+      <dd className="mt-1 text-sm font-bold tabular-nums text-slate-900">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -755,7 +784,9 @@ function PartDetailsModal({
                     key={row.label}
                   >
                     <dt className="font-semibold text-slate-500">{row.label}</dt>
-                    <dd className="font-black text-slate-900">{row.value}</dd>
+                    <dd className="font-black tabular-nums text-slate-900">
+                      {row.value}
+                    </dd>
                   </div>
                 ))}
               </dl>
@@ -874,7 +905,7 @@ function PartSummaryRow({
         <div className="hidden sm:block">
           <StatusPill status={status} />
         </div>
-        <p className="text-right text-sm font-black text-slate-900">
+        <p className="text-right text-sm font-black tabular-nums text-slate-900">
           {total === null ? "No cost" : formatCurrency(total)}
         </p>
         <button
@@ -917,7 +948,7 @@ function ThirdPartySummaryRow({ thirdPartyRepair, vendors }) {
         <div className="hidden sm:block">
           <StatusPill status={thirdPartyRepair.status} />
         </div>
-        <p className="text-right text-sm font-black text-slate-900">
+        <p className="text-right text-sm font-black tabular-nums text-slate-900">
           {formatCurrency(total)}
         </p>
       </div>
@@ -1291,7 +1322,7 @@ function FinancialTab({
                   <span className="text-sm font-semibold text-slate-600 sm:text-right">
                     {formatNumber(laborLog.hours)}h x{" "}
                     {formatHourlyRate(laborLog.hourly_rate)} ={" "}
-                    <span className="font-black text-slate-800">
+                    <span className="font-black tabular-nums text-slate-800">
                       {formatCurrency(getLaborTotal(laborLog))}
                     </span>
                   </span>
@@ -1477,6 +1508,7 @@ async function fetchVehicleFileData(vehicleId) {
     documentsResponse,
     activityLogsResponse,
     activePrebookingResponse,
+    salesResponse,
   ] = await Promise.all([
     supabase.from("vehicles").select("*").eq("id", vehicleId).maybeSingle(),
     supabase
@@ -1528,6 +1560,12 @@ async function fetchVehicleFileData(vehicleId) {
       .select(activePrebookingBadgeColumns)
       .eq("vehicle_id", vehicleId)
       .maybeSingle(),
+    supabase
+      .from("sales")
+      .select("*")
+      .eq("vehicle_id", vehicleId)
+      .order("sale_date", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false }),
   ]);
 
   if (vehicleResponse.error) {
@@ -1590,6 +1628,7 @@ async function fetchVehicleFileData(vehicleId) {
       purchaseOrderItems: purchaseOrderItemsResponse.data ?? [],
       purchaseOrders: purchaseOrdersResponse.data ?? [],
       repairJobs: repairJobsResponse.data ?? [],
+      sales: salesResponse.error ? [] : salesResponse.data ?? [],
       serviceCategories: serviceCategoriesResponse.data ?? [],
       thirdPartyRepairs: thirdPartyRepairsResponse.data ?? [],
       vehicle: vehicleResponse.data,
@@ -1609,6 +1648,7 @@ function VehicleFilePage({
   const [activeTab, setActiveTab] = useState("work_parts");
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSellFormOpen, setIsSellFormOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const canOpenVehicle = Boolean(vehicleId);
   const canViewVehicleFile =
@@ -1621,6 +1661,7 @@ function VehicleFilePage({
     hasPermission(currentProfile?.role, "purchase_order:manage") ||
     hasPermission(currentProfile?.role, "part_request:manage") ||
     hasPermission(currentProfile?.role, "repair:manage");
+  const canViewSaleDetails = hasPermission(currentProfile?.role, "sale:manage");
 
   useEffect(() => {
     let isMounted = true;
@@ -1675,7 +1716,35 @@ function VehicleFilePage({
     : null;
   const hasActiveThirdPartyRepair =
     data?.thirdPartyRepairs?.some(isThirdPartyRepairActive) ?? false;
+  const activeSale = data?.sales?.[0] ?? null;
+  const isVehicleSold =
+    data?.vehicle?.sale_status === "sold" || Boolean(activeSale);
+  const canMarkSold =
+    canViewSaleDetails &&
+    !isVehicleSold &&
+    isReadyForSaleStatus(data?.vehicle?.status);
   const tabRefs = useActiveTabScroll(activeTab);
+
+  async function handleVehicleSold(result) {
+    setData((currentData) =>
+      currentData
+        ? {
+            ...currentData,
+            sales: result?.sale?.id
+              ? [
+                  result.sale,
+                  ...(currentData.sales ?? []).filter(
+                    (sale) => sale.id !== result.sale.id
+                  ),
+                ]
+              : currentData.sales ?? [],
+            vehicle: result?.vehicle?.id
+              ? { ...currentData.vehicle, ...result.vehicle }
+              : { ...currentData.vehicle, sale_status: "sold" },
+          }
+        : currentData
+    );
+  }
 
   async function handleNeedToBuyInstead(partRequest) {
     if (!canMoveInHouseToNeedsPo) {
@@ -1807,8 +1876,12 @@ function VehicleFilePage({
         <>
           <VehicleFileHeader
             activePrebooking={data.activePrebooking}
+            canMarkSold={canMarkSold}
+            canViewSaleDetails={canViewSaleDetails}
             hasActiveThirdPartyRepair={hasActiveThirdPartyRepair}
+            onMarkSold={() => setIsSellFormOpen(true)}
             photo={primaryPhoto}
+            sale={activeSale}
             vehicle={data.vehicle}
           />
 
@@ -1879,6 +1952,14 @@ function VehicleFilePage({
               documents={data.documents}
               photos={data.photos}
               thirdPartyRepairs={data.thirdPartyRepairs}
+            />
+          )}
+
+          {isSellFormOpen && canViewSaleDetails && (
+            <SellVehicleForm
+              onClose={() => setIsSellFormOpen(false)}
+              onVehicleSold={handleVehicleSold}
+              vehicle={data.vehicle}
             />
           )}
         </>

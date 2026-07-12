@@ -10,6 +10,7 @@ import {
   finalCheckTemplates,
 } from "../lib/finalChecks";
 import InvestmentSummary from "../components/vehicle-detail/InvestmentSummary";
+import VehicleSaleSummary from "../components/VehicleSaleSummary";
 import SaleWarrantySection from "../components/vehicle-detail/SaleWarrantySection";
 import SellVehicleForm from "../components/vehicle-detail/SellVehicleForm";
 import ServiceWorkSection from "../components/vehicle-detail/ServiceWorkSection";
@@ -236,7 +237,12 @@ async function fetchVehicleDetails(vehicleId, { canManagePrebookings = false } =
     supabase.from("purchase_orders").select("*").eq("vehicle_id", vehicleId),
     supabase.from("vendors").select("*"),
     prebookingsQuery,
-    supabase.from("sales").select("*").eq("vehicle_id", vehicleId),
+    supabase
+      .from("sales")
+      .select("*")
+      .eq("vehicle_id", vehicleId)
+      .order("sale_date", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false }),
   ]);
 
   const purchaseOrderIds = (purchaseOrdersResponse.data ?? [])
@@ -309,8 +315,6 @@ function findFirstError(responses) {
     responses.purchaseOrderItemsResponse.error ??
     responses.vendorsResponse.error ??
     responses.prebookingsResponse.error ??
-    responses.salesResponse.error ??
-    responses.warrantiesResponse.error ??
     responses.investmentSummaryResponse.error
   );
 }
@@ -1308,8 +1312,7 @@ function VehicleDetailPage({
     await persistVehicleStatus(newStatus);
   }
 
-  const isVehicleSold =
-    String(vehicle?.status ?? "").toLowerCase() === "sold" || sales.length > 0;
+  const isVehicleSold = vehicle?.sale_status === "sold" || sales.length > 0;
   const canChangeVehicleStatus = hasPermission(role, "vehicle:change_status");
   const canDeleteVehicle = hasPermission(role, "vehicle:delete");
   const canEditVehicle = hasPermission(role, "vehicle:edit");
@@ -1325,6 +1328,12 @@ function VehicleDetailPage({
     (canManagePhotos || canManageRepairJobs);
   const canManageDocuments = canManagePhotos;
   const canSellVehicle = hasPermission(role, "sale:manage");
+  const canViewSaleDetails = canSellVehicle;
+  const activeSale = sales[0] ?? null;
+  const canMarkSold =
+    canSellVehicle &&
+    !isVehicleSold &&
+    normalizeVehicleStatus(vehicle?.status) === "ready_for_sale";
   const primaryVehiclePhoto = getVehiclePrimaryPhoto(vehicle, vehiclePhotos);
   const activeVehiclePrebooking = getActivePrebooking(vehiclePrebookings);
   const hasActiveThirdPartyRepair = thirdPartyRepairs.some(
@@ -1385,10 +1394,12 @@ function VehicleDetailPage({
             canEdit={canEditVehicle}
             canManagePhotos={canManagePhotos}
             canMarkReady={canChangeVehicleStatus}
+            canMarkSold={canMarkSold}
             isStatusUpdating={isVehicleStatusUpdating}
             onEdit={() => setIsEditFormOpen(true)}
             onOpenVehicleFile={() => onOpenVehicleFile?.(vehicleId)}
             onMarkReady={() => handleVehicleStatusChange("ready_for_sale")}
+            onMarkSold={() => setIsSellFormOpen(true)}
             onQuickAddWorkOrder={() => scrollToSection(serviceWorkRef)}
             onQuickPhotos={handleHeroPhotoClick}
             onStatusChange={handleVehicleStatusChange}
@@ -1402,6 +1413,13 @@ function VehicleDetailPage({
             <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
               {vehicleStatusError}
             </div>
+          )}
+
+          {isVehicleSold && (
+            <VehicleSaleSummary
+              canViewDetails={canViewSaleDetails}
+              sale={activeSale}
+            />
           )}
 
           {canManagePrebookings && (
@@ -1519,7 +1537,7 @@ function VehicleDetailPage({
             </section>
           )}
 
-          {isVehicleSold && (
+          {isVehicleSold && canViewSaleDetails && (
             <SaleWarrantySection
               sales={sales}
               warranties={warranties}

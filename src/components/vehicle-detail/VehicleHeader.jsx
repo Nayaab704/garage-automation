@@ -2,6 +2,7 @@ import AppIcon from "../ui/AppIcon";
 import HeroBadge from "../ui/HeroBadge";
 import VehicleColorLabel from "../VehicleColorLabel";
 import VehiclePrebookingBadge from "../VehiclePrebookingBadge";
+import VehicleSoldBadge from "../VehicleSoldBadge";
 import VehicleStatusBadge from "../VehicleStatusBadge";
 import { normalizeVehicleStatus } from "../../lib/vehicleStatus";
 import VehicleStatusDropdown from "./VehicleStatusDropdown";
@@ -185,10 +186,12 @@ function VehicleHeader({
   canEdit = false,
   canManagePhotos = false,
   canMarkReady = false,
+  canMarkSold = false,
   hasActiveThirdPartyRepair = false,
   isStatusUpdating,
   onEdit,
   onMarkReady,
+  onMarkSold,
   onOpenVehicleFile,
   onQuickAddWorkOrder,
   onQuickPhotos,
@@ -203,6 +206,7 @@ function VehicleHeader({
   const vehicleOrigin = getVehicleOrigin(vehicle);
   const vehicleOriginLabel = formatHeroOrigin(vehicleOrigin);
   const normalizedVehicleStatus = normalizeVehicleStatus(vehicle.status);
+  const isSold = vehicle.sale_status === "sold";
   const shouldShowReadyAction =
     canMarkReady && !readyActionHiddenStatuses.has(normalizedVehicleStatus);
 
@@ -281,6 +285,16 @@ function VehicleHeader({
                       tone="blue"
                     />
                   )}
+                  {canMarkSold && (
+                    <CompactActionButton
+                      ariaLabel="Mark Sold"
+                      icon="dollar"
+                      label="Mark Sold"
+                      onClick={onMarkSold}
+                      title="Mark Sold"
+                      tone="blue"
+                    />
+                  )}
                 </div>
               </div>
 
@@ -314,6 +328,7 @@ function VehicleHeader({
                     showIcon={false}
                   />
                 )}
+                {isSold && <VehicleSoldBadge />}
                 {vehicleOriginLabel && (
                   <HeroBadge
                     label={vehicleOriginLabel}

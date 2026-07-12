@@ -149,6 +149,7 @@ function getVehicleLabel(vehicle) {
 function isSoldVehicle(vehicle, soldVehicleIds = new Set()) {
   return (
     soldVehicleIds.has(vehicle.id) ||
+    vehicle.sale_status === "sold" ||
     String(vehicle.status ?? "").toLowerCase() === "sold"
   );
 }
@@ -186,7 +187,10 @@ function mergeVehiclesWithSummaries(
 }
 
 function getSalesTotal(sales) {
-  return sales.reduce((total, sale) => total + numberOrZero(sale.sale_price), 0);
+  return sales.reduce(
+    (total, sale) => total + numberOrZero(sale.sale_price ?? sale.sold_price),
+    0
+  );
 }
 
 function enrichDashboardParts({
@@ -658,7 +662,7 @@ async function fetchDashboardData() {
       .order("stock_number", { ascending: true }),
     supabase
       .from("vehicles")
-      .select("id, stock_number, year, make, model, status")
+      .select("id, stock_number, year, make, model, status, sale_status")
       .order("stock_number", { ascending: true }),
     supabase
       .from("sales")
@@ -809,7 +813,7 @@ function SummaryCard({
           {label}
         </p>
         <p
-          className={`mt-0.5 truncate text-base font-black leading-tight sm:text-xl ${valueClassName}`}
+          className={`mt-0.5 truncate text-base font-black leading-tight tabular-nums sm:text-xl ${valueClassName}`}
         >
           {value}
         </p>
@@ -890,7 +894,7 @@ function DashboardSectionSwitcher({ activeSection, counts = {}, onChange }) {
               <span className="truncate">{section.label}</span>
               {count !== undefined && (
                 <span
-                  className={`inline-flex min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 py-0.5 text-[0.65rem] font-black ${
+                  className={`inline-flex min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 py-0.5 text-[0.65rem] font-black tabular-nums ${
                     isActive
                       ? "bg-white/20 text-white"
                       : "bg-slate-100 text-slate-600"
@@ -935,7 +939,7 @@ function DashboardActionRow({
       </span>
       <span className="flex shrink-0 items-center gap-2">
         <span
-          className={`inline-flex min-w-8 items-center justify-center rounded-full border px-2 py-0.5 text-xs font-black ${toneClasses.badge}`}
+          className={`inline-flex min-w-8 items-center justify-center rounded-full border px-2 py-0.5 text-xs font-black tabular-nums ${toneClasses.badge}`}
         >
           {value}
         </span>
@@ -1482,6 +1486,7 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
   const soldVehicles = vehicles.filter((vehicle) =>
     isSoldVehicle(vehicle, soldVehicleIds)
   );
+  const soldVehiclesCount = soldVehicleIds.size || soldVehicles.length;
   const activeInvestmentRows = mergeVehiclesWithSummaries(
     vehicles,
     investmentSummaries,
@@ -1509,7 +1514,9 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
     (vehicle) => vehicle.status === "quality_check"
   ).length;
   const readyForSaleCount = vehicles.filter(
-    (vehicle) => vehicle.status === "ready_for_sale"
+    (vehicle) =>
+      vehicle.status === "ready_for_sale" &&
+      !isSoldVehicle(vehicle, soldVehicleIds)
   ).length;
   const averageActiveInvestment =
     activeVehicles.length > 0
@@ -1597,7 +1604,7 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
               helperText="Closed sales"
               icon="check"
               label="Sold Vehicles"
-              value={formatNumber(soldVehicles.length)}
+              value={formatNumber(soldVehiclesCount)}
             />
             <SummaryCard
               helperText="Sale revenue"
@@ -1644,7 +1651,7 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
               averageActiveInvestment={averageActiveInvestment}
               estimatedActiveProfit={estimatedActiveProfit}
               soldRevenue={soldRevenue}
-              soldVehiclesCount={soldVehicles.length}
+              soldVehiclesCount={soldVehiclesCount}
             />
           )}
 

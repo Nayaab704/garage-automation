@@ -337,21 +337,23 @@ function PartsQueueCard({
             <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <span>
                 <span className="font-bold text-slate-400">Unit</span>{" "}
-                <span className="font-black text-slate-950">
+                <span className="font-black tabular-nums text-slate-950">
                   {unitPriceLabel}
                 </span>
               </span>
               <span className="text-slate-300">|</span>
               <span>
                 <span className="font-bold text-slate-400">Qty</span>{" "}
-                <span className="font-black text-slate-950">
+                <span className="font-black tabular-nums text-slate-950">
                   {quantityLabel}
                 </span>
               </span>
               <span className="text-slate-300">|</span>
               <span>
                 <span className="font-bold text-slate-400">Total</span>{" "}
-                <span className="font-black text-slate-950">{totalLabel}</span>
+                <span className="font-black tabular-nums text-slate-950">
+                  {totalLabel}
+                </span>
               </span>
               <span className="text-slate-300">|</span>
               <span className="min-w-0 truncate">
@@ -376,7 +378,9 @@ function PartsQueueCard({
                   Unit {formatCurrency(returnedPurchaseOrderItem?.unit_cost)}
                 </span>
                 <span className="text-red-200">|</span>
-                <span>Deducted {formatCurrency(returnDeduction)}</span>
+                <span className="tabular-nums">
+                  Deducted {formatCurrency(returnDeduction)}
+                </span>
                 <span className="text-red-200">|</span>
                 <span>
                   Shipping{" "}

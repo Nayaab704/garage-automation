@@ -37,7 +37,7 @@ function SummaryRow({ label, value }) {
   return (
     <div className="flex items-center justify-between gap-4 text-sm">
       <span className="font-semibold text-slate-500">{label}</span>
-      <span className="font-black text-slate-950">{value}</span>
+      <span className="font-black tabular-nums text-slate-950">{value}</span>
     </div>
   );
 }

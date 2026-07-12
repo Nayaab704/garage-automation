@@ -7,7 +7,9 @@ function StatChip({ className = "", icon, label, value }) {
     >
       {icon && <AppIcon className="h-4 w-4 text-slate-500" name={icon} size={16} />}
       <span>{label}</span>
-      <span className="text-sm font-black text-slate-950">{value}</span>
+      <span className="text-sm font-black tabular-nums text-slate-950">
+        {value}
+      </span>
     </span>
   );
 }

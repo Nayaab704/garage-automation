@@ -256,7 +256,7 @@ function VendorStatsCard({ icon, label, value }) {
         <p className="truncate text-[0.68rem] font-black uppercase text-slate-400">
           {label}
         </p>
-        <p className="mt-0.5 truncate text-lg font-black leading-tight text-slate-950">
+        <p className="mt-0.5 truncate text-lg font-black leading-tight tabular-nums text-slate-950">
           {value}
         </p>
       </div>
@@ -295,7 +295,7 @@ function VendorCardMetric({ label, value }) {
       <p className="truncate text-[0.65rem] font-black uppercase text-slate-400">
         {label}
       </p>
-      <p className="mt-0.5 truncate text-sm font-black text-slate-950">
+      <p className="mt-0.5 truncate text-sm font-black tabular-nums text-slate-950">
         {value}
       </p>
     </div>

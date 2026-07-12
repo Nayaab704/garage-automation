@@ -799,21 +799,21 @@ function PurchaseOrderCard({
             <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <span>
                 <span className="font-bold text-slate-400">Qty</span>{" "}
-                <span className="font-black text-slate-950">
+                <span className="font-black tabular-nums text-slate-950">
                   {formatNumber(primaryItem?.quantity || 0)}
                 </span>
               </span>
               <span className="text-slate-300">|</span>
               <span>
                 <span className="font-bold text-slate-400">Unit</span>{" "}
-                <span className="font-black text-slate-950">
+                <span className="font-black tabular-nums text-slate-950">
                   {formatCurrency(primaryItem?.unit_cost)}
                 </span>
               </span>
               <span className="text-slate-300">|</span>
               <span>
                 <span className="font-bold text-slate-400">Total</span>{" "}
-                <span className="font-black text-slate-950">
+                <span className="font-black tabular-nums text-slate-950">
                   {formatCurrency(totalCost)}
                 </span>
               </span>
@@ -822,21 +822,21 @@ function PurchaseOrderCard({
             <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <span>
                 <span className="font-bold text-slate-400">Subtotal</span>{" "}
-                <span className="font-semibold text-slate-700">
+                <span className="font-semibold tabular-nums text-slate-700">
                   {formatCurrency(getItemSubtotal(primaryItem))}
                 </span>
               </span>
               <span className="text-slate-300">|</span>
               <span>
                 <span className="font-bold text-slate-400">Shipping</span>{" "}
-                <span className="font-semibold text-slate-700">
+                <span className="font-semibold tabular-nums text-slate-700">
                   {formatCurrency(primaryItem?.shipping_cost)}
                 </span>
               </span>
               <span className="text-slate-300">|</span>
               <span>
                 <span className="font-bold text-slate-400">Tax</span>{" "}
-                <span className="font-semibold text-slate-700">
+                <span className="font-semibold tabular-nums text-slate-700">
                   {formatCurrency(primaryItem?.tax)}
                 </span>
               </span>
@@ -938,17 +938,17 @@ function PurchaseOrderCard({
               <p className="text-xs font-black uppercase tracking-wide text-slate-400">
                 Items
               </p>
-              <p className="mt-1 font-semibold text-slate-700">
-                {formatNumber(itemCount)}
-              </p>
+                <p className="mt-1 font-semibold tabular-nums text-slate-700">
+                  {formatNumber(itemCount)}
+                </p>
             </div>
             <div>
               <p className="text-xs font-black uppercase tracking-wide text-slate-400">
                 Total
               </p>
-              <p className="mt-1 font-semibold text-slate-700">
-                {formatCurrency(totalCost)}
-              </p>
+                <p className="mt-1 font-semibold tabular-nums text-slate-700">
+                  {formatCurrency(totalCost)}
+                </p>
             </div>
           </div>
 
@@ -1029,7 +1029,7 @@ function PurchaseOrderCard({
                               {getWorkOrderLabel(item)}
                             </p>
                           )}
-                          <p className="mt-2 text-sm text-slate-500">
+                          <p className="mt-2 text-sm tabular-nums text-slate-500">
                             Qty {formatNumber(item.quantity)} -{" "}
                             {formatCurrency(item.unit_cost)} each - Subtotal{" "}
                             {formatCurrency(getItemSubtotal(item))} - Shipping{" "}
@@ -1046,7 +1046,7 @@ function PurchaseOrderCard({
                               {returnTrackingText}
                             </p>
                           )}
-                          <p className="mt-1 text-sm font-black text-slate-700">
+                          <p className="mt-1 text-sm font-black tabular-nums text-slate-700">
                             Total {formatCurrency(getItemTotal(item))}
                           </p>
                         </div>

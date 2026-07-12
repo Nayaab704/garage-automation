@@ -11,10 +11,11 @@ import { activePrebookingBadgeColumns } from "../lib/vehiclePrebookings";
 import {
   activeVehicleWorkflowStatuses,
   normalizeVehicleStatus,
+  vehicleWorkflowStatuses,
 } from "../lib/vehicleStatus";
 
 const vehicleColumns =
-  "id, stock_number, vin, year, make, model, trim, mileage, color, color_hex, title_status, status, primary_photo_id, created_at";
+  "id, stock_number, vin, year, make, model, trim, mileage, color, color_hex, title_status, status, sale_status, primary_photo_id, created_at";
 
 const vehiclePhotoColumns =
   "id, vehicle_id, photo_url, repair_job_id, created_at";
@@ -39,6 +40,7 @@ const inventoryFilterChips = [
     label: "Ready for Sale",
     type: "tab",
   },
+  { icon: "dollar", key: "sold", label: "Sold", type: "tab" },
   { icon: "scan", key: "inspection", label: "Inspection", type: "status" },
   { icon: "wrench", key: "repair", label: "Repair", type: "status" },
   {
@@ -59,8 +61,6 @@ const workflowStatusQueryValues = {
     "ready for sale",
     "ready",
     "Ready",
-    "sold",
-    "Sold",
     "archived",
     "Archived",
   ],
@@ -114,6 +114,10 @@ function getActiveFilterCount(
 }
 
 function getWorkflowStatusesForQuery(activeTab, activeStatusFilter) {
+  if (activeTab === "sold") {
+    return vehicleWorkflowStatuses;
+  }
+
   if (activeTab === "ready_for_sale") {
     return workflowStatusQueryValues.ready_for_sale;
   }
@@ -148,7 +152,10 @@ function applyVehicleQueryFilters(query, {
     activeStatusFilter
   );
   const searchPattern = getSearchPattern(searchText);
-  let filteredQuery = query.in("status", workflowStatuses);
+  let filteredQuery =
+    activeTab === "sold"
+      ? query.eq("sale_status", "sold")
+      : query.neq("sale_status", "sold").in("status", workflowStatuses);
 
   if (titleStatusFilter !== "all") {
     filteredQuery = filteredQuery.eq("title_status", titleStatusFilter);
@@ -257,12 +264,48 @@ async function fetchActivePrebookingBadges(vehicleIds = null) {
   };
 }
 
+async function fetchVehicleSales(vehicleIds = null) {
+  if (Array.isArray(vehicleIds) && vehicleIds.length === 0) {
+    return { data: [], error: null };
+  }
+
+  let query = supabase
+    .from("sales")
+    .select("id, vehicle_id, sale_price, sale_date, customer_name, payment_method, created_at")
+    .order("sale_date", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false });
+
+  if (Array.isArray(vehicleIds)) {
+    query = query.in("vehicle_id", vehicleIds);
+  }
+
+  const response = await query;
+
+  if (response.error) {
+    return { data: [], error: response.error };
+  }
+
+  return { data: response.data ?? [], error: null };
+}
+
 function buildPrebookingMap(prebookings = []) {
   return Object.fromEntries(
     prebookings
       .filter((prebooking) => prebooking?.vehicle_id)
       .map((prebooking) => [prebooking.vehicle_id, prebooking])
   );
+}
+
+function buildSalesMap(sales = []) {
+  const salesByVehicleId = {};
+
+  for (const sale of sales) {
+    if (sale?.vehicle_id && !salesByVehicleId[sale.vehicle_id]) {
+      salesByVehicleId[sale.vehicle_id] = sale;
+    }
+  }
+
+  return salesByVehicleId;
 }
 
 async function fetchPrebookedVehicleIds() {
@@ -330,6 +373,7 @@ async function fetchVehicleCounts() {
   const [
     active,
     readyForSale,
+    sold,
     allActive,
     inspection,
     repair,
@@ -337,6 +381,7 @@ async function fetchVehicleCounts() {
   ] = await Promise.all([
     fetchVehicleCount("active", "all_active"),
     fetchVehicleCount("ready_for_sale", "all_active"),
+    fetchVehicleCount("sold", "all_active"),
     fetchVehicleCount("active", "all_active"),
     fetchVehicleCount("active", "inspection"),
     fetchVehicleCount("active", "repair"),
@@ -352,6 +397,7 @@ async function fetchVehicleCounts() {
       repair,
     },
     ready_for_sale: readyForSale,
+    sold,
   };
 }
 
@@ -359,6 +405,7 @@ async function fetchVehiclesWithPhotos({
   activeStatusFilter,
   activeTab,
   canSearchPrebookings = false,
+  canViewSaleDetails = false,
   hasPrebookingFilter = false,
   hasThirdPartyFilter = false,
   page = 0,
@@ -396,6 +443,7 @@ async function fetchVehiclesWithPhotos({
         data: {
           count: 0,
           prebookingsByVehicleId: {},
+          salesByVehicleId: {},
           thirdPartyVehiclesByVehicleId: {},
           vehiclePhotosByVehicleId: {},
           vehicles: [],
@@ -419,6 +467,7 @@ async function fetchVehiclesWithPhotos({
         data: {
           count: 0,
           prebookingsByVehicleId: {},
+          salesByVehicleId: {},
           thirdPartyVehiclesByVehicleId: {},
           vehiclePhotosByVehicleId: {},
           vehicles: [],
@@ -457,6 +506,7 @@ async function fetchVehiclesWithPhotos({
     photosResponse,
     thirdPartyVehicleMapResponse,
     prebookingBadgesResponse,
+    salesResponse,
   ] = await Promise.all([
     primaryPhotoIds.length > 0
       ? supabase
@@ -466,6 +516,7 @@ async function fetchVehiclesWithPhotos({
       : { data: [], error: null },
     fetchThirdPartyRepairVehicleMap(vehicleIds),
     fetchActivePrebookingBadges(vehicleIds),
+    canViewSaleDetails ? fetchVehicleSales(vehicleIds) : { data: [], error: null },
   ]);
 
   if (photosResponse.error) {
@@ -486,6 +537,10 @@ async function fetchVehiclesWithPhotos({
     );
   }
 
+  if (salesResponse.error) {
+    console.error("Could not load vehicle sales:", salesResponse.error);
+  }
+
   return {
     data: {
       count: vehiclesResponse.count ?? vehicles.length,
@@ -495,6 +550,9 @@ async function fetchVehiclesWithPhotos({
       thirdPartyVehiclesByVehicleId: thirdPartyVehicleMapResponse.error
         ? {}
         : thirdPartyVehicleMapResponse.data,
+      salesByVehicleId: salesResponse.error
+        ? {}
+        : buildSalesMap(salesResponse.data),
       vehiclePhotosByVehicleId: photosResponse.error
         ? {}
         : buildVehiclePrimaryPhotoMap(vehicles, photosResponse.data ?? []),
@@ -572,7 +630,7 @@ function StatCard({ helperText, icon, label, tone = "emerald", value }) {
       </div>
       <div className="min-w-0">
         <p className="truncate text-xs font-medium text-slate-500">{label}</p>
-        <p className="text-lg font-black leading-none text-slate-950">
+        <p className="text-lg font-black leading-none tabular-nums text-slate-950">
           {value}
         </p>
         <p className="mt-0.5 truncate text-xs text-slate-500">{helperText}</p>
@@ -593,6 +651,13 @@ function getEmptyStateMessage({ activeStatusFilter, activeTab, hasFilters }) {
     return {
       body: "Vehicles will appear here after the final checklist is complete.",
       title: "No vehicles ready for sale.",
+    };
+  }
+
+  if (activeTab === "sold") {
+    return {
+      body: "Vehicles marked sold will appear here.",
+      title: "No sold vehicles.",
     };
   }
 
@@ -631,6 +696,7 @@ function VehiclesPage({
   const [vehicles, setVehicles] = useState([]);
   const [vehiclePhotosByVehicleId, setVehiclePhotosByVehicleId] = useState({});
   const [prebookingsByVehicleId, setPrebookingsByVehicleId] = useState({});
+  const [salesByVehicleId, setSalesByVehicleId] = useState({});
   const [thirdPartyVehiclesByVehicleId, setThirdPartyVehiclesByVehicleId] =
     useState({});
   const [activeTab, setActiveTab] = useState("active");
@@ -650,6 +716,7 @@ function VehiclesPage({
       repair: 0,
     },
     ready_for_sale: 0,
+    sold: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -663,9 +730,10 @@ function VehiclesPage({
   const filterButtonRef = useRef(null);
   const filterPanelRef = useRef(null);
   const canManagePrebooking = hasPermission(currentProfile?.role, "sale:manage");
+  const canViewSaleDetails = hasPermission(currentProfile?.role, "sale:manage");
   const activeInventoryChipKey =
-    activeTab === "ready_for_sale"
-      ? "tab-ready_for_sale"
+    ["ready_for_sale", "sold"].includes(activeTab)
+      ? `tab-${activeTab}`
       : activeStatusFilter === "all_active"
         ? "tab-active"
         : `status-${activeStatusFilter}`;
@@ -721,6 +789,7 @@ function VehiclesPage({
           activeStatusFilter,
           activeTab,
           canSearchPrebookings: canManagePrebooking,
+          canViewSaleDetails,
           hasPrebookingFilter,
           hasThirdPartyFilter,
           page: 0,
@@ -737,6 +806,7 @@ function VehiclesPage({
           setErrorMessage("Could not load vehicles.");
           setVehicles([]);
           setPrebookingsByVehicleId({});
+          setSalesByVehicleId({});
           setVehiclePhotosByVehicleId({});
           setThirdPartyVehiclesByVehicleId({});
           return;
@@ -744,6 +814,7 @@ function VehiclesPage({
 
         setVehicles(data.vehicles);
         setPrebookingsByVehicleId(data.prebookingsByVehicleId);
+        setSalesByVehicleId(data.salesByVehicleId ?? {});
         setVehiclePhotosByVehicleId(data.vehiclePhotosByVehicleId);
         setThirdPartyVehiclesByVehicleId(data.thirdPartyVehiclesByVehicleId);
         setTotalCount(data.count);
@@ -753,6 +824,7 @@ function VehiclesPage({
           setErrorMessage("Could not load vehicles.");
           setVehicles([]);
           setPrebookingsByVehicleId({});
+          setSalesByVehicleId({});
           setVehiclePhotosByVehicleId({});
           setThirdPartyVehiclesByVehicleId({});
         }
@@ -772,6 +844,7 @@ function VehiclesPage({
     activeStatusFilter,
     activeTab,
     canManagePrebooking,
+    canViewSaleDetails,
     debouncedSearchText,
     hasPrebookingFilter,
     hasThirdPartyFilter,
@@ -820,6 +893,7 @@ function VehiclesPage({
           activeStatusFilter,
           activeTab,
           canSearchPrebookings: canManagePrebooking,
+          canViewSaleDetails,
           hasPrebookingFilter,
           hasThirdPartyFilter,
           page: 0,
@@ -838,6 +912,7 @@ function VehiclesPage({
       setCounts(nextCounts);
       setVehicles(dataResponse.data.vehicles);
       setPrebookingsByVehicleId(dataResponse.data.prebookingsByVehicleId);
+      setSalesByVehicleId(dataResponse.data.salesByVehicleId ?? {});
       setVehiclePhotosByVehicleId(dataResponse.data.vehiclePhotosByVehicleId);
       setThirdPartyVehiclesByVehicleId(
         dataResponse.data.thirdPartyVehiclesByVehicleId
@@ -863,10 +938,11 @@ function VehiclesPage({
 
     try {
       const { data, error } = await fetchVehiclesWithPhotos({
-        activeStatusFilter,
-        activeTab,
-        canSearchPrebookings: canManagePrebooking,
-        hasPrebookingFilter,
+          activeStatusFilter,
+          activeTab,
+          canSearchPrebookings: canManagePrebooking,
+          canViewSaleDetails,
+          hasPrebookingFilter,
         hasThirdPartyFilter,
         page: nextPage,
         searchText: debouncedSearchText,
@@ -897,6 +973,10 @@ function VehiclesPage({
       setPrebookingsByVehicleId((currentPrebookings) => ({
         ...currentPrebookings,
         ...data.prebookingsByVehicleId,
+      }));
+      setSalesByVehicleId((currentSales) => ({
+        ...currentSales,
+        ...(data.salesByVehicleId ?? {}),
       }));
       setThirdPartyVehiclesByVehicleId((currentThirdPartyVehicles) => ({
         ...currentThirdPartyVehicles,
@@ -942,6 +1022,10 @@ function VehiclesPage({
 
     if (chip.key === "ready_for_sale") {
       return counts.ready_for_sale;
+    }
+
+    if (chip.key === "sold") {
+      return counts.sold;
     }
 
     return counts.activeFilters[chip.key] ?? 0;
@@ -1193,6 +1277,7 @@ function VehiclesPage({
               <VehicleCard
                 key={vehicle.id}
                 canManagePrebooking={canManagePrebooking}
+                canViewSaleDetails={canViewSaleDetails}
                 onOpenVehicleFile={onOpenVehicleFile}
                 onSelectVehicle={onSelectVehicle}
                 onPrebookingClick={handlePrebookingClick}
@@ -1201,6 +1286,7 @@ function VehiclesPage({
                 }
                 photo={vehiclePhotosByVehicleId[vehicle.id]}
                 prebooking={prebookingsByVehicleId[vehicle.id]}
+                sale={salesByVehicleId[vehicle.id]}
                 vehicle={{
                   ...vehicle,
                   status: normalizeVehicleStatus(vehicle.status),

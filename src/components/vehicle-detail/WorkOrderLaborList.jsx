@@ -57,7 +57,9 @@ function DetailItem({ label, value }) {
       <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
         {label}
       </dt>
-      <dd className="mt-1 text-sm font-semibold text-zinc-950">{value}</dd>
+      <dd className="mt-1 text-sm font-semibold tabular-nums text-zinc-950">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -154,7 +156,7 @@ function WorkOrderLaborList({
                     <h6 className="font-semibold text-zinc-950">
                       {getProfileName(profiles, laborLog.technician_id)}
                     </h6>
-                    <p className="mt-1 text-sm text-zinc-500">
+                    <p className="mt-1 text-sm tabular-nums text-zinc-500">
                       {formatNumber(laborLog.hours)} hours on{" "}
                       {formatDate(laborLog.created_at)}
                     </p>

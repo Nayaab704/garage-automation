@@ -63,14 +63,16 @@ function DetailItem({ label, value }) {
   return (
     <div>
       <dt className="text-sm text-zinc-500">{label}</dt>
-      <dd className="mt-1 font-semibold text-zinc-950">{value}</dd>
+      <dd className="mt-1 font-semibold tabular-nums text-zinc-950">
+        {value}
+      </dd>
     </div>
   );
 }
 
 function SaleCard({ sale, warranty }) {
-  const customerName = getFirstValue(sale, ["customer_name", "customer"]);
-  const customerPhone = getFirstValue(sale, ["customer_phone", "phone"]);
+  const customerName = getFirstValue(sale, ["buyer_name", "customer_name", "customer"]);
+  const customerPhone = getFirstValue(sale, ["buyer_phone", "customer_phone", "phone"]);
   const paymentMethod = getFirstValue(sale, ["payment_method"]);
   const saleDate = getFirstValue(sale, ["sale_date", "sold_at", "created_at"]);
   const notes = getFirstValue(sale, ["notes"]);
@@ -97,12 +99,12 @@ function SaleCard({ sale, warranty }) {
         </div>
 
         <span className="rounded-md bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
-          {formatCurrency(sale.sale_price)}
+          {formatCurrency(sale.sale_price ?? sale.sold_price)}
         </span>
       </div>
 
       <dl className="mt-5 grid gap-4 sm:grid-cols-3">
-        <DetailItem label="Customer Phone" value={displayValue(customerPhone)} />
+        <DetailItem label="Buyer Phone" value={displayValue(customerPhone)} />
         <DetailItem label="Payment Method" value={displayValue(paymentMethod)} />
         <DetailItem label="Sale Date" value={formatDate(saleDate)} />
       </dl>

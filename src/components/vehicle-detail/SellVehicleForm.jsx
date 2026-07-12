@@ -87,6 +87,29 @@ function SellVehicleForm({
         return;
       }
 
+      const existingSaleResponse = await supabase
+        .from("sales")
+        .select("*")
+        .eq("vehicle_id", vehicle.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingSaleResponse.error) {
+        console.error("Could not check vehicle sale:", existingSaleResponse.error);
+        setErrorMessage("Could not verify sale status. Please try again.");
+        return;
+      }
+
+      if (existingSaleResponse.data) {
+        setErrorMessage("This vehicle is already marked sold.");
+        await onVehicleSold({
+          sale: existingSaleResponse.data,
+          vehicle: { ...vehicle, sale_status: "sold" },
+        });
+        onClose();
+        return;
+      }
+
       const sale = {
         vehicle_id: vehicle.id,
         customer_name: emptyToNull(formData.customer_name),
@@ -109,10 +132,22 @@ function SellVehicleForm({
         return;
       }
 
-      const saleId = saleResponse.data.id;
+      const vehicleResponse = await supabase
+        .from("vehicles")
+        .update({ sale_status: "sold" })
+        .eq("id", vehicle.id)
+        .select("*")
+        .single();
+
+      if (vehicleResponse.error) {
+        console.error("Could not update vehicle sale status:", vehicleResponse.error);
+      }
+
+      const saleRecord = saleResponse.data ?? sale;
+      const saleId = saleRecord.id;
       let warrantyRecord = null;
 
-      if (hasWarrantyDetails(formData)) {
+      if (hasWarrantyDetails(formData) && saleId) {
         const warranty = {
           sale_id: saleId,
           warranty_type: emptyToNull(formData.warranty_type),
@@ -150,8 +185,8 @@ function SellVehicleForm({
       });
       onActivityLogged?.();
       await onVehicleSold({
-        sale: saleResponse.data ?? sale,
-        vehicle,
+        sale: saleRecord,
+        vehicle: vehicleResponse.data ?? { ...vehicle, sale_status: "sold" },
         warranty: warrantyRecord,
       });
       onClose();
@@ -169,7 +204,7 @@ function SellVehicleForm({
       isCloseDisabled={isSubmitting}
       onClose={onClose}
       size="lg"
-      title="Sell Vehicle"
+      title="Mark Vehicle Sold"
     >
       <form className="space-y-5" onSubmit={handleSubmit}>
           <fieldset className="space-y-4">
@@ -179,14 +214,13 @@ function SellVehicleForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block" htmlFor="sale-customer-name">
               <span className={formControlClassNames.label}>
-                Customer Name
+                Buyer Name
               </span>
               <input
                 className={formControlClassNames.input}
                 id="sale-customer-name"
                 name="customer_name"
                 onChange={handleChange}
-                required
                 type="text"
                 value={formData.customer_name}
               />
@@ -194,7 +228,7 @@ function SellVehicleForm({
 
             <label className="block" htmlFor="sale-customer-phone">
               <span className={formControlClassNames.label}>
-                Customer Phone
+                Buyer Phone
               </span>
               <input
                 className={formControlClassNames.input}
@@ -337,8 +371,8 @@ function SellVehicleForm({
           <FormActions
             isSubmitting={isSubmitting}
             onCancel={onClose}
-            submitLabel="Sell Vehicle"
-            submittingLabel="Selling..."
+            submitLabel="Save Sale / Mark Vehicle Sold"
+            submittingLabel="Saving sale..."
           />
         </form>
     </ModalShell>

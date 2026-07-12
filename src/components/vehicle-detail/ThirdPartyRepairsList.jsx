@@ -83,7 +83,9 @@ function DetailItem({ label, value }) {
       <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
         {label}
       </dt>
-      <dd className="mt-1 text-sm font-semibold text-zinc-950">{value}</dd>
+      <dd className="mt-1 text-sm font-semibold tabular-nums text-zinc-950">
+        {value}
+      </dd>
     </div>
   );
 }

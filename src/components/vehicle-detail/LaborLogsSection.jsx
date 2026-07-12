@@ -79,7 +79,9 @@ function DetailItem({ label, value }) {
   return (
     <div>
       <dt className="text-sm text-zinc-500">{label}</dt>
-      <dd className="mt-1 font-semibold text-zinc-950">{value}</dd>
+      <dd className="mt-1 font-semibold tabular-nums text-zinc-950">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -110,7 +112,7 @@ function LaborLogCard({
         </div>
 
         <div className="flex items-start gap-2 sm:flex-col sm:items-end">
-          <div className="rounded-md bg-emerald-50 px-3 py-2 text-right text-sm font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+          <div className="rounded-md bg-emerald-50 px-3 py-2 text-right text-sm font-bold tabular-nums text-emerald-700 ring-1 ring-inset ring-emerald-200">
             {formatCurrency(laborCost)}
           </div>
           {canManage && (

@@ -1,6 +1,7 @@
 import AppIcon from "./ui/AppIcon";
 import VehicleColorLabel from "./VehicleColorLabel";
 import VehiclePrebookingBadge from "./VehiclePrebookingBadge";
+import VehicleSaleSummary from "./VehicleSaleSummary";
 import VehicleStatusBadge from "./VehicleStatusBadge";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
@@ -67,12 +68,14 @@ function ThirdPartyBadge() {
 
 function VehicleCard({
   canManagePrebooking = false,
+  canViewSaleDetails = false,
   hasThirdPartyRepair = false,
   onOpenVehicleFile,
   onPrebookingClick,
   onSelectVehicle,
   photo,
   prebooking,
+  sale,
   vehicle,
 }) {
   const title = getVehicleTitle(vehicle);
@@ -124,7 +127,7 @@ function VehicleCard({
         <div className="flex min-w-0 flex-col">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="truncate whitespace-nowrap text-lg font-black leading-tight text-slate-950">
+              <p className="truncate whitespace-nowrap text-lg font-black leading-tight tabular-nums text-slate-950">
                 {displayValue(vehicle.stock_number)}
               </p>
               <p className="mt-1 truncate text-sm font-semibold text-slate-800">
@@ -170,13 +173,20 @@ function VehicleCard({
               />
             )}
             {hasThirdPartyRepair && <ThirdPartyBadge />}
+            {vehicle.sale_status === "sold" && (
+              <VehicleSaleSummary
+                canViewDetails={canViewSaleDetails}
+                compact
+                sale={sale}
+              />
+            )}
           </div>
 
           <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-slate-100 pt-3 text-sm">
             <span className="inline-flex min-w-0 items-center gap-1.5">
               <AppIcon className="text-slate-400" name="mileage" size={15} />
               <span className="font-semibold text-slate-500">Mileage:</span>
-              <span className="truncate font-semibold text-slate-700">
+              <span className="truncate font-semibold tabular-nums text-slate-700">
                 {mileageLabel}
               </span>
             </span>

@@ -34,7 +34,9 @@ function InvestmentCard({ label, tone = "default", value }) {
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
         {label}
       </p>
-      <p className={`mt-2 text-xl font-black ${valueClassName}`}>{value}</p>
+      <p className={`mt-2 text-xl font-black tabular-nums ${valueClassName}`}>
+        {value}
+      </p>
     </div>
   );
 }

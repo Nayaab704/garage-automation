@@ -94,7 +94,9 @@ function DetailItem({ label, value }) {
   return (
     <div>
       <dt className="text-sm text-zinc-500">{label}</dt>
-      <dd className="mt-1 font-semibold text-zinc-950">{value}</dd>
+      <dd className="mt-1 font-semibold tabular-nums text-zinc-950">
+        {value}
+      </dd>
     </div>
   );
 }
