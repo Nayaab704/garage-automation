@@ -23,6 +23,10 @@ const APP_HISTORY_DEPTH_KEY = "garageAppHistoryDepth";
 const FALLBACK_PAGE = "Vehicles";
 const vehicleScopedPages = new Set(["vehicleDetail", "vehicleFile"]);
 
+function getDefaultLandingPageForRole(role) {
+  return role === "technician" ? "My Work" : FALLBACK_PAGE;
+}
+
 function createAppRoute(page, vehicleId = null) {
   return {
     page,
@@ -193,15 +197,18 @@ function App() {
     getInitialHistoryDepth()
   );
   const hasInitializedHistoryRef = useRef(false);
+  const currentRouteRef = useRef(currentRoute);
+  const appHistoryDepthRef = useRef(appHistoryDepth);
   const activePage = currentRoute.page;
   const selectedVehicleId = currentRoute.vehicleId;
   const canViewDashboard = hasPermission(currentProfile?.role, "dashboard:view");
   const canManageUsers = hasPermission(currentProfile?.role, "user:manage");
+  const defaultLandingPage = getDefaultLandingPageForRole(currentProfile?.role);
   const effectiveActivePage =
     activePage === "Dashboard" && !canViewDashboard
-      ? "Vehicles"
+      ? defaultLandingPage
       : activePage === "Team" && !canManageUsers
-        ? "Vehicles"
+        ? defaultLandingPage
         : activePage;
   const currentPage = pageDetails[effectiveActivePage];
   const showShellTitle = !MAIN_NAV_PAGES.includes(effectiveActivePage);
@@ -211,7 +218,10 @@ function App() {
   const userEmail = session?.user?.email ?? "";
   const userMetadata = session?.user?.user_metadata ?? null;
   const showAppBackButton =
-    appHistoryDepth > 0 || effectiveActivePage !== FALLBACK_PAGE;
+    appHistoryDepth > 0 || effectiveActivePage !== defaultLandingPage;
+
+  currentRouteRef.current = currentRoute;
+  appHistoryDepthRef.current = appHistoryDepth;
 
   useEffect(() => {
     let isMounted = true;
@@ -303,6 +313,27 @@ function App() {
         }
 
         setCurrentProfile(data);
+
+        if (data.is_active === true) {
+          const route = currentRouteRef.current;
+          const depth = appHistoryDepthRef.current;
+          const landingRoute = createAppRoute(
+            getDefaultLandingPageForRole(data.role)
+          );
+          const isDefaultRootRoute =
+            depth === 0 &&
+            route.page === FALLBACK_PAGE &&
+            !route.vehicleId;
+
+          if (
+            isDefaultRootRoute &&
+            !areRoutesEqual(route, landingRoute)
+          ) {
+            writeBrowserHistoryRoute(landingRoute, 0, "replaceState");
+            setCurrentRoute(landingRoute);
+            setAppHistoryDepth(0);
+          }
+        }
       } catch (error) {
         if (isMounted) {
           setCurrentProfile(null);
@@ -338,19 +369,19 @@ function App() {
 
     function normalizeRouteForAccess(route) {
       if (!route) {
-        return createAppRoute(FALLBACK_PAGE);
+        return createAppRoute(defaultLandingPage);
       }
 
       if (route.page === "Dashboard" && !canViewDashboard) {
-        return createAppRoute(FALLBACK_PAGE);
+        return createAppRoute(defaultLandingPage);
       }
 
       if (route.page === "Team" && !canManageUsers) {
-        return createAppRoute(FALLBACK_PAGE);
+        return createAppRoute(defaultLandingPage);
       }
 
       if (vehicleScopedPages.has(route.page) && !route.vehicleId) {
-        return createAppRoute(FALLBACK_PAGE);
+        return createAppRoute(defaultLandingPage);
       }
 
       return route;
@@ -370,7 +401,7 @@ function App() {
     return () => {
       window.removeEventListener("popstate", handlePopState);
     };
-  }, [canManageUsers, canViewDashboard]);
+  }, [canManageUsers, canViewDashboard, defaultLandingPage]);
 
   function handlePageChange(pageName) {
     navigateToRoute(pageName);
@@ -395,15 +426,15 @@ function App() {
 
   function normalizeAppRoute(pageName, vehicleId = null) {
     if (pageName === "Dashboard" && !canViewDashboard) {
-      return createAppRoute(FALLBACK_PAGE);
+      return createAppRoute(defaultLandingPage);
     }
 
     if (pageName === "Team" && !canManageUsers) {
-      return createAppRoute(FALLBACK_PAGE);
+      return createAppRoute(defaultLandingPage);
     }
 
     if (vehicleScopedPages.has(pageName) && !vehicleId) {
-      return createAppRoute(FALLBACK_PAGE);
+      return createAppRoute(defaultLandingPage);
     }
 
     return createAppRoute(pageName, vehicleId);
@@ -424,7 +455,7 @@ function App() {
   }
 
   function navigateToFallback() {
-    const fallbackRoute = createAppRoute(FALLBACK_PAGE);
+    const fallbackRoute = createAppRoute(defaultLandingPage);
 
     if (!areRoutesEqual(currentRoute, fallbackRoute)) {
       writeBrowserHistoryRoute(fallbackRoute, 0, "replaceState");
