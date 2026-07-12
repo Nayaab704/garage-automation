@@ -116,10 +116,24 @@ function getVehicleTitle(vehicle) {
     .join(" ") || "Vehicle";
 }
 
-function getVehicleSubtitle(vehicle) {
-  return [vehicle?.trim, vehicle?.vin ? `VIN ${vehicle.vin}` : ""]
+function getVehicleReportTitle(vehicle) {
+  return [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim]
     .filter(Boolean)
-    .join(" · ");
+    .join(" ") || "Vehicle";
+}
+
+function getVinEnding(vin) {
+  const cleanVin = String(vin ?? "").trim().replace(/\s+/g, "");
+
+  if (!cleanVin) {
+    return "";
+  }
+
+  if (cleanVin.length <= 4) {
+    return `VIN ${cleanVin}`;
+  }
+
+  return `VIN ending ${cleanVin.slice(-4)}`;
 }
 
 function getRecordById(records, id) {
@@ -411,40 +425,60 @@ function VehicleFileHeader({
   canViewSaleDetails = false,
   hasActiveThirdPartyRepair,
   onMarkSold,
+  onOpenVehicleDetail,
   photo,
   sale,
   vehicle,
 }) {
-  const title = getVehicleTitle(vehicle);
-  const subtitle = getVehicleSubtitle(vehicle);
+  const title = getVehicleReportTitle(vehicle);
+  const fallbackPhotoTitle = getVehicleTitle(vehicle);
   const isSold = vehicle?.sale_status === "sold" || Boolean(sale);
+  const vinEnding = getVinEnding(vehicle?.vin);
+  const metadataItems = [
+    vehicle?.stock_number ? `Stock ${vehicle.stock_number}` : "",
+    vinEnding,
+    vehicle?.mileage !== null && vehicle?.mileage !== undefined
+      ? `${formatNumber(vehicle.mileage)} mi`
+      : "",
+  ].filter(Boolean);
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-      <div className="flex gap-3 sm:gap-4">
-        <div className="h-20 w-24 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 sm:h-24 sm:w-36">
-          {photo?.photo_url ? (
-            <img
-              alt={`${title} thumbnail`}
-              className="h-full w-full object-cover"
-              src={photo.photo_url}
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-slate-400">
-              <AppIcon name="car" size={34} />
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 bg-slate-50 px-3 py-2.5 sm:px-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600">
+              <AppIcon name="file" size={17} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                Vehicle File
+              </p>
+              <p className="hidden truncate text-xs font-semibold text-slate-500 sm:block">
+                Complete record, work, parts, financials, activity, and documents.
+              </p>
             </div>
-          )}
-        </div>
+          </div>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-start justify-between gap-3">
-            <p className="truncate text-sm font-black text-slate-500">
-              {displayValue(vehicle.stock_number, "No stock number")}
-            </p>
+          <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+            {onOpenVehicleDetail && vehicle?.id && (
+              <button
+                aria-label="Open Vehicle Detail"
+                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-black text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                onClick={() => onOpenVehicleDetail(vehicle.id)}
+                title="Open Vehicle Detail"
+                type="button"
+              >
+                <AppIcon name="car" size={15} />
+                <span className="hidden sm:inline">Vehicle Detail</span>
+              </button>
+            )}
             {canMarkSold && (
               <button
-                className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700 shadow-sm transition hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                aria-label="Mark Vehicle Sold"
+                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-black text-emerald-700 shadow-sm transition hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                 onClick={onMarkSold}
+                title="Mark Vehicle Sold"
                 type="button"
               >
                 <AppIcon name="dollar" size={15} />
@@ -452,57 +486,72 @@ function VehicleFileHeader({
               </button>
             )}
           </div>
-          <h2 className="mt-0.5 truncate text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
-            {title}
-          </h2>
-          {subtitle && (
-            <p className="mt-1 break-words text-sm font-semibold text-slate-500">
-              {subtitle}
-            </p>
-          )}
+        </div>
+      </div>
 
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <VehicleStatusBadge
-              className="h-7 max-w-[10.5rem] truncate px-2.5 text-xs"
-              status={vehicle.status}
-            />
-            {activePrebooking && (
-              <VehiclePrebookingBadge
-                prebooking={activePrebooking}
-                showAmount={false}
-                showIcon={false}
+      <div className="p-3 sm:p-4">
+        <div className="flex gap-3 sm:items-start">
+          <div className="h-20 w-24 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 sm:h-24 sm:w-32">
+            {photo?.photo_url ? (
+              <img
+                alt={`${fallbackPhotoTitle} thumbnail`}
+                className="h-full w-full object-cover"
+                src={photo.photo_url}
               />
-            )}
-            {isSold && (
-              <VehicleSaleSummary
-                canViewDetails={canViewSaleDetails}
-                compact
-                sale={sale}
-              />
-            )}
-            {hasActiveThirdPartyRepair && (
-              <span className="inline-flex h-7 items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
-                3rd-Party
-              </span>
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-slate-400">
+                <AppIcon name="car" size={30} />
+              </div>
             )}
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs leading-5 text-slate-600 sm:text-sm">
-            {vehicle.mileage !== null && vehicle.mileage !== undefined && (
-              <span className="font-semibold tabular-nums">
-                {formatNumber(vehicle.mileage)} mi
-              </span>
-            )}
-            <VehicleColorLabel
-              color={vehicle.color}
-              colorHex={vehicle.color_hex}
-              showLabel
-            />
-            {vehicle.vin && (
-              <span className="break-all font-mono font-semibold">
-                {vehicle.vin}
-              </span>
-            )}
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
+              {title}
+            </h2>
+
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-600">
+              {metadataItems.map((item) => (
+                <span
+                  className="inline-flex h-7 max-w-full items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 tabular-nums"
+                  key={item}
+                >
+                  <span className="min-w-0 truncate">{item}</span>
+                </span>
+              ))}
+              <VehicleColorLabel
+                className="h-7 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1"
+                color={vehicle.color}
+                colorHex={vehicle.color_hex}
+              />
+            </div>
+
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <VehicleStatusBadge
+                className="h-7 max-w-[10.5rem] truncate px-2.5 text-xs"
+                status={vehicle.status}
+              />
+              {activePrebooking && (
+                <VehiclePrebookingBadge
+                  prebooking={activePrebooking}
+                  showAmount={false}
+                  showIcon={false}
+                />
+              )}
+              {isSold && (
+                <VehicleSaleSummary
+                  canViewDetails={canViewSaleDetails}
+                  compact
+                  sale={sale}
+                />
+              )}
+              {hasActiveThirdPartyRepair && (
+                <span className="inline-flex h-7 items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
+                  3rd-Party
+                </span>
+              )}
+            </div>
+
           </div>
         </div>
       </div>
@@ -1815,34 +1864,15 @@ function VehicleFilePage({
 
   return (
     <div className="space-y-4 text-slate-950">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm font-black uppercase tracking-wide text-emerald-700">
-            Vehicle File
-          </p>
-          <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
-            Vehicle File
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-            Complete work, parts, labor, costs, activity, and documents for this vehicle.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button className={buttonClassNames.secondary} onClick={onBack} type="button">
-            <AppIcon className="rotate-180" name="chevron-right" size={17} />
-            Back
-          </button>
-          {vehicleId && (
-            <button
-              className={buttonClassNames.secondary}
-              onClick={() => onOpenVehicleDetail?.(vehicleId)}
-              type="button"
-            >
-              <AppIcon name="car" size={17} />
-              Open Vehicle Detail
-            </button>
-          )}
-        </div>
+      <div className="flex justify-start">
+        <button
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200"
+          onClick={onBack}
+          type="button"
+        >
+          <AppIcon className="rotate-180" name="chevron-right" size={16} />
+          Back
+        </button>
       </div>
 
       {isLoading && (
@@ -1880,6 +1910,7 @@ function VehicleFilePage({
             canViewSaleDetails={canViewSaleDetails}
             hasActiveThirdPartyRepair={hasActiveThirdPartyRepair}
             onMarkSold={() => setIsSellFormOpen(true)}
+            onOpenVehicleDetail={onOpenVehicleDetail}
             photo={primaryPhoto}
             sale={activeSale}
             vehicle={data.vehicle}
