@@ -528,7 +528,14 @@ function WorkOrderPartsList({
                     {displayPurchaseOrderItem && (
                       <button
                         className="min-h-9 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
-                        onClick={onOpenPurchaseOrders}
+                        onClick={() =>
+                          onOpenPurchaseOrders?.({
+                            itemId: displayPurchaseOrderItem.id,
+                            poId:
+                              linkedPurchaseOrder?.id ??
+                              displayPurchaseOrderItem.purchase_order_id,
+                          })
+                        }
                         type="button"
                       >
                         View PO

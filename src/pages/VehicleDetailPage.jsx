@@ -405,6 +405,7 @@ function VehicleDetailPage({
   currentProfile,
   onBack,
   onOpenVehicleFile,
+  onViewPurchaseOrders,
   vehicleId,
 }) {
   const [vehicle, setVehicle] = useState(null);
@@ -1447,6 +1448,7 @@ function VehicleDetailPage({
               onThirdPartyRepairAdded={handleThirdPartyRepairAdded}
               onThirdPartyRepairCompleted={handleThirdPartyRepairCompleted}
               onThirdPartyRepairDeleted={handleThirdPartyRepairDeleted}
+              onViewPurchaseOrders={onViewPurchaseOrders}
               onWorkOrderStatusChange={handleWorkOrderStatusChange}
               onWorkOrderAdded={handleWorkOrderAdded}
               partRequests={partRequests}

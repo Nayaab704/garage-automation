@@ -52,25 +52,6 @@ function matchesQuery(label, query) {
   return normalizedLabel.includes(normalizedQuery);
 }
 
-function getMatchRank(label, query) {
-  const normalizedLabel = normalizeVehicleCatalogText(label);
-  const normalizedQuery = normalizeVehicleCatalogText(query);
-
-  if (!normalizedQuery) {
-    return 0;
-  }
-
-  if (normalizedLabel.startsWith(normalizedQuery)) {
-    return 0;
-  }
-
-  if (normalizedLabel.includes(normalizedQuery)) {
-    return 1;
-  }
-
-  return 2;
-}
-
 function buildDistinctSuggestions(entries, { fieldName, filter, query }) {
   const suggestionsByKey = new Map();
 
@@ -116,22 +97,9 @@ function buildDistinctSuggestions(entries, { fieldName, filter, query }) {
 
   return Array.from(suggestionsByKey.values())
     .sort((firstSuggestion, secondSuggestion) => {
-      const firstRank = getMatchRank(firstSuggestion.label, query);
-      const secondRank = getMatchRank(secondSuggestion.label, query);
-
-      if (firstRank !== secondRank) {
-        return firstRank - secondRank;
-      }
-
-      if (firstSuggestion.usageCount !== secondSuggestion.usageCount) {
-        return secondSuggestion.usageCount - firstSuggestion.usageCount;
-      }
-
-      if (firstSuggestion.updatedTime !== secondSuggestion.updatedTime) {
-        return secondSuggestion.updatedTime - firstSuggestion.updatedTime;
-      }
-
-      return firstSuggestion.label.localeCompare(secondSuggestion.label);
+      return firstSuggestion.label.localeCompare(secondSuggestion.label, undefined, {
+        sensitivity: "base",
+      });
     })
     .slice(0, suggestionLimit);
 }

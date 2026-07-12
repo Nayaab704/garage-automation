@@ -188,6 +188,7 @@ function App() {
   const [authError, setAuthError] = useState("");
   const [profileError, setProfileError] = useState("");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [purchaseOrderFocus, setPurchaseOrderFocus] = useState(null);
   const [appHistoryDepth, setAppHistoryDepth] = useState(() =>
     getInitialHistoryDepth()
   );
@@ -375,6 +376,11 @@ function App() {
     navigateToRoute(pageName);
   }
 
+  function handleViewPurchaseOrders(target = null) {
+    setPurchaseOrderFocus(target?.poId ? target : null);
+    navigateToRoute("Purchase Orders");
+  }
+
   function handleSelectVehicle(vehicleId) {
     navigateToRoute("vehicleDetail", vehicleId);
   }
@@ -522,7 +528,7 @@ function App() {
         <PartsPage
           currentProfile={currentProfile}
           onSelectVehicle={handleSelectVehicle}
-          onViewPurchaseOrders={() => handlePageChange("Purchase Orders")}
+          onViewPurchaseOrders={handleViewPurchaseOrders}
         />
       );
     }
@@ -531,6 +537,8 @@ function App() {
       return (
         <PurchaseOrdersPage
           currentProfile={currentProfile}
+          focusTarget={purchaseOrderFocus}
+          onFocusHandled={() => setPurchaseOrderFocus(null)}
           onSelectVehicle={handleSelectVehicle}
         />
       );
@@ -559,6 +567,7 @@ function App() {
           currentProfile={currentProfile}
           onBack={handleAppBack}
           onOpenVehicleFile={handleOpenVehicleFile}
+          onViewPurchaseOrders={handleViewPurchaseOrders}
           vehicleId={selectedVehicleId}
         />
       );
@@ -570,6 +579,7 @@ function App() {
           currentProfile={currentProfile}
           onBack={handleVehicleFileBack}
           onOpenVehicleDetail={handleOpenVehicleDetail}
+          onViewPurchaseOrders={handleViewPurchaseOrders}
           vehicleId={selectedVehicleId}
         />
       );

@@ -422,6 +422,7 @@ function WorkOrderCard({
   onThirdPartyRepairAdded,
   onThirdPartyRepairCompleted,
   onThirdPartyRepairDeleted,
+  onViewPurchaseOrders,
   onWorkOrderStatusChange,
   parts,
   photos,
@@ -464,6 +465,15 @@ function WorkOrderCard({
 
   function openPurchaseOrdersSection() {
     setOpenSection("purchase_orders");
+  }
+
+  function handleOpenPurchaseOrders(target) {
+    if (target?.poId) {
+      onViewPurchaseOrders?.(target);
+      return;
+    }
+
+    openPurchaseOrdersSection();
   }
 
   return (
@@ -664,7 +674,7 @@ function WorkOrderCard({
                 currentProfile={currentProfile}
                 hideHeader
                 onActivityLogged={onActivityLogged}
-                onOpenPurchaseOrders={openPurchaseOrdersSection}
+                onOpenPurchaseOrders={handleOpenPurchaseOrders}
                 onPartApprovalUpdated={onPartApprovalUpdated}
                 onPartPurchaseOrderCreated={onPartPurchaseOrderCreated}
                 onPurchaseOrderItemUpdated={onPurchaseOrderItemUpdated}

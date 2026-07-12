@@ -1,6 +1,9 @@
 import { PART_QUEUE_TABS } from "../../lib/partWorkflowUtils";
+import useActiveTabScroll from "../../hooks/useActiveTabScroll";
 
 function PartsQueueTabs({ activeTab, counts = {}, onChange }) {
+  const tabRefs = useActiveTabScroll(activeTab);
+
   return (
     <div className="flex max-w-full gap-1.5 overflow-x-auto pb-1">
       {PART_QUEUE_TABS.map((tab) => {
@@ -15,6 +18,9 @@ function PartsQueueTabs({ activeTab, counts = {}, onChange }) {
             }`}
             key={tab.key}
             onClick={() => onChange(tab.key)}
+            ref={(element) => {
+              tabRefs.current[tab.key] = element;
+            }}
             type="button"
           >
             <span>{tab.label}</span>

@@ -31,6 +31,7 @@ import {
   REPAIR_QUEUE_TABS,
 } from "../lib/repairWorkflowUtils";
 import { supabase } from "../lib/supabaseClient";
+import useActiveTabScroll from "../hooks/useActiveTabScroll";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 import {
   getWorkOrderStatusAfterPartAdded,
@@ -83,6 +84,8 @@ function getServiceCategoryLabel(job) {
 }
 
 function RepairsQueueTabs({ activeTab, counts = {}, onChange }) {
+  const tabRefs = useActiveTabScroll(activeTab);
+
   return (
     <div className="flex gap-2 overflow-x-auto pb-1">
       {REPAIR_QUEUE_TABS.map((tab) => {
@@ -97,6 +100,9 @@ function RepairsQueueTabs({ activeTab, counts = {}, onChange }) {
             }`}
             key={tab.key}
             onClick={() => onChange(tab.key)}
+            ref={(element) => {
+              tabRefs.current[tab.key] = element;
+            }}
             type="button"
           >
             <span>{tab.label}</span>

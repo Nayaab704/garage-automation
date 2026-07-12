@@ -6,6 +6,7 @@ import { formatCurrency, getLaborLogCost } from "../lib/laborCost";
 import { supabase } from "../lib/supabaseClient";
 import { formatUserFirstName } from "../lib/userDisplay";
 import { getWorkOrderStatusLabel } from "../lib/workOrderStatus";
+import useActiveTabScroll from "../hooks/useActiveTabScroll";
 
 const repairJobColumns =
   "id, vehicle_id, service_category_id, title, category, priority, status, assigned_to, created_by, notes, created_at, completed_at";
@@ -862,21 +863,26 @@ function MobileSummaryStrip({ summary }) {
 }
 
 function MobileSectionTabs({ activeSection, counts, onChange }) {
+  const tabRefs = useActiveTabScroll(activeSection);
+
   return (
-    <div className="grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 sm:hidden">
+    <div className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1 sm:hidden">
       {mobileSectionTabs.map((tab) => {
         const isActive = activeSection === tab.key;
 
         return (
           <button
             aria-pressed={isActive}
-            className={`min-h-8 rounded-lg px-2 py-1 text-xs font-black transition ${
+            className={`min-h-8 shrink-0 rounded-lg px-2 py-1 text-xs font-black transition ${
               isActive
                 ? "bg-white text-emerald-700 shadow-sm ring-1 ring-inset ring-emerald-100"
                 : "text-slate-600 hover:bg-white/60"
             }`}
             key={tab.key}
             onClick={() => onChange(tab.key)}
+            ref={(element) => {
+              tabRefs.current[tab.key] = element;
+            }}
             type="button"
           >
             <span>{tab.label}</span>

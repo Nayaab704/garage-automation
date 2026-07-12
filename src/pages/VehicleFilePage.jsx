@@ -4,6 +4,7 @@ import { buttonClassNames } from "../components/ui/uiStyles";
 import VehicleColorLabel from "../components/VehicleColorLabel";
 import VehiclePrebookingBadge from "../components/VehiclePrebookingBadge";
 import VehicleStatusBadge from "../components/VehicleStatusBadge";
+import { logVehicleActivity } from "../lib/activityLogger";
 import { getLaborLogCost, formatHourlyRate } from "../lib/laborCost";
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
@@ -12,6 +13,7 @@ import { formatUserFirstName } from "../lib/userDisplay";
 import { getVehiclePrimaryPhoto } from "../lib/vehicleDisplayPhoto";
 import { activePrebookingBadgeColumns } from "../lib/vehiclePrebookings";
 import { getWorkOrderStatusLabel } from "../lib/workOrderStatus";
+import useActiveTabScroll from "../hooks/useActiveTabScroll";
 
 const tabs = [
   { key: "work_parts", label: "Work & Parts" },
@@ -223,6 +225,53 @@ function getPartDisplayTotal(partRequest, purchaseOrderItem) {
   const unitCost = getPartUnitCost(partRequest, purchaseOrderItem);
 
   return quantity !== null && unitCost !== null ? quantity * unitCost : null;
+}
+
+function isInHousePartRequest(partRequest) {
+  return partRequest?.part_source === "in_house";
+}
+
+function shouldCountInHousePart(partRequest, purchaseOrderItemIds) {
+  if (!isInHousePartRequest(partRequest)) {
+    return false;
+  }
+
+  if (purchaseOrderItemIds.has(partRequest.id)) {
+    return false;
+  }
+
+  const status = String(partRequest?.status ?? "").toLowerCase();
+  return !["cancelled", "canceled", "returned"].includes(status);
+}
+
+function getPurchasedPartsTotal(purchaseOrderItems) {
+  return purchaseOrderItems.reduce(
+    (total, item) => total + numberOrZero(getPartItemTotal(item)),
+    0
+  );
+}
+
+function getInHousePartsTotal(partRequests, purchaseOrderItems) {
+  const purchaseOrderItemPartRequestIds = new Set(
+    purchaseOrderItems
+      .map((item) => item.part_request_id)
+      .filter(Boolean)
+  );
+
+  return partRequests.reduce((total, partRequest) => {
+    if (!shouldCountInHousePart(partRequest, purchaseOrderItemPartRequestIds)) {
+      return total;
+    }
+
+    return total + numberOrZero(getPartDisplayTotal(partRequest, null));
+  }, 0);
+}
+
+function getPartsInvestmentTotal(partRequests, purchaseOrderItems) {
+  return (
+    getPurchasedPartsTotal(purchaseOrderItems) +
+    getInHousePartsTotal(partRequests, purchaseOrderItems)
+  );
 }
 
 function getPurchaseOrderLabel(purchaseOrder) {
@@ -561,8 +610,11 @@ function buildPartActivityRows({
 }
 
 function PartDetailsModal({
+  canMoveInHouseToNeedsPo = false,
   documents,
   onClose,
+  onNeedToBuyInstead,
+  onViewPurchaseOrder,
   partRequest,
   profiles,
   purchaseOrder,
@@ -600,6 +652,9 @@ function PartDetailsModal({
     purchaseOrderItem,
   });
   const documentLinks = getPurchaseOrderDocumentLinks(documents, purchaseOrder);
+  const canMoveToNeedsPo =
+    canMoveInHouseToNeedsPo && isInHousePartRequest(partRequest);
+  const canOpenPurchaseOrder = Boolean(purchaseOrder?.id);
 
   function handleBackdropMouseDown(event) {
     if (event.target === event.currentTarget) {
@@ -657,6 +712,35 @@ function PartDetailsModal({
                 value={total === null ? "" : formatCurrency(total)}
               />
             </dl>
+            {(canOpenPurchaseOrder || canMoveToNeedsPo) && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {canOpenPurchaseOrder && (
+                  <button
+                    className={`inline-flex min-h-9 items-center justify-center px-3 ${buttonClassNames.secondary}`}
+                    onClick={() =>
+                      onViewPurchaseOrder?.({
+                        itemId: purchaseOrderItem?.id,
+                        poId: purchaseOrder.id,
+                      })
+                    }
+                    type="button"
+                  >
+                    <AppIcon name="file" size={15} />
+                    View PO
+                  </button>
+                )}
+                {canMoveToNeedsPo && (
+                  <button
+                    className={`inline-flex min-h-9 items-center justify-center px-3 ${buttonClassNames.secondary}`}
+                    onClick={() => onNeedToBuyInstead?.(partRequest)}
+                    type="button"
+                  >
+                    <AppIcon name="box" size={15} />
+                    Need to Buy Instead
+                  </button>
+                )}
+              </div>
+            )}
           </section>
 
           {costRows.length > 0 && (
@@ -926,7 +1010,10 @@ function WorkOrderCard({
 }
 
 function WorkPartsTab({
+  canMoveInHouseToNeedsPo = false,
   documents = [],
+  onNeedToBuyInstead,
+  onViewPurchaseOrders,
   partRequests,
   profiles = [],
   purchaseOrderItems,
@@ -963,16 +1050,40 @@ function WorkPartsTab({
       !thirdPartyRepair.repair_job_id ||
       !repairJobIds.has(thirdPartyRepair.repair_job_id)
   );
-  const partsTotal = purchaseOrderItems.reduce(
-    (total, item) => total + numberOrZero(getPartItemTotal(item)),
-    0
+  const purchasedPartsTotal = getPurchasedPartsTotal(purchaseOrderItems);
+  const inHousePartsTotal = getInHousePartsTotal(
+    partRequests,
+    purchaseOrderItems
   );
+  const partsTotal = purchasedPartsTotal + inHousePartsTotal;
   const thirdPartyTotal = thirdPartyRepairs.reduce(
     (total, thirdPartyRepair) => total + getThirdPartyTotal(thirdPartyRepair),
     0
   );
   const shouldShowTotals =
-    purchaseOrderItems.length > 0 || thirdPartyRepairs.length > 0;
+    purchaseOrderItems.length > 0 ||
+    inHousePartsTotal > 0 ||
+    thirdPartyRepairs.length > 0;
+
+  async function handleNeedToBuyInstead(partRequest) {
+    const updatedPartRequest = await onNeedToBuyInstead?.(partRequest);
+
+    if (!updatedPartRequest?.id) {
+      return;
+    }
+
+    setSelectedPartDetails((currentDetails) =>
+      currentDetails?.partRequest?.id === updatedPartRequest.id
+        ? {
+            ...currentDetails,
+            partRequest: {
+              ...currentDetails.partRequest,
+              ...updatedPartRequest,
+            },
+          }
+        : currentDetails
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -1039,8 +1150,11 @@ function WorkPartsTab({
 
       {selectedPartDetails && (
         <PartDetailsModal
+          canMoveInHouseToNeedsPo={canMoveInHouseToNeedsPo}
           documents={selectedPartDetails.documents}
           onClose={() => setSelectedPartDetails(null)}
+          onNeedToBuyInstead={handleNeedToBuyInstead}
+          onViewPurchaseOrder={onViewPurchaseOrders}
           partRequest={selectedPartDetails.partRequest}
           profiles={selectedPartDetails.profiles}
           purchaseOrder={selectedPartDetails.purchaseOrder}
@@ -1050,8 +1164,15 @@ function WorkPartsTab({
       )}
 
       {shouldShowTotals && (
-        <div className="grid gap-2 sm:grid-cols-3">
-          <MetricCard label="Parts Total" value={formatCurrency(partsTotal)} />
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            label="Purchased Parts"
+            value={formatCurrency(purchasedPartsTotal)}
+          />
+          <MetricCard
+            label="In-House Parts"
+            value={formatCurrency(inHousePartsTotal)}
+          />
           <MetricCard
             label="Third-Party Total"
             value={formatCurrency(thirdPartyTotal)}
@@ -1070,6 +1191,7 @@ function FinancialTab({
   costEntries,
   currentProfile,
   laborLogs,
+  partRequests,
   profiles,
   purchaseOrderItems,
   repairJobs,
@@ -1080,10 +1202,7 @@ function FinancialTab({
     (laborLog) => laborLog.technician_id === currentProfile?.id
   );
   const visibleLaborLogs = canViewAdminFinancial ? laborLogs : userLaborLogs;
-  const partsTotal = purchaseOrderItems.reduce(
-    (total, item) => total + numberOrZero(getPartItemTotal(item)),
-    0
-  );
+  const partsTotal = getPartsInvestmentTotal(partRequests, purchaseOrderItems);
   const thirdPartyTotal = thirdPartyRepairs.reduce(
     (total, thirdPartyRepair) => total + getThirdPartyTotal(thirdPartyRepair),
     0
@@ -1484,6 +1603,7 @@ function VehicleFilePage({
   currentProfile,
   onBack,
   onOpenVehicleDetail,
+  onViewPurchaseOrders,
   vehicleId,
 }) {
   const [activeTab, setActiveTab] = useState("work_parts");
@@ -1497,6 +1617,10 @@ function VehicleFilePage({
       hasPermission(currentProfile?.role, "dashboard:view") ||
       hasPermission(currentProfile?.role, "sale:manage") ||
       hasPermission(currentProfile?.role, "vehicle:change_status"));
+  const canMoveInHouseToNeedsPo =
+    hasPermission(currentProfile?.role, "purchase_order:manage") ||
+    hasPermission(currentProfile?.role, "part_request:manage") ||
+    hasPermission(currentProfile?.role, "repair:manage");
 
   useEffect(() => {
     let isMounted = true;
@@ -1551,6 +1675,74 @@ function VehicleFilePage({
     : null;
   const hasActiveThirdPartyRepair =
     data?.thirdPartyRepairs?.some(isThirdPartyRepairActive) ?? false;
+  const tabRefs = useActiveTabScroll(activeTab);
+
+  async function handleNeedToBuyInstead(partRequest) {
+    if (!canMoveInHouseToNeedsPo) {
+      return null;
+    }
+
+    if (!isInHousePartRequest(partRequest)) {
+      return null;
+    }
+
+    if (
+      !window.confirm(
+        "Move this part from In-House to Needs PO? Use this if the part is not actually available in-house."
+      )
+    ) {
+      return null;
+    }
+
+    const updateValues = {
+      approval_status: "pending",
+      approved_at: null,
+      approved_by: null,
+      part_source: "needs_to_buy",
+      status: "requested",
+    };
+
+    const { data: updatedPartRequest, error } = await supabase
+      .from("part_requests")
+      .update(updateValues)
+      .eq("id", partRequest.id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("Could not move in-house part to Needs PO:", error);
+      return null;
+    }
+
+    const nextPartRequest = updatedPartRequest ?? {
+      ...partRequest,
+      ...updateValues,
+    };
+
+    setData((currentData) =>
+      currentData
+        ? {
+            ...currentData,
+            partRequests: currentData.partRequests.map((currentPartRequest) =>
+              currentPartRequest.id === partRequest.id
+                ? { ...currentPartRequest, ...nextPartRequest }
+                : currentPartRequest
+            ),
+          }
+        : currentData
+    );
+
+    await logVehicleActivity({
+      vehicleId: partRequest.vehicle_id ?? vehicleId,
+      action: "In-house part moved to Needs PO",
+      details: {
+        part_name: partRequest.part_name,
+        quantity: partRequest.quantity,
+      },
+    });
+
+    return nextPartRequest;
+  }
 
   return (
     <div className="space-y-4 text-slate-950">
@@ -1634,6 +1826,9 @@ function VehicleFilePage({
                     }`}
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key)}
+                    ref={(element) => {
+                      tabRefs.current[tab.key] = element;
+                    }}
                     type="button"
                   >
                     {tab.label}
@@ -1645,7 +1840,10 @@ function VehicleFilePage({
 
           {activeTab === "work_parts" && (
             <WorkPartsTab
+              canMoveInHouseToNeedsPo={canMoveInHouseToNeedsPo}
               documents={data.documents}
+              onNeedToBuyInstead={handleNeedToBuyInstead}
+              onViewPurchaseOrders={onViewPurchaseOrders}
               partRequests={data.partRequests}
               profiles={data.profiles}
               purchaseOrderItems={data.purchaseOrderItems}
@@ -1661,6 +1859,7 @@ function VehicleFilePage({
               costEntries={data.costEntries}
               currentProfile={currentProfile}
               laborLogs={data.laborLogs}
+              partRequests={data.partRequests}
               profiles={data.profiles}
               purchaseOrderItems={data.purchaseOrderItems}
               repairJobs={data.repairJobs}

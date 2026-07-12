@@ -8,6 +8,7 @@ import {
   getPrimaryPurchaseOrderItem,
   getSelectedUnitCost,
   getSelectedVendorName,
+  isPartInHouse,
   isPartReturned,
   isPartNeedsPo,
   isPartPendingReview,
@@ -209,10 +210,12 @@ const rejectActionButtonClassName = `${compactActionButtonClassName} border bord
 function PartsQueueCard({
   canApproveParts,
   canCreatePurchaseOrders,
+  canMoveInHouseToNeedsPo = false,
   canManageReturns,
   isUpdating,
   onApprove,
   onCreatePurchaseOrder,
+  onNeedToBuyInstead,
   onOpenPurchaseOrders,
   onOpenVehicle,
   onReject,
@@ -225,6 +228,8 @@ function PartsQueueCard({
   const returnedPurchaseOrderItem = getPrimaryReturnedPurchaseOrderItem(part);
   const returned = isPartReturned(part);
   const primaryPurchaseOrderItem = getPrimaryPurchaseOrderItem(part);
+  const displayPurchaseOrderItem =
+    primaryPurchaseOrderItem ?? returnedPurchaseOrderItem;
   const vendorLabel =
     getSelectedVendorName(part) ||
     returnedPurchaseOrderItem?.purchaseOrder?.vendor?.name;
@@ -236,6 +241,7 @@ function PartsQueueCard({
     (workOrder?.category ? formatPartLabel(workOrder.category, {}) : "");
   const workOrderLine = getWorkOrderLine(workOrder, serviceCategory);
   const canCreatePoForPart = canCreatePurchaseOrders && isPartNeedsPo(part);
+  const canMoveToNeedsPo = canMoveInHouseToNeedsPo && isPartInHouse(part);
   const canApprovePart =
     canApproveParts &&
     part.part_source === "needs_to_buy" &&
@@ -420,13 +426,30 @@ function PartsQueueCard({
           ) : purchaseOrderStatus ? (
             <button
               className={secondaryActionButtonClassName}
-              onClick={onOpenPurchaseOrders}
+              onClick={() =>
+                onOpenPurchaseOrders?.({
+                  itemId: displayPurchaseOrderItem?.id,
+                  poId: displayPurchaseOrderItem?.purchaseOrder?.id,
+                })
+              }
               type="button"
             >
               <AppIcon name="file" size={15} />
               View PO
             </button>
           ) : null}
+
+          {canMoveToNeedsPo && (
+            <button
+              className={secondaryActionButtonClassName}
+              disabled={isUpdating}
+              onClick={() => onNeedToBuyInstead?.(part)}
+              type="button"
+            >
+              <AppIcon name="box" size={15} />
+              Need to Buy Instead
+            </button>
+          )}
 
           {returned && canManageReturns && (
             <button

@@ -5,6 +5,7 @@ import VehiclePrebookingModal from "../components/vehicle-detail/VehiclePrebooki
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 import { buildVehiclePrimaryPhotoMap } from "../lib/vehicleDisplayPhoto";
+import useActiveTabScroll from "../hooks/useActiveTabScroll";
 import useDismissableLayer from "../hooks/useDismissableLayer";
 import { activePrebookingBadgeColumns } from "../lib/vehiclePrebookings";
 import {
@@ -519,7 +520,11 @@ function FilterSelect({ children, id, label, onChange, value }) {
   );
 }
 
-function InventoryFilterChip({ count, icon, isActive, label, onClick }) {
+function getInventoryChipKey(chip) {
+  return `${chip.type}-${chip.key}`;
+}
+
+function InventoryFilterChip({ buttonRef, count, icon, isActive, label, onClick }) {
   return (
     <button
       className={`inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-black shadow-sm transition ${
@@ -528,6 +533,7 @@ function InventoryFilterChip({ count, icon, isActive, label, onClick }) {
           : "border-slate-200 bg-white text-slate-700 hover:border-emerald-100 hover:bg-emerald-50/40"
       }`}
       onClick={onClick}
+      ref={buttonRef}
       type="button"
     >
       <AppIcon
@@ -657,6 +663,13 @@ function VehiclesPage({
   const filterButtonRef = useRef(null);
   const filterPanelRef = useRef(null);
   const canManagePrebooking = hasPermission(currentProfile?.role, "sale:manage");
+  const activeInventoryChipKey =
+    activeTab === "ready_for_sale"
+      ? "tab-ready_for_sale"
+      : activeStatusFilter === "all_active"
+        ? "tab-active"
+        : `status-${activeStatusFilter}`;
+  const inventoryChipRefs = useActiveTabScroll(activeInventoryChipKey);
 
   useDismissableLayer({
     enabled: areFiltersOpen,
@@ -1080,6 +1093,9 @@ function VehiclesPage({
           <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
             {inventoryFilterChips.map((chip) => (
               <InventoryFilterChip
+                buttonRef={(element) => {
+                  inventoryChipRefs.current[getInventoryChipKey(chip)] = element;
+                }}
                 count={getChipCount(chip)}
                 icon={chip.icon}
                 isActive={isChipActive(chip)}

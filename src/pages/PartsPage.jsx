@@ -14,6 +14,7 @@ import { logVehicleActivity } from "../lib/activityLogger";
 import {
   getPartQueueCounts,
   getSelectedVendorId,
+  isPartInHouse,
 } from "../lib/partWorkflowUtils";
 import {
   getPrimaryReturnedPurchaseOrderItem,
@@ -141,6 +142,10 @@ function PartsPage({
     currentProfile?.role,
     "purchase_order:manage"
   );
+  const canMoveInHouseToNeedsPo =
+    canManagePurchaseOrders ||
+    hasPermission(currentProfile?.role, "part_request:manage") ||
+    hasPermission(currentProfile?.role, "repair:manage");
 
   const countsByTab = useMemo(
     () => getPartQueueCounts(partQueue),
@@ -457,6 +462,78 @@ function PartsPage({
     setSelectedPartForPurchaseOrder(part);
   }
 
+  async function handleNeedToBuyInstead(part) {
+    if (!canMoveInHouseToNeedsPo) {
+      setErrorMessage("Your role cannot update in-house parts.");
+      return;
+    }
+
+    if (!isPartInHouse(part)) {
+      setErrorMessage("Only in-house parts can be moved to Needs PO.");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "Move this part from In-House to Needs PO? Use this if the part is not actually available in-house."
+      )
+    ) {
+      return;
+    }
+
+    const updateValues = {
+      approval_status: "pending",
+      approved_at: null,
+      approved_by: null,
+      part_source: "needs_to_buy",
+      status: "requested",
+    };
+
+    setUpdatingPartId(part.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const { data, error } = await supabase
+        .from("part_requests")
+        .update(updateValues)
+        .eq("id", part.id)
+        .select(partRequestColumns)
+        .single();
+
+      if (error) {
+        console.error("Could not move in-house part to Needs PO:", error);
+        setErrorMessage("Could not move this part to Needs PO. Please try again.");
+        return;
+      }
+
+      const updatedPart = data ?? { ...part, ...updateValues };
+
+      setPartQueue((currentParts) =>
+        currentParts.map((currentPart) =>
+          currentPart.id === part.id
+            ? { ...currentPart, ...updatedPart }
+            : currentPart
+        )
+      );
+
+      await logVehicleActivity({
+        vehicleId: part.vehicle_id,
+        action: "In-house part moved to Needs PO",
+        details: {
+          part_name: part.part_name,
+          quantity: part.quantity,
+        },
+      });
+      setSuccessMessage("Part moved to Needs PO.");
+    } catch (error) {
+      console.error("Could not move in-house part to Needs PO:", error);
+      setErrorMessage("Could not move this part to Needs PO. Please try again.");
+    } finally {
+      setUpdatingPartId(null);
+    }
+  }
+
   async function handleConfirmUndoReturn() {
     const part = undoReturnPart;
     const returnedItem = getPrimaryReturnedPurchaseOrderItem(part);
@@ -675,6 +752,7 @@ function PartsPage({
             <PartsQueueCard
               canApproveParts={canApproveParts}
               canCreatePurchaseOrders={canManagePurchaseOrders}
+              canMoveInHouseToNeedsPo={canMoveInHouseToNeedsPo}
               canManageReturns={canManageReturns}
               isUpdating={updatingPartId === part.id}
               key={part.id}
@@ -682,6 +760,7 @@ function PartsPage({
                 handleApprovalChange(currentPart, "approved")
               }
               onCreatePurchaseOrder={handleCreatePurchaseOrder}
+              onNeedToBuyInstead={handleNeedToBuyInstead}
               onOpenPurchaseOrders={onViewPurchaseOrders}
               onOpenVehicle={onSelectVehicle}
               onReject={(currentPart) =>

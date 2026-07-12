@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import MarkReceivedModal from "../components/parts/MarkReceivedModal";
 import MarkReturnedModal from "../components/parts/MarkReturnedModal";
 import AppIcon from "../components/ui/AppIcon";
@@ -47,6 +47,7 @@ import {
 import { supabase } from "../lib/supabaseClient";
 import { formatUserFirstName } from "../lib/userDisplay";
 import { getWorkOrderStatusAfterPartsReceived } from "../lib/workOrderStatus";
+import useActiveTabScroll from "../hooks/useActiveTabScroll";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 
 const purchaseOrderColumns =
@@ -74,6 +75,31 @@ const purchaseOrderItemStatuses = [
   "received",
   "cancelled",
 ];
+
+function getPurchaseOrderFocusFromUrl() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const poId = params.get("poId");
+
+  if (!poId) {
+    return null;
+  }
+
+  return {
+    itemId: params.get("itemId") || null,
+    poId,
+  };
+}
+
+function targetsMatch(firstTarget, secondTarget) {
+  return (
+    String(firstTarget?.poId ?? "") === String(secondTarget?.poId ?? "") &&
+    String(firstTarget?.itemId ?? "") === String(secondTarget?.itemId ?? "")
+  );
+}
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -601,6 +627,8 @@ const secondaryActionButtonClassName = `${compactActionButtonClassName} border b
 const dangerActionButtonClassName = `${compactActionButtonClassName} border border-red-200 bg-white text-red-700 hover:bg-red-50 focus:ring-red-100`;
 
 function PurchaseOrderTabs({ activeTab, counts, onChange }) {
+  const tabRefs = useActiveTabScroll(activeTab);
+
   return (
     <div className="flex max-w-full gap-1.5 overflow-x-auto pb-1">
       {PURCHASE_ORDER_TABS.map((tab) => {
@@ -615,6 +643,9 @@ function PurchaseOrderTabs({ activeTab, counts, onChange }) {
             }`}
             key={tab.key}
             onClick={() => onChange(tab.key)}
+            ref={(element) => {
+              tabRefs.current[tab.key] = element;
+            }}
             type="button"
           >
             <span>{tab.label}</span>
@@ -682,6 +713,7 @@ function PurchaseOrderEmptyState({
 }
 
 function PurchaseOrderCard({
+  cardRef,
   canDeleteDocuments,
   canManagePurchaseOrders,
   canManageReturns,
@@ -689,7 +721,9 @@ function PurchaseOrderCard({
   currentProfile,
   documents,
   isExpanded,
+  isHighlighted = false,
   isUpdating,
+  highlightedItemId = null,
   onCancel,
   onDocumentAdded,
   onDocumentDeleted,
@@ -715,7 +749,14 @@ function PurchaseOrderCard({
   const footerParts = getPurchaseOrderFooterParts(purchaseOrder);
 
   return (
-    <article className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+    <article
+      className={`min-w-0 scroll-mt-24 overflow-hidden rounded-2xl border bg-white p-3 shadow-sm transition sm:p-4 ${
+        isHighlighted
+          ? "border-emerald-300 ring-2 ring-emerald-200"
+          : "border-slate-200"
+      }`}
+      ref={cardRef}
+    >
       <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <div className="min-w-0">
           <div className="flex min-w-0 items-start justify-between gap-3">
@@ -971,7 +1012,11 @@ function PurchaseOrderCard({
 
                   return (
                     <div
-                      className="rounded-2xl border border-slate-200 bg-white p-4"
+                      className={`rounded-2xl border bg-white p-4 transition ${
+                        String(highlightedItemId ?? "") === String(item.id)
+                          ? "border-emerald-300 bg-emerald-50/40 ring-2 ring-emerald-100"
+                          : "border-slate-200"
+                      }`}
                       key={item.id}
                     >
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -1058,7 +1103,12 @@ function PurchaseOrderCard({
   );
 }
 
-function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
+function PurchaseOrdersPage({
+  currentProfile,
+  focusTarget = null,
+  onFocusHandled,
+  onSelectVehicle,
+}) {
   const [activeTab, setActiveTab] = useState("ordered");
   const [confirmReceivedOrder, setConfirmReceivedOrder] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -1077,11 +1127,17 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
   const [serviceCategoriesById, setServiceCategoriesById] = useState({});
   const [statusErrorMessage, setStatusErrorMessage] = useState("");
   const [statusSuccessMessage, setStatusSuccessMessage] = useState("");
+  const [highlightTarget, setHighlightTarget] = useState(null);
   const [updatingItemId, setUpdatingItemId] = useState(null);
   const [updatingPurchaseOrderId, setUpdatingPurchaseOrderId] = useState(null);
   const [vehicleDocuments, setVehicleDocuments] = useState([]);
   const [vehiclesById, setVehiclesById] = useState({});
   const [vendorsById, setVendorsById] = useState({});
+  const purchaseOrderRefs = useRef({});
+  const pendingFocusTargetRef = useRef(null);
+  const handledFocusTargetRef = useRef(null);
+  const highlightTimeoutRef = useRef(null);
+  const queryFocusTarget = useMemo(() => getPurchaseOrderFocusFromUrl(), []);
 
   const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
 
@@ -1251,6 +1307,93 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
       vehicleSearchIndex,
     ]
   );
+
+  useEffect(() => {
+    const target = focusTarget?.poId ? focusTarget : queryFocusTarget;
+    const isQueryTarget = !focusTarget?.poId && Boolean(queryFocusTarget?.poId);
+    const poId = String(target?.poId ?? "");
+
+    if (!poId || isLoading || enrichedPurchaseOrders.length === 0) {
+      return;
+    }
+
+    if (isQueryTarget && targetsMatch(handledFocusTargetRef.current, target)) {
+      return;
+    }
+
+    const matchingPurchaseOrder = enrichedPurchaseOrders.find(
+      (purchaseOrder) => String(purchaseOrder.id) === poId
+    );
+
+    if (!matchingPurchaseOrder) {
+      return;
+    }
+
+    const nextTarget = {
+      itemId: target.itemId ? String(target.itemId) : null,
+      poId,
+    };
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      pendingFocusTargetRef.current = nextTarget;
+      setSearchTerm("");
+      setSelectedVehicleFilterId("");
+      setSelectedVendorFilterId("");
+      setActiveTab("all");
+      setExpandedPurchaseOrderIds((currentIds) =>
+        currentIds.includes(poId) ? currentIds : [...currentIds, poId]
+      );
+      setHighlightTarget(nextTarget);
+    });
+
+    return () => window.cancelAnimationFrame(animationFrameId);
+  }, [enrichedPurchaseOrders, focusTarget, isLoading, queryFocusTarget]);
+
+  useEffect(() => {
+    const target = pendingFocusTargetRef.current;
+
+    if (!target?.poId) {
+      return undefined;
+    }
+
+    const isVisible = filteredPurchaseOrders.some(
+      (purchaseOrder) => String(purchaseOrder.id) === target.poId
+    );
+
+    if (!isVisible) {
+      return undefined;
+    }
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      purchaseOrderRefs.current[target.poId]?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      handledFocusTargetRef.current = target;
+      pendingFocusTargetRef.current = null;
+      onFocusHandled?.();
+
+      if (highlightTimeoutRef.current) {
+        window.clearTimeout(highlightTimeoutRef.current);
+      }
+
+      highlightTimeoutRef.current = window.setTimeout(() => {
+        setHighlightTarget((currentTarget) =>
+          targetsMatch(currentTarget, target) ? null : currentTarget
+        );
+      }, 3500);
+    });
+
+    return () => window.cancelAnimationFrame(animationFrameId);
+  }, [filteredPurchaseOrders, onFocusHandled]);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) {
+        window.clearTimeout(highlightTimeoutRef.current);
+      }
+    };
+  }, []);
 
   async function persistAutomaticRepairJobStatus(
     repairJobId,
@@ -2061,6 +2204,9 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
         <section className="min-w-0 space-y-2.5">
           {filteredPurchaseOrders.map((purchaseOrder) => (
             <PurchaseOrderCard
+              cardRef={(element) => {
+                purchaseOrderRefs.current[String(purchaseOrder.id)] = element;
+              }}
               canDeleteDocuments={canDeleteDocuments}
               canManagePurchaseOrders={canManagePurchaseOrders}
               canManageReturns={canManageReturns}
@@ -2068,7 +2214,11 @@ function PurchaseOrdersPage({ currentProfile, onSelectVehicle }) {
               currentProfile={currentProfile}
               documents={purchaseOrder.documents}
               isExpanded={expandedPurchaseOrderIds.includes(purchaseOrder.id)}
+              isHighlighted={
+                String(highlightTarget?.poId ?? "") === String(purchaseOrder.id)
+              }
               isUpdating={updatingPurchaseOrderId === purchaseOrder.id}
+              highlightedItemId={highlightTarget?.itemId ?? null}
               key={purchaseOrder.id}
               onCancel={handleCancelPurchaseOrder}
               onDocumentAdded={handleDocumentAdded}
