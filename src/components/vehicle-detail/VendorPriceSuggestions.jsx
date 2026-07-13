@@ -109,7 +109,7 @@ function VendorPriceCard({ isSelected = false, onUseQuote, quote }) {
   return (
     <article
       className={`rounded-2xl border bg-white p-3 shadow-sm transition ${
-        isSelected ? "border-emerald-300 ring-2 ring-emerald-100" : "border-slate-200"
+        isSelected ? "border-blue-300 ring-2 ring-blue-100" : "border-slate-200"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -160,7 +160,7 @@ function VendorPriceCard({ isSelected = false, onUseQuote, quote }) {
         <button
           className={`min-h-9 rounded-xl px-3 py-1.5 text-xs font-black transition ${
             isSelected
-              ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
+              ? "bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200"
               : "bg-blue-600 text-white shadow-sm hover:bg-blue-700"
           }`}
           onClick={() => onUseQuote(quote)}
@@ -460,7 +460,7 @@ function VendorPriceSuggestions({
       </div>
 
       {selectedQuote && (
-        <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+        <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
           <span className="font-black">Selected:</span>{" "}
           {getVendorQuoteDisplayName(selectedQuote)} -{" "}
           {formatCurrency(selectedQuote.unit_price)} each

@@ -140,11 +140,11 @@ const allowedVehicleOrigins = vehicleOriginOptions.map((option) => option.value)
 const catalogFieldNames = new Set(["make", "model", "trim"]);
 
 const intakeInputClassName =
-  "mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100";
+  "mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-100";
 const intakeTextareaClassName =
-  "mt-2 min-h-24 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100";
+  "mt-2 min-h-24 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-100";
 const photoInputActionClassName =
-  "inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-emerald-100";
+  "inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-100";
 const disabledPhotoInputActionClassName =
   "pointer-events-none cursor-not-allowed opacity-60";
 const photoSaveFailureMessage =
@@ -356,7 +356,7 @@ function IntakeFormSection({ children, description, icon, title }) {
     <fieldset className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <legend className="sr-only">{title}</legend>
       <div className="mb-4 flex items-start gap-3 border-b border-slate-100 pb-4">
-        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100">
+        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-100">
           <AppIcon name={icon} size={19} />
         </span>
         <div>
@@ -653,7 +653,7 @@ function AddVehicleForm({
   return (
     <section className="mx-auto w-full max-w-5xl pb-6">
       <div className={`overflow-hidden bg-white/95 ${cardClassNames.elevated}`}>
-        <div className="border-b border-slate-100 bg-gradient-to-br from-white via-emerald-50/35 to-white p-4 sm:p-6">
+        <div className="border-b border-slate-100 bg-gradient-to-br from-white via-blue-50/50 to-white p-4 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {onBack && (
               <button
@@ -668,7 +668,7 @@ function AddVehicleForm({
             )}
 
             {formData.vin && (
-              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-emerald-100 bg-white/90 px-3 py-1.5 text-xs font-black text-emerald-800 shadow-sm">
+              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-blue-100 bg-white/90 px-3 py-1.5 text-xs font-black text-blue-800 shadow-sm">
                 <AppIcon name="scan" size={14} />
                 <span className="text-slate-500">VIN</span>
                 <span className="truncate font-mono tracking-wide">
@@ -679,7 +679,7 @@ function AddVehicleForm({
           </div>
 
           <div className="mt-5 flex items-start gap-4">
-            <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100">
+            <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-100">
               <AppIcon name="vehicle" size={24} />
             </span>
             <div>
@@ -822,7 +822,7 @@ function AddVehicleForm({
               </div>
 
               {selectedPhoto && (
-                <div className="flex flex-col gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3 sm:flex-row sm:items-center">
+                <div className="flex flex-col gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-3 sm:flex-row sm:items-center">
                   {photoPreviewUrl && (
                     <img
                       alt="Selected main vehicle photo"
@@ -831,16 +831,16 @@ function AddVehicleForm({
                     />
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-black text-emerald-950">
+                    <p className="text-sm font-black text-blue-950">
                       Main vehicle photo
                     </p>
-                    <p className="mt-1 truncate text-sm font-semibold text-emerald-800">
+                    <p className="mt-1 truncate text-sm font-semibold text-blue-800">
                       {selectedPhoto.name}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <label
                         aria-disabled={isSubmitting}
-                        className={`inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-white px-3 py-2 text-sm font-black text-emerald-800 shadow-sm transition hover:bg-emerald-50 ${
+                        className={`inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-white px-3 py-2 text-sm font-black text-blue-800 shadow-sm transition hover:bg-blue-50 ${
                           isSubmitting ? disabledPhotoInputActionClassName : ""
                         }`}
                         htmlFor="vehicle-main-photo-camera"
@@ -943,7 +943,7 @@ function AddVehicleForm({
             title="Prebooking"
           >
             <div className="space-y-4">
-              <label className="flex cursor-pointer flex-col gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 text-slate-900 sm:flex-row sm:items-center sm:justify-between">
+              <label className="flex cursor-pointer flex-col gap-3 rounded-2xl border border-violet-100 bg-violet-50/60 p-4 text-slate-900 sm:flex-row sm:items-center sm:justify-between">
                 <span>
                   <span className="block text-sm font-black text-slate-950">
                     Prebooked
@@ -954,7 +954,7 @@ function AddVehicleForm({
                 </span>
                 <input
                   checked={isPrebooked}
-                  className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-200"
+                  className="h-5 w-5 rounded border-slate-300 text-violet-600 focus:ring-violet-200"
                   disabled={isSubmitting}
                   onChange={handlePrebookingToggle}
                   type="checkbox"

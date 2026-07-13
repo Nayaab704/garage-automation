@@ -42,7 +42,7 @@ function PhotoThumbnail({ canManage, isDeleting, onDelete, onPreview, photo }) {
     <article className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-sm">
       <button
         aria-label="Preview work order photo"
-        className="block h-28 w-full overflow-hidden text-left focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:h-32"
+        className="block h-28 w-full overflow-hidden text-left focus:outline-none focus:ring-2 focus:ring-blue-200 sm:h-32"
         onClick={() => onPreview(photo)}
         type="button"
       >

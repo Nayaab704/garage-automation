@@ -184,19 +184,19 @@ function SectionAccordion({
   return (
     <section
       className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition ${
-        isOpen ? "border-emerald-300" : "border-slate-200"
+        isOpen ? "border-blue-300" : "border-slate-200"
       }`}
     >
       <button
         className={`flex min-h-14 w-full items-center gap-3 px-3 py-2.5 text-left transition ${
-          isOpen ? "bg-emerald-50/60" : "hover:bg-slate-50"
+          isOpen ? "bg-blue-50/60" : "hover:bg-slate-50"
         }`}
         onClick={onToggle}
         type="button"
       >
         <span
           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-            isOpen ? "bg-emerald-50 text-emerald-700" : "bg-slate-50 text-slate-600"
+            isOpen ? "bg-blue-50 text-blue-700" : "bg-slate-50 text-slate-600"
           }`}
         >
           <AppIcon name={icon} size={19} />

@@ -248,7 +248,7 @@ function VendorStatsCard({ icon, label, value }) {
   return (
     <article className="flex min-h-16 min-w-0 items-center gap-2.5 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm">
       {icon && (
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-100">
           <AppIcon name={icon} size={16} />
         </span>
       )}
@@ -305,7 +305,7 @@ function VendorCardMetric({ label, value }) {
 function VendorEmptyState({ hasSearch, onClearSearch }) {
   return (
     <section className="rounded-3xl border border-dashed border-slate-300 bg-white/90 p-8 text-center shadow-sm">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
         <AppIcon name="users" size={24} />
       </div>
       <h3 className="mt-4 text-lg font-black text-slate-950">
@@ -389,7 +389,7 @@ function VendorCard({
 
       <div className="mt-3 flex flex-wrap gap-2">
         <button
-          className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:flex-none"
+          className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200 sm:flex-none"
           onClick={() => onViewHistory(vendor.id)}
           type="button"
         >

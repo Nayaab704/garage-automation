@@ -12,13 +12,17 @@ const statusLabels = {
   ordered: "Ordered",
   parts_needed: "Parts Needed",
   pending: "Pending Review",
+  prebooked: "Prebooked",
   quality_check: "Quality Check",
   ready_for_sale: "Ready For Sale",
   received: "Received",
   rejected: "Rejected",
+  repair: "Repair",
   repairing: "Repairing",
   requested: "Requested",
+  returned: "Returned",
   sold: "Sold",
+  in_house: "In-House",
   waiting_for_parts: "Waiting For Parts",
   waiting_parts: "Waiting Parts",
 };
@@ -26,6 +30,7 @@ const statusLabels = {
 const amberStatuses = new Set([
   "pending",
   "parts_needed",
+  "repair",
   "requested",
   "waiting_for_parts",
   "waiting_parts",
@@ -46,6 +51,7 @@ const redStatuses = new Set([
   "blocked",
   "cancelled",
   "rejected",
+  "returned",
   "urgent",
 ]);
 
@@ -53,9 +59,12 @@ const blueStatuses = new Set([
   "in_progress",
   "inspection",
   "ordered",
-  "quality_check",
   "repairing",
 ]);
+
+const purpleStatuses = new Set(["prebooked", "quality_check", "third_party"]);
+
+const tealStatuses = new Set(["in_house"]);
 
 function formatStatusLabel(status) {
   if (statusLabels[status]) {
@@ -88,6 +97,14 @@ function getStatusBadgeClassName(status) {
 
   if (blueStatuses.has(status)) {
     return "bg-blue-50 text-blue-700 ring-blue-200";
+  }
+
+  if (purpleStatuses.has(status)) {
+    return "bg-violet-50 text-violet-700 ring-violet-200";
+  }
+
+  if (tealStatuses.has(status)) {
+    return "bg-teal-50 text-teal-700 ring-teal-200";
   }
 
   return "bg-zinc-100 text-zinc-700 ring-zinc-200";

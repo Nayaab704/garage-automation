@@ -194,7 +194,7 @@ function AddVehiclePhotoForm({
             <span className={formControlClassNames.label}>Image</span>
             <input
               accept="image/*"
-              className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-950 shadow-sm outline-none transition file:mr-3 file:rounded-xl file:border-0 file:bg-emerald-600 file:px-3 file:py-2 file:text-sm file:font-black file:text-white focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+              className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-950 shadow-sm outline-none transition file:mr-3 file:rounded-xl file:border-0 file:bg-blue-600 file:px-3 file:py-2 file:text-sm file:font-black file:text-white focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
               id="vehicle-photo-file"
               key={fileInputKey}
               onChange={handleFileChange}

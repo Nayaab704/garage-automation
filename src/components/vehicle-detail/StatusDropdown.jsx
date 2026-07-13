@@ -31,6 +31,10 @@ function getStatusClassName(status) {
     return "bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100";
   }
 
+  if (normalizedStatus === "quality_check" || normalizedStatus === "third_party") {
+    return "bg-violet-50 text-violet-700 ring-violet-200 hover:bg-violet-100";
+  }
+
   if (normalizedStatus === "waiting_parts" || normalizedStatus === "partial_received") {
     return "bg-amber-50 text-amber-700 ring-amber-200 hover:bg-amber-100";
   }

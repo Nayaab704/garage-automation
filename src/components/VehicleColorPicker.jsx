@@ -97,7 +97,7 @@ function VehicleColorPicker({
               aria-pressed={isSelected}
               className={`inline-flex min-h-9 items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-black transition ${
                 isSelected
-                  ? "border-emerald-300 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-100"
+                  ? "border-blue-300 bg-blue-50 text-blue-800 ring-2 ring-blue-100"
                   : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               } disabled:cursor-not-allowed disabled:opacity-60`}
               disabled={disabled}
@@ -119,7 +119,7 @@ function VehicleColorPicker({
           aria-pressed={isCustomSelected}
           className={`inline-flex min-h-9 items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-black transition ${
             isCustomSelected
-              ? "border-emerald-300 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-100"
+              ? "border-blue-300 bg-blue-50 text-blue-800 ring-2 ring-blue-100"
               : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
           } disabled:cursor-not-allowed disabled:opacity-60`}
           disabled={disabled}

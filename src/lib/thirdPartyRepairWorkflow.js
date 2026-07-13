@@ -86,7 +86,7 @@ export function getThirdPartyRepairStatusBadge(status) {
   }
 
   return {
-    className: "bg-indigo-50 text-indigo-700 ring-indigo-200",
+    className: "bg-violet-50 text-violet-700 ring-violet-200",
     label: thirdPartyRepairStatusLabels.in_progress,
     status: normalizedStatus,
   };

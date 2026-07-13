@@ -893,7 +893,7 @@ function SummaryCard({
 }) {
   return (
     <article className="flex min-h-[4.75rem] min-w-0 items-start gap-2.5 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm sm:min-h-20 sm:p-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100 sm:h-9 sm:w-9">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-100 sm:h-9 sm:w-9">
         <AppIcon name={icon} size={18} />
       </div>
       <div className="min-w-0">
@@ -920,7 +920,7 @@ function DashboardQuickActions({ canStartIntake, onNavigate }) {
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <div className="min-w-0">
-          <p className="text-[0.68rem] font-black uppercase text-emerald-700">
+          <p className="text-[0.68rem] font-black uppercase text-blue-700">
             Admin Command Center
           </p>
           <h1 className="mt-0.5 truncate text-xl font-black text-slate-950 sm:text-2xl">
@@ -933,7 +933,7 @@ function DashboardQuickActions({ canStartIntake, onNavigate }) {
 
         {canStartIntake && (
           <button
-            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-[0_12px_24px_rgba(5,150,105,0.2)] transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:w-auto"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white shadow-[0_12px_24px_rgba(37,99,235,0.2)] transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200 sm:w-auto"
             onClick={() => onNavigate?.("Intake")}
             type="button"
           >
@@ -970,9 +970,9 @@ function DashboardSectionSwitcher({ activeSection, counts = {}, onChange }) {
           return (
             <button
               aria-pressed={isActive}
-              className={`flex min-h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 sm:text-sm ${
+              className={`flex min-h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 sm:text-sm ${
                 isActive
-                  ? "bg-emerald-600 text-white shadow-sm"
+                  ? "bg-blue-600 text-white shadow-sm"
                   : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
               }`}
               key={section.key}
@@ -1052,7 +1052,7 @@ function DashboardActionRow({
 
   return (
     <button
-      className="grid min-h-14 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 text-left transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 sm:px-4"
+      className="grid min-h-14 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 text-left transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 sm:px-4"
       onClick={onClick}
       type="button"
     >
@@ -1070,7 +1070,7 @@ function DashboardAttentionList({ metrics, onNavigate }) {
 
           return (
             <button
-              className="grid min-h-14 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 text-left transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 sm:px-4"
+              className="grid min-h-14 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 text-left transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 sm:px-4"
               key={metric.label}
               onClick={() => onNavigate?.(metric.actionPage)}
               type="button"
@@ -1440,7 +1440,7 @@ function AttentionQueue({
         <div className="divide-y divide-slate-100">
           {items.map((item, index) => (
             <button
-              className="grid min-h-16 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 text-left transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 sm:px-4"
+              className="grid min-h-16 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 text-left transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 sm:px-4"
               disabled={!item.actionPage && !item.vehicleId}
               key={`${item.type}-${item.vehicleId}-${item.title}-${index}`}
               onClick={() => handleAction(item)}

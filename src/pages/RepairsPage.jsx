@@ -95,7 +95,7 @@ function RepairsQueueTabs({ activeTab, counts = {}, onChange }) {
           <button
             className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-2xl px-3.5 py-2 text-sm font-black transition ${
               isActive
-                ? "bg-emerald-600 text-white shadow-sm"
+                ? "bg-blue-600 text-white shadow-sm"
                 : "border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
             }`}
             key={tab.key}
@@ -143,7 +143,7 @@ function RepairJobEmptyState({ activeTab, hasFilters, hasSearch, onClearSearch }
 
   return (
     <section className="rounded-3xl border border-dashed border-slate-300 bg-white/90 p-8 text-center shadow-sm">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
         <AppIcon name="wrench" size={24} />
       </div>
       <h3 className="mt-4 text-lg font-black text-slate-950">
@@ -333,7 +333,7 @@ function RepairJobCard({
 
           {canMarkComplete && (
             <button
-              className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 lg:w-full"
+              className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 lg:w-full"
               disabled={isUpdating}
               onClick={() => onMarkComplete(job)}
               type="button"

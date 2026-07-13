@@ -74,7 +74,7 @@ function Topbar({
               aria-current={isActive ? "page" : undefined}
               className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-2xl px-3 py-2 text-sm font-bold transition ${
                 isActive
-                  ? "bg-emerald-600 text-white shadow-sm"
+                  ? "bg-blue-600 text-white shadow-sm"
                   : "bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-950"
               }`}
               key={item.page}

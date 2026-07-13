@@ -622,7 +622,7 @@ function Badge({ children, className }) {
 const compactActionButtonClassName =
   "inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black shadow-sm transition focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60";
 
-const primaryActionButtonClassName = `${compactActionButtonClassName} bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-200 disabled:bg-slate-400`;
+const primaryActionButtonClassName = `${compactActionButtonClassName} bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-200 disabled:bg-slate-400`;
 const secondaryActionButtonClassName = `${compactActionButtonClassName} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:ring-slate-200`;
 const dangerActionButtonClassName = `${compactActionButtonClassName} border border-red-200 bg-white text-red-700 hover:bg-red-50 focus:ring-red-100`;
 
@@ -638,7 +638,7 @@ function PurchaseOrderTabs({ activeTab, counts, onChange }) {
           <button
             className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black transition sm:text-sm ${
               isActive
-                ? "bg-emerald-600 text-white shadow-sm"
+                ? "bg-blue-600 text-white shadow-sm"
                 : "border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
             }`}
             key={tab.key}
@@ -690,7 +690,7 @@ function PurchaseOrderEmptyState({
 
   return (
     <section className="rounded-3xl border border-dashed border-slate-300 bg-white/90 p-8 text-center shadow-sm">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
         <AppIcon name="box" size={24} />
       </div>
       <h3 className="mt-4 text-lg font-black text-slate-950">
@@ -752,7 +752,7 @@ function PurchaseOrderCard({
     <article
       className={`min-w-0 scroll-mt-24 overflow-hidden rounded-2xl border bg-white p-3 shadow-sm transition sm:p-4 ${
         isHighlighted
-          ? "border-emerald-300 ring-2 ring-emerald-200"
+          ? "border-blue-300 ring-2 ring-blue-200"
           : "border-slate-200"
       }`}
       ref={cardRef}
@@ -1014,7 +1014,7 @@ function PurchaseOrderCard({
                     <div
                       className={`rounded-2xl border bg-white p-4 transition ${
                         String(highlightedItemId ?? "") === String(item.id)
-                          ? "border-emerald-300 bg-emerald-50/40 ring-2 ring-emerald-100"
+                          ? "border-blue-300 bg-blue-50/40 ring-2 ring-blue-100"
                           : "border-slate-200"
                       }`}
                       key={item.id}

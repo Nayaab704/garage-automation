@@ -125,7 +125,7 @@ function VehicleAutocompleteInput({
                   aria-selected={index === activeIndex}
                   className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm font-bold transition ${
                     index === activeIndex
-                      ? "bg-emerald-50 text-emerald-900"
+                      ? "bg-blue-50 text-blue-900"
                       : "text-slate-800 hover:bg-slate-50"
                   }`}
                   key={suggestion.key}
@@ -138,7 +138,7 @@ function VehicleAutocompleteInput({
                   <span className="min-w-0 truncate">{suggestion.label}</span>
                   <AppIcon
                     className={
-                      index === activeIndex ? "text-emerald-600" : "text-slate-300"
+                      index === activeIndex ? "text-blue-600" : "text-slate-300"
                     }
                     name="chevron-right"
                     size={15}

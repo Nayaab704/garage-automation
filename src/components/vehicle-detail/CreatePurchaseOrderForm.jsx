@@ -785,9 +785,9 @@ function CreatePurchaseOrderForm({
                 return (
                   <button
                     aria-pressed={isSelected}
-                    className={`inline-flex min-h-10 items-center justify-center rounded-2xl border px-3 py-2 text-sm font-black shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-100 ${
+                    className={`inline-flex min-h-10 items-center justify-center rounded-2xl border px-3 py-2 text-sm font-black shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-100 ${
                       isSelected
-                        ? "border-emerald-600 bg-emerald-600 text-white"
+                        ? "border-blue-600 bg-blue-600 text-white"
                         : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                     }`}
                     key={option}
@@ -801,9 +801,9 @@ function CreatePurchaseOrderForm({
               })}
               <button
                 aria-pressed={selectedShippingOption === "custom"}
-                className={`inline-flex min-h-10 items-center justify-center rounded-2xl border px-3 py-2 text-sm font-black shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-100 ${
+                className={`inline-flex min-h-10 items-center justify-center rounded-2xl border px-3 py-2 text-sm font-black shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-100 ${
                   selectedShippingOption === "custom"
-                    ? "border-emerald-600 bg-emerald-600 text-white"
+                    ? "border-blue-600 bg-blue-600 text-white"
                     : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                 }`}
                 onClick={handleCustomShippingSelect}
@@ -867,7 +867,7 @@ function CreatePurchaseOrderForm({
             </div>
             <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-2">
               <span className="text-base font-black text-slate-950">Total</span>
-              <span className="text-xl font-black text-emerald-700">
+              <span className="text-xl font-black text-blue-700">
                 {formatCurrency(costSummary.total)}
               </span>
             </div>

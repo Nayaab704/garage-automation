@@ -3,6 +3,36 @@
 @theme {
   --font-sans: "Plus Jakarta Sans", "Inter", system-ui, -apple-system,
     BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --color-primary-navy: #0f172a;
+  --color-primary-blue: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-soft: #eff6ff;
+  --color-primary-border: #bfdbfe;
+  --color-app-background: #f8fafc;
+  --color-app-border: #e2e8f0;
+  --color-app-border-muted: #cbd5e1;
+  --color-text-main: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #64748b;
+  --color-text-faint: #94a3b8;
+  --color-status-success: #16a34a;
+  --color-status-success-soft: #dcfce7;
+  --color-status-success-border: #86efac;
+  --color-status-warning: #d97706;
+  --color-status-warning-soft: #fef3c7;
+  --color-status-warning-border: #fcd34d;
+  --color-status-danger: #dc2626;
+  --color-status-danger-soft: #fee2e2;
+  --color-status-danger-border: #fca5a5;
+  --color-status-info: #2563eb;
+  --color-status-info-soft: #dbeafe;
+  --color-status-info-border: #93c5fd;
+  --color-status-purple: #7c3aed;
+  --color-status-purple-soft: #f3e8ff;
+  --color-status-purple-border: #c4b5fd;
+  --color-status-teal: #0d9488;
+  --color-status-teal-soft: #ccfbf1;
+  --color-status-teal-border: #5eead4;
 }
 
 html {

@@ -50,7 +50,7 @@ function PartsQueueEmptyState({
 
   return (
     <section className="rounded-3xl border border-dashed border-slate-300 bg-white/90 p-8 text-center shadow-sm">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
         <AppIcon name="box" size={24} />
       </div>
       <h3 className="mt-4 text-lg font-black text-slate-950">

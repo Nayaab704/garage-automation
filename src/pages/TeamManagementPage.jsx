@@ -204,7 +204,7 @@ function TeamMemberCard({
             </span>
             <div className="mt-1 flex gap-2">
               <input
-                className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900 shadow-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900 shadow-sm outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isUpdating}
                 id={`team-full-name-${profile.id}`}
                 onChange={(event) => setFullNameValue(event.target.value)}
@@ -262,7 +262,7 @@ function TeamMemberCard({
             </span>
             <div className="mt-1 flex gap-2">
               <input
-                className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900 shadow-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900 shadow-sm outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isUpdating}
                 id={`team-hourly-rate-${profile.id}`}
                 min="0"
@@ -291,7 +291,7 @@ function TeamMemberCard({
             Role
           </span>
           <select
-            className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900 shadow-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900 shadow-sm outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isUpdating || isCurrentUser}
             id={`team-role-${profile.id}`}
             onChange={(event) => onRoleChange(profile, event.target.value)}
@@ -590,7 +590,7 @@ function TeamManagementPage({ currentProfile }) {
               Search
             </span>
             <input
-              className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+              className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
               id="team-search"
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Name, email, or role"
@@ -608,7 +608,7 @@ function TeamManagementPage({ currentProfile }) {
               <button
                 className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-black transition ${
                   isSelected
-                    ? "bg-emerald-600 text-white shadow-sm"
+                    ? "bg-blue-600 text-white shadow-sm"
                     : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                 }`}
                 key={tabOption.value}

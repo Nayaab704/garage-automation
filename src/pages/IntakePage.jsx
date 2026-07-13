@@ -1,6 +1,6 @@
 import { useState } from "react";
 import AddVehicleForm from "../components/AddVehicleForm";
-import IntakeSceneryBackground from "../components/intake/IntakeSceneryBackground";
+import IntakeAutomotiveBackground from "../components/intake/IntakeAutomotiveBackground";
 import IntakeVinStep from "../components/intake/IntakeVinStep";
 import { buttonClassNames, cardClassNames } from "../components/ui/uiStyles";
 import { hasPermission } from "../lib/permissions";
@@ -96,15 +96,17 @@ function IntakePage({ currentProfile, onViewVehicles }) {
     <div
       className={`relative ${
         isVinStep
-          ? "-mx-4 -my-5 h-[calc(100svh-8rem)] overflow-hidden px-4 pt-2 sm:-mx-6 sm:px-6 sm:pt-4 lg:-mx-8 lg:h-[calc(100svh-4rem)] lg:px-8"
+          ? "-mx-4 -my-5 min-h-[calc(100svh-8rem)] overflow-hidden bg-slate-950 px-3 py-4 sm:-mx-6 sm:px-6 sm:py-6 lg:-mx-8 lg:min-h-[calc(100svh-4rem)] lg:px-8"
           : "px-1 py-5 sm:px-3 lg:px-6"
       }`}
     >
-      {isVinStep && <IntakeSceneryBackground />}
+      {isVinStep && <IntakeAutomotiveBackground />}
 
       <div
         className={`relative z-10 mx-auto w-full max-w-4xl ${
-          isVinStep ? "flex h-full min-h-0 flex-col" : ""
+          isVinStep
+            ? "flex min-h-[calc(100svh-9rem)] flex-col justify-center py-2 sm:min-h-[calc(100svh-9.5rem)] lg:min-h-[calc(100svh-6rem)]"
+            : ""
         }`}
       >
         {isVinStep && (
@@ -155,7 +157,7 @@ function IntakePage({ currentProfile, onViewVehicles }) {
                 </div>
               )}
               {createdVehicle.prebooking?.id && (
-                <div className="mt-4 rounded-2xl border border-indigo-200 bg-indigo-50 p-3 text-sm font-semibold text-indigo-900">
+                <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-3 text-sm font-semibold text-violet-900">
                   Prebooking saved for this vehicle.
                 </div>
               )}

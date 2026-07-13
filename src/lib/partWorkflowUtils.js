@@ -660,7 +660,7 @@ export function getPartQueueBadge(status) {
 
   if (status === "ordered") {
     return {
-      className: "bg-sky-50 text-sky-700 ring-sky-200",
+      className: "bg-blue-50 text-blue-700 ring-blue-200",
       label: "Ordered",
     };
   }
@@ -681,7 +681,7 @@ export function getPartQueueBadge(status) {
 
   if (status === "in_house") {
     return {
-      className: "bg-indigo-50 text-indigo-700 ring-indigo-200",
+      className: "bg-teal-50 text-teal-700 ring-teal-200",
       label: "In-House",
     };
   }

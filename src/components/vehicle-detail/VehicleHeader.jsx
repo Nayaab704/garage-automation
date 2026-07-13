@@ -229,6 +229,7 @@ function VehicleHeader({
                 <img
                   alt={`${title} thumbnail`}
                   className="h-full w-full object-cover"
+                  loading="lazy"
                   src={thumbnailUrl}
                 />
               ) : (

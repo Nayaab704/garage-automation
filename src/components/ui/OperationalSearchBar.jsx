@@ -74,8 +74,8 @@ function OperationalSearchBar({
     ? "rounded-2xl border border-slate-200 bg-slate-50/80 p-2 shadow-inner sm:p-3"
     : "rounded-3xl border border-slate-200 bg-slate-50/80 p-3 shadow-inner sm:p-4";
   const inputClassName = dense
-    ? "h-11 min-h-11 w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm font-semibold text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
-    : "h-[3.25rem] min-h-12 w-full rounded-2xl border border-slate-200 bg-white py-2 pl-11 pr-4 text-sm font-semibold text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100";
+    ? "h-11 min-h-11 w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm font-semibold text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+    : "h-[3.25rem] min-h-12 w-full rounded-2xl border border-slate-200 bg-white py-2 pl-11 pr-4 text-sm font-semibold text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100";
   const iconClassName = dense
     ? "pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
     : "pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400";

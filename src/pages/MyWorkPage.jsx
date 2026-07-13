@@ -799,7 +799,7 @@ function SummaryCard({ icon, label, value, helper }) {
   return (
     <article className="min-w-0 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
       <div className="flex min-w-0 items-center gap-2.5">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-100">
           <AppIcon name={icon} size={15} />
         </span>
         <div className="min-w-0">
@@ -844,7 +844,7 @@ function MobileSummaryStrip({ summary }) {
     <div className="grid grid-cols-3 divide-x divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       {stats.map((stat) => (
         <div className="min-w-0 px-2 py-2 text-center" key={stat.label}>
-          <div className="mx-auto flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+          <div className="mx-auto flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
             <AppIcon name={stat.icon} size={13} />
           </div>
           <p className="mt-1 truncate text-[10px] font-black uppercase tracking-wide text-slate-400">
@@ -875,7 +875,7 @@ function MobileSectionTabs({ activeSection, counts, onChange }) {
             aria-pressed={isActive}
             className={`min-h-8 shrink-0 rounded-lg px-2 py-1 text-xs font-black transition ${
               isActive
-                ? "bg-white text-emerald-700 shadow-sm ring-1 ring-inset ring-emerald-100"
+                ? "bg-white text-blue-700 shadow-sm ring-1 ring-inset ring-blue-100"
                 : "text-slate-600 hover:bg-white/60"
             }`}
             key={tab.key}
@@ -1186,7 +1186,7 @@ function MyWorkPage({ currentProfile, onSelectVehicle }) {
       <section className="rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm sm:p-3">
         <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,0.78fr)_minmax(420px,1.22fr)] lg:items-center">
           <div className="min-w-0">
-            <p className="text-[11px] font-black uppercase tracking-wide text-emerald-700 sm:text-xs">
+            <p className="text-[11px] font-black uppercase tracking-wide text-blue-700 sm:text-xs">
               {firstName}'s Workspace
             </p>
             <h1 className="text-xl font-black leading-7 text-slate-950 sm:text-2xl sm:leading-8">

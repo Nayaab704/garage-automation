@@ -13,6 +13,8 @@ const catalogSelectColumns = [
 ].join(", ");
 
 const suggestionLimit = 8;
+let catalogEntriesCache = null;
+let catalogEntriesPromise = null;
 
 export function normalizeVehicleCatalogText(value) {
   const normalized = String(value ?? "")
@@ -104,19 +106,39 @@ function buildDistinctSuggestions(entries, { fieldName, filter, query }) {
     .slice(0, suggestionLimit);
 }
 
-export async function fetchVehicleCatalogEntries() {
-  const { data, error } = await supabase
+export function invalidateVehicleCatalogEntriesCache() {
+  catalogEntriesCache = null;
+  catalogEntriesPromise = null;
+}
+
+export async function fetchVehicleCatalogEntries({ force = false } = {}) {
+  if (!force && catalogEntriesCache) {
+    return catalogEntriesCache;
+  }
+
+  if (!force && catalogEntriesPromise) {
+    return catalogEntriesPromise;
+  }
+
+  catalogEntriesPromise = supabase
     .from("vehicle_catalog_entries")
     .select(catalogSelectColumns)
     .order("usage_count", { ascending: false })
     .order("updated_at", { ascending: false })
-    .limit(1500);
+    .limit(1500)
+    .then(({ data, error }) => {
+      if (error) {
+        throw error;
+      }
 
-  if (error) {
-    throw error;
-  }
+      catalogEntriesCache = data ?? [];
+      return catalogEntriesCache;
+    })
+    .finally(() => {
+      catalogEntriesPromise = null;
+    });
 
-  return data ?? [];
+  return catalogEntriesPromise;
 }
 
 export async function recordVehicleCatalogEntrySafely({ make, model, trim }) {
@@ -134,7 +156,10 @@ export async function recordVehicleCatalogEntrySafely({ make, model, trim }) {
 
     if (error) {
       console.warn("Could not record vehicle catalog entry:", error);
+      return;
     }
+
+    invalidateVehicleCatalogEntriesCache();
   } catch (error) {
     console.warn("Could not record vehicle catalog entry:", error);
   }

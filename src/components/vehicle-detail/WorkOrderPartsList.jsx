@@ -127,7 +127,7 @@ function statusClassName(status) {
   }
 
   if (status === "in_house") {
-    return "bg-indigo-50 text-indigo-700 ring-indigo-200";
+    return "bg-teal-50 text-teal-700 ring-teal-200";
   }
 
   return "bg-zinc-100 text-zinc-700 ring-zinc-200";
@@ -139,7 +139,7 @@ function sourceClassName(partSource) {
   }
 
   if (partSource === "in_house") {
-    return "bg-indigo-50 text-indigo-700 ring-indigo-200";
+    return "bg-teal-50 text-teal-700 ring-teal-200";
   }
 
   return "bg-zinc-100 text-zinc-700 ring-zinc-200";

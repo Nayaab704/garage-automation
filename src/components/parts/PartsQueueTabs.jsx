@@ -13,7 +13,7 @@ function PartsQueueTabs({ activeTab, counts = {}, onChange }) {
           <button
             className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black transition sm:text-sm ${
               isActive
-                ? "bg-emerald-600 text-white shadow-sm"
+                ? "bg-blue-600 text-white shadow-sm"
                 : "border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
             }`}
             key={tab.key}

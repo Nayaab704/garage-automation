@@ -88,7 +88,7 @@ function FilterDropdown({
         onClick={() => handleSelect(option.id)}
         type="button"
       >
-        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
         <span className="min-w-0">
           <span className="block truncate text-sm font-black text-slate-800">
             {option.label}
@@ -125,7 +125,7 @@ function FilterDropdown({
         aria-haspopup="menu"
         className={`inline-flex min-h-8 max-w-[14rem] items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-black shadow-sm transition focus:outline-none focus:ring-2 focus:ring-slate-200 ${
           selectedOption
-            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            ? "border-blue-200 bg-blue-50 text-blue-800"
             : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
         }`}
         onClick={() => setIsOpen((currentValue) => !currentValue)}
@@ -148,7 +148,7 @@ function FilterDropdown({
         >
           <div className="p-1">
             <input
-              className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+              className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder={searchPlaceholder}
               type="search"

@@ -55,11 +55,11 @@ function VehiclePrebookingSection({
           <div className="flex min-w-0 flex-1 items-center gap-1 rounded-2xl p-1">
             <button
               aria-expanded={isExpanded}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-xl text-left transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-xl text-left transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-100"
               onClick={() => setIsExpanded((currentValue) => !currentValue)}
               type="button"
             >
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-100">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-100">
                 <AppIcon name="dollar" size={18} />
               </span>
               <span className="min-w-0 flex-1">
@@ -83,7 +83,7 @@ function VehiclePrebookingSection({
             {canManage && (
               <button
                 aria-label="Edit prebooking"
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-100"
                 onClick={(event) => {
                   event.stopPropagation();
                   setIsModalOpen(true);
@@ -99,7 +99,7 @@ function VehiclePrebookingSection({
               aria-label={
                 isExpanded ? "Collapse prebooking details" : "Expand prebooking details"
               }
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-50 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-50 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-violet-100"
               onClick={() => setIsExpanded((currentValue) => !currentValue)}
               title={
                 isExpanded ? "Collapse prebooking details" : "Expand prebooking details"
@@ -115,7 +115,7 @@ function VehiclePrebookingSection({
         ) : (
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-100">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-100">
                 <AppIcon name="dollar" size={18} />
               </span>
               <h2 className="text-base font-black text-slate-950">

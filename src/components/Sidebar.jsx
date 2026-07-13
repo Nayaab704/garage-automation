@@ -20,7 +20,7 @@ function Sidebar({ activePage = "Vehicles", currentProfile, onPageChange }) {
               aria-current={isActive ? "page" : undefined}
               className={`flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm font-bold transition ${
                 isActive
-                  ? "bg-emerald-600 text-white shadow-sm"
+                  ? "bg-blue-600 text-white shadow-sm"
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
               }`}
               key={item.page}

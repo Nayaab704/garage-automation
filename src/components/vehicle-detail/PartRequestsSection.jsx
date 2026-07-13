@@ -37,16 +37,12 @@ function formatStatusLabel(status) {
 function statusBadgeClassName(status) {
   const normalizedStatus = String(status ?? "").toLowerCase();
 
-  if (normalizedStatus === "installed") {
+  if (normalizedStatus === "installed" || normalizedStatus === "received") {
     return "bg-emerald-50 text-emerald-700 ring-emerald-200";
   }
 
   if (normalizedStatus === "ordered") {
     return "bg-blue-50 text-blue-700 ring-blue-200";
-  }
-
-  if (normalizedStatus === "received") {
-    return "bg-amber-50 text-amber-700 ring-amber-200";
   }
 
   return "bg-zinc-100 text-zinc-700 ring-zinc-200";

@@ -60,7 +60,7 @@ function VehiclePhotoThumbnail({
     <article className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-sm">
       <button
         aria-label={`Preview ${formatPhotoType(photo.photo_type)} vehicle photo`}
-        className="block h-32 w-full overflow-hidden text-left focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:h-36"
+        className="block h-32 w-full overflow-hidden text-left focus:outline-none focus:ring-2 focus:ring-blue-200 sm:h-36"
         onClick={() => onPreview(photo)}
         type="button"
       >

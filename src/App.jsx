@@ -1,23 +1,24 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 import AppLayout from "./layouts/AppLayout";
-import Dashboard from "./pages/Dashboard";
-import IntakePage from "./pages/IntakePage";
 import LoginPage from "./pages/LoginPage";
-import MyWorkPage from "./pages/MyWorkPage";
-import PartsPage from "./pages/PartsPage";
-import PurchaseOrdersPage from "./pages/PurchaseOrdersPage";
-import RepairsPage from "./pages/RepairsPage";
-import SettingsPage from "./pages/SettingsPage";
-import TeamManagementPage from "./pages/TeamManagementPage";
-import VehicleDetailPage from "./pages/VehicleDetailPage";
-import VehicleFilePage from "./pages/VehicleFilePage";
-import VehiclesPage from "./pages/VehiclesPage";
-import VendorsPage from "./pages/VendorsPage";
 import { MAIN_NAV_PAGES } from "./config/appConfig";
 import { fetchCurrentUserProfile } from "./lib/currentUserProfile";
 import { hasPermission } from "./lib/permissions";
 import { supabase } from "./lib/supabaseClient";
+
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const IntakePage = lazy(() => import("./pages/IntakePage"));
+const MyWorkPage = lazy(() => import("./pages/MyWorkPage"));
+const PartsPage = lazy(() => import("./pages/PartsPage"));
+const PurchaseOrdersPage = lazy(() => import("./pages/PurchaseOrdersPage"));
+const RepairsPage = lazy(() => import("./pages/RepairsPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const TeamManagementPage = lazy(() => import("./pages/TeamManagementPage"));
+const VehicleDetailPage = lazy(() => import("./pages/VehicleDetailPage"));
+const VehicleFilePage = lazy(() => import("./pages/VehicleFilePage"));
+const VehiclesPage = lazy(() => import("./pages/VehiclesPage"));
+const VendorsPage = lazy(() => import("./pages/VendorsPage"));
 
 const APP_HISTORY_ROUTE_KEY = "garageAppRoute";
 const APP_HISTORY_DEPTH_KEY = "garageAppHistoryDepth";
@@ -275,7 +276,7 @@ const pageDetails = {
 function PlaceholderPage({ title }) {
   return (
     <section className="rounded-lg border border-zinc-200 bg-white p-8 shadow-sm">
-      <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
+      <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
         Coming Soon
       </p>
       <h2 className="mt-3 text-2xl font-bold text-zinc-950">{title}</h2>
@@ -326,7 +327,7 @@ function ProfileLoadError({ isLoggingOut, onLogout, onRetry }) {
         </p>
         <div className="mt-6 flex flex-col gap-2 sm:flex-row">
           <button
-            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
             onClick={onRetry}
             type="button"
           >
@@ -343,6 +344,28 @@ function ProfileLoadError({ isLoggingOut, onLogout, onRetry }) {
         </div>
       </section>
     </main>
+  );
+}
+
+function PageLoadingFallback({ title = "Page" }) {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+      <div className="flex items-center gap-3">
+        <div className="h-11 w-11 shrink-0 animate-pulse rounded-2xl bg-blue-50" />
+        <div className="min-w-0 flex-1">
+          <p className="h-3 w-28 animate-pulse rounded-full bg-slate-100" />
+          <p className="mt-3 h-5 w-44 max-w-full animate-pulse rounded-full bg-slate-200" />
+        </div>
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <div className="h-20 animate-pulse rounded-2xl bg-slate-100" />
+        <div className="h-20 animate-pulse rounded-2xl bg-slate-100" />
+        <div className="h-20 animate-pulse rounded-2xl bg-slate-100" />
+      </div>
+      <p className="mt-4 text-sm font-semibold text-slate-500">
+        Loading {title}...
+      </p>
+    </section>
   );
 }
 
@@ -935,7 +958,9 @@ function App() {
         onGoVehicles={() => navigateToRoute("Vehicles")}
         resetKey={`${effectiveActivePage}:${selectedVehicleId ?? ""}`}
       >
-        {renderActivePage()}
+        <Suspense fallback={<PageLoadingFallback title={currentPage?.title} />}>
+          {renderActivePage()}
+        </Suspense>
       </AppErrorBoundary>
     </AppLayout>
   );

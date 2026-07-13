@@ -2,12 +2,12 @@ export const APP_NAME = "Makkah Autosales";
 export const APP_SHORT_NAME = "MA";
 
 export const BRAND_COLORS = {
-  accent: "#007a3d",
-  accentDark: "#005f32",
-  accentSoft: "rgba(0, 122, 61, 0.16)",
-  ink: "#142231",
-  inkSoft: "rgba(20, 34, 49, 0.12)",
-  surface: "#f8faf8",
+  accent: "#2563EB",
+  accentDark: "#0F172A",
+  accentSoft: "#EFF6FF",
+  ink: "#0F172A",
+  inkSoft: "rgba(15, 23, 42, 0.12)",
+  surface: "#F8FAFC",
 };
 
 export const BRAND_TAGLINE = "Garage Operations";

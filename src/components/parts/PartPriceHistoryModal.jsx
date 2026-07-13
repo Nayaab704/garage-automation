@@ -187,7 +187,7 @@ function PartPriceHistoryModal({
               <article
                 className={`rounded-2xl border bg-white p-4 shadow-sm ${
                   isSelected
-                    ? "border-emerald-300 ring-2 ring-emerald-100"
+                    ? "border-blue-300 ring-2 ring-blue-100"
                     : "border-slate-200"
                 }`}
                 key={quote.id}
@@ -203,7 +203,7 @@ function PartPriceHistoryModal({
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1.5">
                     {isSelected && (
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                      <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-black text-blue-700 ring-1 ring-inset ring-blue-200">
                         Selected
                       </span>
                     )}

@@ -26,7 +26,7 @@ function ModalShell({
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
           <div className="min-w-0">
             {eyebrow && (
-              <p className="truncate text-xs font-black uppercase tracking-wide text-emerald-700">
+              <p className="truncate text-xs font-black uppercase tracking-wide text-blue-700">
                 {eyebrow}
               </p>
             )}

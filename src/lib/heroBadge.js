@@ -6,6 +6,7 @@ const badgeLabels = {
   clean: "Clean",
   completed: "Completed",
   flood: "Flood",
+  in_house: "In-House",
   in_progress: "In Progress",
   inspection: "Inspection",
   issue: "Issue",
@@ -16,6 +17,7 @@ const badgeLabels = {
   parts_review: "Parts Review",
   pending: "Pending",
   pending_review: "Pending",
+  prebooked: "Prebooked",
   quality_check: "Quality Check",
   ready: "Ready",
   ready_for_parts_review: "Parts Review",
@@ -39,7 +41,6 @@ const blueValues = new Set([
   "in_progress",
   "inspection",
   "ordered",
-  "quality_check",
   "repairing",
 ]);
 
@@ -84,12 +85,17 @@ const grayValues = new Set([
   "unknown",
 ]);
 
+const purpleValues = new Set(["prebooked", "quality_check", "third_party"]);
+
+const tealValues = new Set(["in_house"]);
+
 const variantClassNames = {
   amber: "border-amber-200 bg-amber-50 text-amber-700",
   blue: "border-blue-200 bg-blue-50 text-blue-700",
   gray: "border-slate-200 bg-slate-100 text-slate-700",
   green: "border-emerald-200 bg-emerald-50 text-emerald-700",
   red: "border-red-200 bg-red-50 text-red-700",
+  teal: "border-teal-200 bg-teal-50 text-teal-700",
   violet: "border-violet-200 bg-violet-50 text-violet-700",
 };
 
@@ -134,6 +140,14 @@ export function getHeroBadgeVariant(value) {
 
   if (redValues.has(normalizedValue)) {
     return "red";
+  }
+
+  if (purpleValues.has(normalizedValue)) {
+    return "violet";
+  }
+
+  if (tealValues.has(normalizedValue)) {
+    return "teal";
   }
 
   if (grayValues.has(normalizedValue)) {

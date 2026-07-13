@@ -567,7 +567,7 @@ function FilterSelect({ children, id, label, onChange, value }) {
     <label className="block" htmlFor={id}>
       <span className="text-sm font-semibold text-slate-700">{label}</span>
       <select
-        className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+        className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
         id={id}
         onChange={onChange}
         value={value}
@@ -587,8 +587,8 @@ function InventoryFilterChip({ buttonRef, count, icon, isActive, label, onClick 
     <button
       className={`inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-black shadow-sm transition ${
         isActive
-          ? "border-emerald-600 bg-emerald-600 text-white shadow-emerald-100"
-          : "border-slate-200 bg-white text-slate-700 hover:border-emerald-100 hover:bg-emerald-50/40"
+          ? "border-blue-600 bg-blue-600 text-white shadow-blue-100"
+          : "border-slate-200 bg-white text-slate-700 hover:border-blue-100 hover:bg-blue-50/40"
       }`}
       onClick={onClick}
       ref={buttonRef}
@@ -603,7 +603,7 @@ function InventoryFilterChip({ buttonRef, count, icon, isActive, label, onClick 
       <span
         className={`rounded-full px-2 py-0.5 text-xs leading-none ${
           isActive
-            ? "bg-white text-emerald-700"
+            ? "bg-white text-blue-700"
             : "bg-slate-100 text-slate-600"
         }`}
       >
@@ -613,15 +613,17 @@ function InventoryFilterChip({ buttonRef, count, icon, isActive, label, onClick 
   );
 }
 
-function StatCard({ helperText, icon, label, tone = "emerald", value }) {
+function StatCard({ helperText, icon, label, tone = "blue", value }) {
   const toneClassName =
-    tone === "blue"
+    tone === "green"
+      ? "bg-emerald-50 text-emerald-700"
+      : tone === "blue"
       ? "bg-blue-50 text-blue-700"
       : tone === "violet"
         ? "bg-violet-50 text-violet-700"
         : tone === "slate"
           ? "bg-slate-100 text-slate-600"
-          : "bg-emerald-50 text-emerald-700";
+          : "bg-blue-50 text-blue-700";
 
   return (
     <div className="flex min-w-44 items-center gap-3 border-slate-200 bg-white px-3 py-2.5 sm:border-r last:border-r-0">
@@ -1081,7 +1083,7 @@ function VehiclesPage({
                 <AppIcon name="search" size={19} />
               </span>
               <input
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 sm:pl-12 sm:text-base"
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100 sm:pl-12 sm:text-base"
                 id="vehicle-search"
                 onChange={(event) => setSearchText(event.target.value)}
                 placeholder="Search stock, VIN, make, model, trim, or color"
@@ -1095,9 +1097,9 @@ function VehiclesPage({
             <button
               aria-expanded={areFiltersOpen}
               aria-haspopup="menu"
-              className={`inline-flex h-12 w-12 items-center justify-center gap-1.5 rounded-2xl border px-0 text-sm font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-100 sm:w-auto sm:gap-2 sm:px-4 ${
+              className={`inline-flex h-12 w-12 items-center justify-center gap-1.5 rounded-2xl border px-0 text-sm font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-100 sm:w-auto sm:gap-2 sm:px-4 ${
                 areFiltersOpen
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  ? "border-blue-200 bg-blue-50 text-blue-700"
                   : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               }`}
               onClick={() => setAreFiltersOpen((isOpen) => !isOpen)}
@@ -1107,7 +1109,7 @@ function VehiclesPage({
               <AppIcon name="filter" size={19} />
               <span className="hidden sm:inline">Filters</span>
               {activeFilterCount > 0 && (
-                <span className="rounded-full bg-emerald-600 px-1.5 py-0.5 text-[11px] leading-none text-white">
+                <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[11px] leading-none text-white">
                   {activeFilterCount}
                 </span>
               )}
@@ -1149,14 +1151,14 @@ function VehiclesPage({
               ))}
             </FilterSelect>
 
-            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50">
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-violet-200 hover:bg-violet-50">
               <input
                 checked={hasPrebookingFilter}
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-200"
+                className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-200"
                 onChange={handlePrebookingFilterChange}
                 type="checkbox"
               />
-              <AppIcon className="text-indigo-600" name="dollar" size={17} />
+              <AppIcon className="text-violet-600" name="dollar" size={17} />
               <span>Prebooked</span>
             </label>
 
@@ -1192,7 +1194,7 @@ function VehiclesPage({
 
           {hasActiveFilters && (
             <button
-              className="mt-2 w-fit rounded-xl px-1 text-sm font-semibold text-emerald-700 transition hover:text-emerald-800"
+              className="mt-2 w-fit rounded-xl px-1 text-sm font-semibold text-blue-700 transition hover:text-blue-800"
               onClick={clearFilters}
               type="button"
             >
@@ -1214,7 +1216,7 @@ function VehiclesPage({
             helperText="Cleared for sale"
             icon="chart-up"
             label="Ready for Sale"
-            tone="blue"
+            tone="green"
             value={counts.ready_for_sale}
           />
           <StatCard

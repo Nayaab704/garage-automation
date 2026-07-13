@@ -113,7 +113,7 @@ function VehicleCard({
 
   return (
     <article
-      className="cursor-pointer overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
+      className="cursor-pointer overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2"
       onClick={handleOpenVehicle}
       onKeyDown={handleCardKeyDown}
       role="button"
@@ -140,7 +140,7 @@ function VehicleCard({
               {onOpenVehicleFile && (
                 <button
                   aria-label="Open Vehicle File"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-50 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-50 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100"
                   onClick={handleVehicleFileClick}
                   onKeyDown={(event) => event.stopPropagation()}
                   title="Open Vehicle File"

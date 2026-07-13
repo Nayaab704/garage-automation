@@ -14,7 +14,7 @@ export function formatProfileRole(role) {
 
 export function getProfileRoleClassName(role) {
   if (role === "owner" || role === "admin") {
-    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+    return "bg-blue-50 text-blue-700 ring-blue-200";
   }
 
   if (role === "technician") {

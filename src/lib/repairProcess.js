@@ -54,7 +54,7 @@ export function formatRepairProcessItemStatus(status) {
 
 export function getRepairProcessTypeClassName(processType) {
   if (processType === "in_house") {
-    return "bg-blue-50 text-blue-700 ring-blue-200";
+    return "bg-teal-50 text-teal-700 ring-teal-200";
   }
 
   if (processType === "third_party") {
