@@ -65,6 +65,20 @@ function displayValue(value) {
     : value;
 }
 
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function normalizeRepairJobRecord(job = {}) {
+  return {
+    ...job,
+    laborLogs: asArray(job?.laborLogs),
+    parts: asArray(job?.parts),
+    photos: asArray(job?.photos),
+    thirdPartyRepairs: asArray(job?.thirdPartyRepairs),
+  };
+}
+
 function formatHours(value) {
   const numberValue = Number(value ?? 0);
 
@@ -193,10 +207,11 @@ function RepairJobCard({
   onToggleDetails,
   job,
 }) {
-  const counts = getRepairJobCounts(job);
-  const vehicleLabel = formatRepairJobVehicleLabel(job);
-  const serviceCategory = getServiceCategoryLabel(job);
-  const isCompleted = job.status === "completed";
+  const repairJob = normalizeRepairJobRecord(job);
+  const counts = getRepairJobCounts(repairJob);
+  const vehicleLabel = formatRepairJobVehicleLabel(repairJob);
+  const serviceCategory = getServiceCategoryLabel(repairJob);
+  const isCompleted = repairJob.status === "completed";
   const canMarkComplete = canManageRepairJobs && !isCompleted;
 
   return (
@@ -212,11 +227,11 @@ function RepairJobCard({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h3 className="text-lg font-black leading-snug text-slate-950">
-                {displayValue(job.title)}
+                {displayValue(repairJob.title)}
               </h3>
               <div className="mt-2 flex flex-wrap gap-2">
-                <PriorityBadge priority={job.priority} />
-                <StatusBadge status={job.status} />
+                <PriorityBadge priority={repairJob.priority} />
+                <StatusBadge status={repairJob.status} />
               </div>
             </div>
           </div>
@@ -229,7 +244,7 @@ function RepairJobCard({
               </span>
               <span className="text-slate-500">
                 {" "}
-                - Created {formatDate(job.created_at)}
+                - Created {formatDate(repairJob.created_at)}
               </span>
             </p>
           </div>
@@ -238,7 +253,7 @@ function RepairJobCard({
             <CountPill
               icon="camera"
               label="Photos"
-              value={job.photos.length}
+              value={repairJob.photos.length}
             />
             <CountPill
               icon="clock"
@@ -261,7 +276,7 @@ function RepairJobCard({
                     Assigned
                   </p>
                   <p className="mt-1 font-semibold text-slate-700">
-                    {getProfileName(job.assignedProfile)}
+                    {getProfileName(repairJob.assignedProfile)}
                   </p>
                 </div>
                 <div>
@@ -269,7 +284,7 @@ function RepairJobCard({
                     Created By
                   </p>
                   <p className="mt-1 font-semibold text-slate-700">
-                    {getProfileName(job.createdByProfile)}
+                    {getProfileName(repairJob.createdByProfile)}
                   </p>
                 </div>
                 <div>
@@ -277,7 +292,7 @@ function RepairJobCard({
                     Vehicle Status
                   </p>
                   <p className="mt-1 font-semibold text-slate-700">
-                    {formatRepairLabel(job.vehicle?.status, {})}
+                    {formatRepairLabel(repairJob.vehicle?.status, {})}
                   </p>
                 </div>
                 <div>
@@ -286,7 +301,7 @@ function RepairJobCard({
                   </p>
                   <p className="mt-1 font-semibold text-slate-700">
                     {
-                      job.parts.filter(
+                      repairJob.parts.filter(
                         (part) =>
                           part.part_source === "needs_to_buy" &&
                           !["received", "installed", "cancelled"].includes(
@@ -298,9 +313,9 @@ function RepairJobCard({
                 </div>
               </div>
 
-              {job.notes && (
+              {repairJob.notes && (
                 <p className="whitespace-pre-wrap rounded-2xl bg-white p-3 text-sm leading-6 text-slate-600">
-                  {job.notes}
+                  {repairJob.notes}
                 </p>
               )}
 
@@ -310,9 +325,9 @@ function RepairJobCard({
                     Status
                   </span>
                   <StatusDropdown
-                    currentStatus={job.status}
+                    currentStatus={repairJob.status}
                     isUpdating={isUpdating}
-                    onChange={(newStatus) => onStatusChange(job, newStatus)}
+                    onChange={(newStatus) => onStatusChange(repairJob, newStatus)}
                     statuses={statusOptions}
                   />
                 </div>
@@ -324,8 +339,8 @@ function RepairJobCard({
         <div className="flex shrink-0 flex-wrap gap-2 lg:w-48 lg:flex-col lg:items-stretch">
           <button
             className={`${buttonClassNames.primary} flex-1 lg:w-full`}
-            disabled={!job.vehicle_id}
-            onClick={() => onOpenVehicle?.(job.vehicle_id)}
+            disabled={!repairJob.vehicle_id}
+            onClick={() => onOpenVehicle?.(repairJob.vehicle_id)}
             type="button"
           >
             Open Vehicle
@@ -335,7 +350,7 @@ function RepairJobCard({
             <button
               className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 lg:w-full"
               disabled={isUpdating}
-              onClick={() => onMarkComplete(job)}
+              onClick={() => onMarkComplete(repairJob)}
               type="button"
             >
               <AppIcon name="check" size={16} />
@@ -346,7 +361,7 @@ function RepairJobCard({
           {canManageParts && (
             <button
               className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
-              onClick={() => onAddPart(job)}
+              onClick={() => onAddPart(repairJob)}
               type="button"
             >
               Add Part
@@ -356,7 +371,7 @@ function RepairJobCard({
           {canManageLabor && (
             <button
               className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
-              onClick={() => onAddLabor(job)}
+              onClick={() => onAddLabor(repairJob)}
               type="button"
             >
               Add Labor
@@ -366,7 +381,7 @@ function RepairJobCard({
           {canManagePhotos && (
             <button
               className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
-              onClick={() => onAddPhoto(job)}
+              onClick={() => onAddPhoto(repairJob)}
               type="button"
             >
               Add Photo
@@ -375,7 +390,7 @@ function RepairJobCard({
 
           <button
             className={`${buttonClassNames.secondary} flex-1 lg:w-full`}
-            onClick={() => onToggleDetails(job.id)}
+            onClick={() => onToggleDetails(repairJob.id)}
             type="button"
           >
             {isExpanded ? "Hide Details" : "View Details"}
@@ -495,10 +510,10 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
         return;
       }
 
-      setJobs(data.jobs);
-      setProfiles(data.profiles);
-      setServiceCategories(data.serviceCategories ?? []);
-      setVendors(data.vendors);
+      setJobs((data?.jobs ?? []).map(normalizeRepairJobRecord));
+      setProfiles(data?.profiles ?? []);
+      setServiceCategories(data?.serviceCategories ?? []);
+      setVendors(data?.vendors ?? []);
     } catch (error) {
       console.error("Could not load repairs:", error);
       setErrorMessage("Could not load repairs.");
@@ -529,10 +544,10 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
           return;
         }
 
-        setJobs(data.jobs);
-        setProfiles(data.profiles);
-        setServiceCategories(data.serviceCategories ?? []);
-        setVendors(data.vendors);
+        setJobs((data?.jobs ?? []).map(normalizeRepairJobRecord));
+        setProfiles(data?.profiles ?? []);
+        setServiceCategories(data?.serviceCategories ?? []);
+        setVendors(data?.vendors ?? []);
       } catch (error) {
         if (isMounted) {
           console.error("Could not load repairs:", error);
@@ -626,7 +641,15 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
 
   function updateJobList(jobId, updater) {
     setJobs((currentJobs) =>
-      currentJobs.map((job) => (job.id === jobId ? updater(job) : job))
+      currentJobs.map((job) => {
+        const normalizedJob = normalizeRepairJobRecord(job);
+
+        if (normalizedJob.id !== jobId) {
+          return normalizedJob;
+        }
+
+        return normalizeRepairJobRecord(updater(normalizedJob));
+      })
     );
   }
 
@@ -687,7 +710,7 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
         ...job,
         parts: [
           partRequest,
-          ...job.parts.filter((part) => part.id !== partRequest.id),
+          ...asArray(job.parts).filter((part) => part.id !== partRequest.id),
         ],
       }));
     }
@@ -715,7 +738,7 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
         ...job,
         laborLogs: [
           laborLog,
-          ...job.laborLogs.filter((log) => log.id !== laborLog.id),
+          ...asArray(job.laborLogs).filter((log) => log.id !== laborLog.id),
         ],
       }));
     }
@@ -736,7 +759,10 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
     if (photo?.id && photo?.repair_job_id) {
       updateJobList(photo.repair_job_id, (job) => ({
         ...job,
-        photos: [photo, ...job.photos.filter((item) => item.id !== photo.id)],
+        photos: [
+          photo,
+          ...asArray(job.photos).filter((item) => item.id !== photo.id),
+        ],
       }));
     }
 
