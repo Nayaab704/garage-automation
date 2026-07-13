@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import AppErrorBoundary from "./components/AppErrorBoundary";
 import AppLayout from "./layouts/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import IntakePage from "./pages/IntakePage";
@@ -22,6 +23,19 @@ const APP_HISTORY_ROUTE_KEY = "garageAppRoute";
 const APP_HISTORY_DEPTH_KEY = "garageAppHistoryDepth";
 const FALLBACK_PAGE = "Vehicles";
 const vehicleScopedPages = new Set(["vehicleDetail", "vehicleFile"]);
+const appRoutePaths = {
+  Dashboard: "dashboard",
+  Intake: "intake",
+  "My Work": "my-work",
+  Parts: "parts",
+  "Purchase Orders": "purchase-orders",
+  Repairs: "repairs",
+  Settings: "settings",
+  Team: "team",
+  Vehicles: "vehicles",
+  Vendors: "vendors",
+};
+const PROFILE_LOAD_TIMEOUT_MS = 15000;
 
 function getDefaultLandingPageForRole(role) {
   return role === "technician" ? "My Work" : FALLBACK_PAGE;
@@ -32,6 +46,101 @@ function createAppRoute(page, vehicleId = null) {
     page,
     vehicleId: vehicleScopedPages.has(page) ? vehicleId : null,
   };
+}
+
+function parseAppRoutePath(pathValue) {
+  const cleanPath = String(pathValue ?? "")
+    .split("?")[0]
+    .replace(/^#/, "")
+    .replace(/^\/+|\/+$/g, "");
+
+  if (!cleanPath) {
+    return null;
+  }
+
+  const segments = cleanPath.split("/").filter(Boolean);
+  const [section, vehicleId, fileSegment] = segments;
+
+  if (section === "vehicles") {
+    if (vehicleId && fileSegment === "file") {
+      return createAppRoute("vehicleFile", decodeURIComponent(vehicleId));
+    }
+
+    if (vehicleId) {
+      return createAppRoute("vehicleDetail", decodeURIComponent(vehicleId));
+    }
+
+    return createAppRoute("Vehicles");
+  }
+
+  const page = Object.entries(appRoutePaths).find(
+    ([, routePath]) => routePath === section
+  )?.[0];
+
+  return page ? createAppRoute(page) : null;
+}
+
+function getRouteFromUrl() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const hashRoute = parseAppRoutePath(window.location.hash);
+
+  if (hashRoute) {
+    return hashRoute;
+  }
+
+  const pathRoute = parseAppRoutePath(window.location.pathname);
+
+  if (pathRoute) {
+    return pathRoute;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+
+  return params.get("poId") ? createAppRoute("Purchase Orders") : null;
+}
+
+function getPathForRoute(route) {
+  if (route?.page === "vehicleFile" && route.vehicleId) {
+    return `/vehicles/${encodeURIComponent(route.vehicleId)}/file`;
+  }
+
+  if (route?.page === "vehicleDetail" && route.vehicleId) {
+    return `/vehicles/${encodeURIComponent(route.vehicleId)}`;
+  }
+
+  return `/${appRoutePaths[route?.page] ?? appRoutePaths[FALLBACK_PAGE]}`;
+}
+
+function getSearchForRoute(route, routeSearchParams = null) {
+  if (route?.page !== "Purchase Orders" || typeof window === "undefined") {
+    return "";
+  }
+
+  const currentParams = new URLSearchParams(window.location.search);
+  const poId = routeSearchParams?.poId ?? currentParams.get("poId");
+  const itemId = routeSearchParams?.itemId ?? currentParams.get("itemId");
+
+  if (!poId) {
+    return "";
+  }
+
+  const nextParams = new URLSearchParams();
+  nextParams.set("poId", poId);
+
+  if (itemId) {
+    nextParams.set("itemId", itemId);
+  }
+
+  return `?${nextParams.toString()}`;
+}
+
+function createBrowserUrlForRoute(route, routeSearchParams = null) {
+  const search = getSearchForRoute(route, routeSearchParams);
+
+  return `/${search}#${getPathForRoute(route)}`;
 }
 
 function getRouteFromHistoryState(state) {
@@ -55,15 +164,11 @@ function getInitialAppRoute() {
     return createAppRoute(FALLBACK_PAGE);
   }
 
-  return getRouteFromHistoryState(window.history.state) ?? createAppRoute(FALLBACK_PAGE);
+  return getRouteFromUrl() ?? createAppRoute(FALLBACK_PAGE);
 }
 
 function getInitialHistoryDepth() {
-  if (typeof window === "undefined") {
-    return 0;
-  }
-
-  return getHistoryDepth(window.history.state);
+  return 0;
 }
 
 function areRoutesEqual(firstRoute, secondRoute) {
@@ -73,7 +178,12 @@ function areRoutesEqual(firstRoute, secondRoute) {
   );
 }
 
-function writeBrowserHistoryRoute(route, depth, method = "pushState") {
+function writeBrowserHistoryRoute(
+  route,
+  depth,
+  method = "pushState",
+  routeSearchParams = null
+) {
   if (typeof window === "undefined") {
     return;
   }
@@ -85,8 +195,22 @@ function writeBrowserHistoryRoute(route, depth, method = "pushState") {
       [APP_HISTORY_DEPTH_KEY]: depth,
     },
     "",
-    window.location.href
+    createBrowserUrlForRoute(route, routeSearchParams)
   );
+}
+
+function withTimeout(promise, timeoutMs, message) {
+  let timeoutId;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(new Error(message));
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    window.clearTimeout(timeoutId);
+  });
 }
 
 const pageDetails = {
@@ -183,6 +307,41 @@ function AccountPendingApproval({ isLoggingOut, onLogout }) {
   );
 }
 
+function ProfileLoadError({ isLoggingOut, onLogout, onRetry }) {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-4">
+      <section className="w-full max-w-md rounded-lg border border-amber-200 bg-white p-8 text-center shadow-sm">
+        <p className="text-sm font-semibold uppercase tracking-wide text-amber-700">
+          Profile Unavailable
+        </p>
+        <h1 className="mt-3 text-2xl font-bold text-zinc-950">
+          Unable to load your profile.
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-zinc-600">
+          Please retry. If this keeps happening, log out and sign in again.
+        </p>
+        <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+          <button
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+            onClick={onRetry}
+            type="button"
+          >
+            Retry
+          </button>
+          <button
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isLoggingOut}
+            onClick={onLogout}
+            type="button"
+          >
+            {isLoggingOut ? "Logging Out..." : "Logout"}
+          </button>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function App() {
   const [currentRoute, setCurrentRoute] = useState(() => getInitialAppRoute());
   const [session, setSession] = useState(null);
@@ -193,10 +352,14 @@ function App() {
   const [profileError, setProfileError] = useState("");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [purchaseOrderFocus, setPurchaseOrderFocus] = useState(null);
+  const [profileRetryKey, setProfileRetryKey] = useState(0);
   const [appHistoryDepth, setAppHistoryDepth] = useState(() =>
     getInitialHistoryDepth()
   );
   const hasInitializedHistoryRef = useRef(false);
+  const initialRouteWasExplicitRef = useRef(
+    typeof window !== "undefined" && Boolean(getRouteFromUrl())
+  );
   const currentRouteRef = useRef(currentRoute);
   const appHistoryDepthRef = useRef(appHistoryDepth);
   const activePage = currentRoute.page;
@@ -231,21 +394,28 @@ function App() {
       setAuthError("");
 
       try {
-        const { data, error } = await supabase.auth.getSession();
+        const { data, error } = await withTimeout(
+          supabase.auth.getSession(),
+          PROFILE_LOAD_TIMEOUT_MS,
+          "Unable to check your session."
+        );
 
         if (!isMounted) {
           return;
         }
 
         if (error) {
-          setAuthError(error.message);
+          setAuthError("Unable to check your session.");
           setSession(null);
         } else {
           setSession(data.session ?? null);
         }
       } catch (error) {
         if (isMounted) {
-          setAuthError(error.message ?? "Unable to check your session.");
+          if (import.meta.env.DEV) {
+            console.error("Unable to check session:", error);
+          }
+          setAuthError("Unable to check your session.");
           setSession(null);
         }
       } finally {
@@ -267,6 +437,7 @@ function App() {
         setCurrentRoute(fallbackRoute);
         setAppHistoryDepth(0);
         hasInitializedHistoryRef.current = false;
+        initialRouteWasExplicitRef.current = false;
       }
 
       setSession(nextSession);
@@ -294,15 +465,22 @@ function App() {
       setProfileError("");
 
       try {
-        const { data, error } = await fetchCurrentUserProfile(session.user.id);
+        const { data, error } = await withTimeout(
+          fetchCurrentUserProfile(session.user.id),
+          PROFILE_LOAD_TIMEOUT_MS,
+          "Unable to load profile."
+        );
 
         if (!isMounted) {
           return;
         }
 
         if (error) {
+          if (import.meta.env.DEV) {
+            console.error("Unable to load profile:", error);
+          }
           setCurrentProfile(null);
-          setProfileError(error.message);
+          setProfileError("Unable to load profile.");
           return;
         }
 
@@ -321,6 +499,7 @@ function App() {
             getDefaultLandingPageForRole(data.role)
           );
           const isDefaultRootRoute =
+            !initialRouteWasExplicitRef.current &&
             depth === 0 &&
             route.page === FALLBACK_PAGE &&
             !route.vehicleId;
@@ -336,8 +515,11 @@ function App() {
         }
       } catch (error) {
         if (isMounted) {
+          if (import.meta.env.DEV) {
+            console.error("Unable to load profile:", error);
+          }
           setCurrentProfile(null);
-          setProfileError(error.message ?? "Unable to load your profile.");
+          setProfileError("Unable to load profile.");
         }
       } finally {
         if (isMounted) {
@@ -351,7 +533,7 @@ function App() {
     return () => {
       isMounted = false;
     };
-  }, [session?.user?.id]);
+  }, [profileRetryKey, session?.user?.id]);
 
   useEffect(() => {
     if (!session || hasInitializedHistoryRef.current) {
@@ -409,7 +591,7 @@ function App() {
 
   function handleViewPurchaseOrders(target = null) {
     setPurchaseOrderFocus(target?.poId ? target : null);
-    navigateToRoute("Purchase Orders");
+    navigateToRoute("Purchase Orders", null, target?.poId ? target : null);
   }
 
   function handleSelectVehicle(vehicleId) {
@@ -440,18 +622,31 @@ function App() {
     return createAppRoute(pageName, vehicleId);
   }
 
-  function navigateToRoute(pageName, vehicleId = null) {
+  function navigateToRoute(pageName, vehicleId = null, routeSearchParams = null) {
     const nextRoute = normalizeAppRoute(pageName, vehicleId);
 
     if (areRoutesEqual(currentRoute, nextRoute)) {
+      if (routeSearchParams) {
+        writeBrowserHistoryRoute(
+          nextRoute,
+          appHistoryDepth,
+          "replaceState",
+          routeSearchParams
+        );
+      }
       return;
     }
 
     const nextDepth = appHistoryDepth + 1;
 
-    writeBrowserHistoryRoute(nextRoute, nextDepth);
+    writeBrowserHistoryRoute(nextRoute, nextDepth, "pushState", routeSearchParams);
     setCurrentRoute(nextRoute);
     setAppHistoryDepth(nextDepth);
+  }
+
+  function handleRetryProfile() {
+    setProfileError("");
+    setProfileRetryKey((currentKey) => currentKey + 1);
   }
 
   function navigateToFallback() {
@@ -652,6 +847,16 @@ function App() {
     );
   }
 
+  if (!currentProfile && profileError) {
+    return (
+      <ProfileLoadError
+        isLoggingOut={isLoggingOut}
+        onLogout={handleLogout}
+        onRetry={handleRetryProfile}
+      />
+    );
+  }
+
   if (!currentProfile || currentProfile.is_active === false) {
     return (
       <AccountPendingApproval
@@ -687,7 +892,14 @@ function App() {
           {profileError}
         </div>
       )}
-      {renderActivePage()}
+      <AppErrorBoundary
+        canViewDashboard={canViewDashboard}
+        onGoDashboard={() => navigateToRoute("Dashboard")}
+        onGoVehicles={() => navigateToRoute("Vehicles")}
+        resetKey={`${effectiveActivePage}:${selectedVehicleId ?? ""}`}
+      >
+        {renderActivePage()}
+      </AppErrorBoundary>
     </AppLayout>
   );
 }
