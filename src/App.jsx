@@ -41,6 +41,10 @@ function getDefaultLandingPageForRole(role) {
   return role === "technician" ? "My Work" : FALLBACK_PAGE;
 }
 
+function getMyWorkFallbackPageForRole(role) {
+  return hasPermission(role, "dashboard:view") ? "Dashboard" : FALLBACK_PAGE;
+}
+
 function createAppRoute(page, vehicleId = null) {
   return {
     page,
@@ -367,8 +371,11 @@ function App() {
   const canViewDashboard = hasPermission(currentProfile?.role, "dashboard:view");
   const canManageUsers = hasPermission(currentProfile?.role, "user:manage");
   const defaultLandingPage = getDefaultLandingPageForRole(currentProfile?.role);
+  const myWorkFallbackPage = getMyWorkFallbackPageForRole(currentProfile?.role);
   const effectiveActivePage =
-    activePage === "Dashboard" && !canViewDashboard
+    activePage === "My Work" && currentProfile?.role !== "technician"
+      ? myWorkFallbackPage
+      : activePage === "Dashboard" && !canViewDashboard
       ? defaultLandingPage
       : activePage === "Team" && !canManageUsers
         ? defaultLandingPage
@@ -495,9 +502,24 @@ function App() {
         if (data.is_active === true) {
           const route = currentRouteRef.current;
           const depth = appHistoryDepthRef.current;
+          const myWorkFallbackRoute = createAppRoute(
+            getMyWorkFallbackPageForRole(data.role)
+          );
           const landingRoute = createAppRoute(
             getDefaultLandingPageForRole(data.role)
           );
+
+          if (
+            route.page === "My Work" &&
+            data.role !== "technician" &&
+            !areRoutesEqual(route, myWorkFallbackRoute)
+          ) {
+            writeBrowserHistoryRoute(myWorkFallbackRoute, 0, "replaceState");
+            setCurrentRoute(myWorkFallbackRoute);
+            setAppHistoryDepth(0);
+            return;
+          }
+
           const isDefaultRootRoute =
             !initialRouteWasExplicitRef.current &&
             depth === 0 &&
@@ -558,6 +580,10 @@ function App() {
         return createAppRoute(defaultLandingPage);
       }
 
+      if (route.page === "My Work" && currentProfile?.role !== "technician") {
+        return createAppRoute(myWorkFallbackPage);
+      }
+
       if (route.page === "Team" && !canManageUsers) {
         return createAppRoute(defaultLandingPage);
       }
@@ -583,7 +609,13 @@ function App() {
     return () => {
       window.removeEventListener("popstate", handlePopState);
     };
-  }, [canManageUsers, canViewDashboard, defaultLandingPage]);
+  }, [
+    canManageUsers,
+    canViewDashboard,
+    currentProfile?.role,
+    defaultLandingPage,
+    myWorkFallbackPage,
+  ]);
 
   function handlePageChange(pageName) {
     navigateToRoute(pageName);
@@ -609,6 +641,10 @@ function App() {
   function normalizeAppRoute(pageName, vehicleId = null) {
     if (pageName === "Dashboard" && !canViewDashboard) {
       return createAppRoute(defaultLandingPage);
+    }
+
+    if (pageName === "My Work" && currentProfile?.role !== "technician") {
+      return createAppRoute(myWorkFallbackPage);
     }
 
     if (pageName === "Team" && !canManageUsers) {
@@ -717,6 +753,7 @@ function App() {
           currentProfile={currentProfile}
           onNavigate={handlePageChange}
           onSelectVehicle={handleSelectVehicle}
+          onViewPurchaseOrders={handleViewPurchaseOrders}
         />
       );
     }

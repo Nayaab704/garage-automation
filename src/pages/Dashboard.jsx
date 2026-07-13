@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import AppIcon from "../components/ui/AppIcon";
 import {
   getPartQueueCounts,
-  isPartIssue,
   isPartNeedsPo,
   isPartPendingReview,
 } from "../lib/partWorkflowUtils";
@@ -60,8 +59,8 @@ const purchaseOrderStatusLabels = {
 const openPurchaseOrderStatuses = ["ordered", "partial_received"];
 
 const dashboardSections = [
-  { key: "overview", label: "Overview" },
   { key: "attention", label: "Attention" },
+  { key: "operations", label: "Operations" },
   { key: "finance", label: "Finance" },
 ];
 
@@ -109,6 +108,35 @@ function formatDate(value) {
     month: "short",
     year: "numeric",
   });
+}
+
+function getAgeInDays(value) {
+  if (!value) {
+    return 0;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24))
+  );
+}
+
+function getStaleLabel(value, thresholdDays) {
+  const ageInDays = getAgeInDays(value);
+
+  if (ageInDays < thresholdDays) {
+    return "";
+  }
+
+  return ageInDays >= thresholdDays + 7
+    ? "Stuck"
+    : `${ageInDays}d waiting`;
 }
 
 function formatLabel(value, labels = {}) {
@@ -359,8 +387,8 @@ function getAttentionHelperText(metricKey) {
     parts_need_po: "Create purchase orders for pending parts.",
     pending_review: "Review requested parts before ordering.",
     prebooked_vehicles: "Reservations attached to inventory vehicles.",
+    quality_check: "Vehicles waiting on final admin review.",
     ready_for_sale: "Vehicles marked ready after final checks.",
-    rejected_parts: "Resolve rejected or unavailable part requests.",
     third_party_out: "Follow up on outside repair work.",
     urgent_repairs: "Open high-priority work orders.",
     waiting_parts: "Work orders blocked by parts activity.",
@@ -382,6 +410,7 @@ function getAttentionMetrics({
   const metrics = [
     {
       actionPage: "Parts",
+      actionText: "Create PO",
       count: partQueueCounts.needs_po ?? 0,
       icon: "parts",
       key: "parts_need_po",
@@ -390,6 +419,7 @@ function getAttentionMetrics({
     },
     {
       actionPage: "Purchase Orders",
+      actionText: "Review POs",
       count: purchaseOrders.filter((purchaseOrder) =>
         openPurchaseOrderStatuses.includes(purchaseOrder.status)
       ).length,
@@ -400,6 +430,7 @@ function getAttentionMetrics({
     },
     {
       actionPage: "Repairs",
+      actionText: "View Waiting",
       count: repairQueueCounts.waiting_parts ?? 0,
       icon: "clock",
       key: "waiting_parts",
@@ -408,6 +439,7 @@ function getAttentionMetrics({
     },
     {
       actionPage: "Repairs",
+      actionText: "View Urgent",
       count: repairJobs.filter((repairJob) => isRepairJobUrgent(repairJob))
         .length,
       icon: "warning",
@@ -417,6 +449,7 @@ function getAttentionMetrics({
     },
     {
       actionPage: "Parts",
+      actionText: "Review",
       count: partRequests.filter((partRequest) =>
         isPartPendingReview(partRequest)
       ).length,
@@ -426,16 +459,8 @@ function getAttentionMetrics({
       tone: "amber",
     },
     {
-      actionPage: "Parts",
-      count: partRequests.filter((partRequest) => isPartIssue(partRequest))
-        .length,
-      icon: "warning",
-      key: "rejected_parts",
-      label: "Rejected / Issue Parts",
-      tone: "red",
-    },
-    {
       actionPage: "Repairs",
+      actionText: "Review",
       count: repairJobs.filter((repairJob) => repairJob.status === "blocked")
         .length,
       icon: "warning",
@@ -445,6 +470,7 @@ function getAttentionMetrics({
     },
     {
       actionPage: "Repairs",
+      actionText: "Follow Up",
       count: thirdPartyRepairs.filter(isThirdPartyRepairActive).length,
       icon: "third-party",
       key: "third_party_out",
@@ -453,14 +479,26 @@ function getAttentionMetrics({
     },
     {
       actionPage: "Vehicles",
+      actionText: "View",
       count: prebookingBadges.length,
       icon: "dollar",
       key: "prebooked_vehicles",
       label: "Prebooked Vehicles",
-      tone: "blue",
+      tone: "purple",
     },
     {
       actionPage: "Vehicles",
+      actionText: "Review",
+      count: vehicles.filter((vehicle) => vehicle.status === "quality_check")
+        .length,
+      icon: "status",
+      key: "quality_check",
+      label: "Quality Check Vehicles",
+      tone: "purple",
+    },
+    {
+      actionPage: "Vehicles",
+      actionText: "View / Mark Sold",
       count: vehicles.filter((vehicle) => vehicle.status === "ready_for_sale")
         .length,
       icon: "check",
@@ -480,7 +518,9 @@ function buildAttentionQueue({
   partRequests,
   purchaseOrders,
   repairJobs,
+  soldVehicleIds = new Set(),
   thirdPartyRepairs,
+  vehicles = [],
   vehiclesById,
 }) {
   const queueItems = [];
@@ -519,6 +559,8 @@ function buildAttentionQueue({
     }
 
     if (isRepairJobWaitingParts(repairJob)) {
+      const staleLabel = getStaleLabel(repairJob.created_at, 7);
+
       queueItems.push({
         actionPage: "Repairs",
         actionText: "View Repairs",
@@ -527,6 +569,7 @@ function buildAttentionQueue({
         reason: "Work order is waiting on parts",
         status: repairJob.status,
         statusLabels: workOrderStatusLabels,
+        staleLabel,
         title: repairJob.title || "Untitled work order",
         type: "Waiting Parts",
         vehicle: vehiclesById[repairJob.vehicle_id],
@@ -539,7 +582,7 @@ function buildAttentionQueue({
     if (isPartNeedsPo(partRequest)) {
       queueItems.push({
         actionPage: "Parts",
-        actionText: "View Parts",
+        actionText: "Create PO",
         createdAt: partRequest.created_at,
         priority: 85,
         reason: "Part is ready for purchase order",
@@ -555,7 +598,7 @@ function buildAttentionQueue({
     if (partRequest.approval_status === "pending") {
       queueItems.push({
         actionPage: "Parts",
-        actionText: "View Parts",
+        actionText: "Review",
         createdAt: partRequest.created_at,
         priority: 80,
         reason: "Part is waiting for admin review",
@@ -568,21 +611,6 @@ function buildAttentionQueue({
       });
     }
 
-    if (partRequest.approval_status === "rejected") {
-      queueItems.push({
-        actionPage: "Parts",
-        actionText: "View Parts",
-        createdAt: partRequest.created_at,
-        priority: 95,
-        reason: "Part review was rejected or flagged",
-        status: partRequest.approval_status,
-        statusLabels: approvalStatusLabels,
-        title: partRequest.part_name || "Unnamed part",
-        type: "Issue Part",
-        vehicle: vehiclesById[partRequest.vehicle_id],
-        vehicleId: partRequest.vehicle_id,
-      });
-    }
   });
 
   purchaseOrders
@@ -590,23 +618,63 @@ function buildAttentionQueue({
       openPurchaseOrderStatuses.includes(purchaseOrder.status)
     )
     .forEach((purchaseOrder) => {
+      const orderDate = purchaseOrder.ordered_at ?? purchaseOrder.created_at;
+      const staleLabel = getStaleLabel(orderDate, 7);
+
       queueItems.push({
         actionPage: "Purchase Orders",
-        actionText: "View Purchase Orders",
-        createdAt: purchaseOrder.ordered_at ?? purchaseOrder.created_at,
+        actionText: "Review PO",
+        createdAt: orderDate,
         priority: purchaseOrder.status === "partial_received" ? 70 : 60,
+        purchaseOrderId: purchaseOrder.id,
         reason:
           purchaseOrder.status === "partial_received"
             ? "Purchase order is partially received"
             : "Purchase order is still open",
         status: purchaseOrder.status,
         statusLabels: purchaseOrderStatusLabels,
+        staleLabel,
         title: "Purchase order",
         type: "Purchase Order",
         vehicle: vehiclesById[purchaseOrder.vehicle_id],
         vehicleId: purchaseOrder.vehicle_id,
       });
     });
+
+  vehicles.forEach((vehicle) => {
+    if (vehicle.status === "quality_check") {
+      queueItems.push({
+        actionText: "Review Vehicle",
+        createdAt: vehicle.created_at,
+        priority: 68,
+        reason: "Vehicle is waiting on quality check review",
+        status: vehicle.status,
+        statusLabels: { quality_check: "Quality Check" },
+        title: getVehicleName(vehicle) || "Vehicle",
+        type: "Quality Check",
+        vehicle,
+        vehicleId: vehicle.id,
+      });
+    }
+
+    if (
+      vehicle.status === "ready_for_sale" &&
+      !isSoldVehicle(vehicle, soldVehicleIds)
+    ) {
+      queueItems.push({
+        actionText: "Open Vehicle",
+        createdAt: vehicle.created_at,
+        priority: 66,
+        reason: "Vehicle is ready to sell or mark sold",
+        status: vehicle.status,
+        statusLabels: { ready_for_sale: "Ready for Sale" },
+        title: getVehicleName(vehicle) || "Vehicle",
+        type: "Ready for Sale",
+        vehicle,
+        vehicleId: vehicle.id,
+      });
+    }
+  });
 
   thirdPartyRepairs
     .filter(isThirdPartyRepairActive)
@@ -655,6 +723,8 @@ async function fetchDashboardData() {
     thirdPartyRepairsResponse,
     prebookingBadgesResponse,
     activityLogsResponse,
+    laborLogsResponse,
+    profilesResponse,
   ] = await Promise.all([
     supabase
       .from("vehicle_investment_summary")
@@ -662,7 +732,9 @@ async function fetchDashboardData() {
       .order("stock_number", { ascending: true }),
     supabase
       .from("vehicles")
-      .select("id, stock_number, year, make, model, status, sale_status")
+      .select(
+        "id, stock_number, year, make, model, status, sale_status, created_at"
+      )
       .order("stock_number", { ascending: true }),
     supabase
       .from("sales")
@@ -701,6 +773,16 @@ async function fetchDashboardData() {
       .select("id, vehicle_id, action, details, created_at")
       .order("created_at", { ascending: false })
       .limit(10),
+    supabase
+      .from("labor_logs")
+      .select("id, vehicle_id, technician_id, hours, created_at")
+      .gte("created_at", new Date(new Date().setHours(0, 0, 0, 0)).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(50),
+    supabase
+      .from("profiles")
+      .select("id, full_name, email, role, hourly_rate, is_active")
+      .order("full_name", { ascending: true }),
   ]);
 
   const firstRequiredError =
@@ -743,7 +825,9 @@ async function fetchDashboardData() {
         ? []
         : activityLogsResponse.data ?? [],
       investmentSummaries: summariesResponse.data ?? [],
+      laborLogs: laborLogsResponse.error ? [] : laborLogsResponse.data ?? [],
       partRequests,
+      profiles: profilesResponse.error ? [] : profilesResponse.data ?? [],
       purchaseOrders,
       prebookingBadges: prebookingBadgesResponse.data ?? [],
       repairJobs,
@@ -772,6 +856,10 @@ const toneClassNames = {
   green: {
     badge: "border-emerald-200 bg-emerald-50 text-emerald-700",
     icon: "bg-emerald-50 text-emerald-700",
+  },
+  purple: {
+    badge: "border-violet-200 bg-violet-50 text-violet-700",
+    icon: "bg-violet-50 text-violet-700",
   },
   red: {
     badge: "border-red-200 bg-red-50 text-red-700",
@@ -833,13 +921,13 @@ function DashboardQuickActions({ canStartIntake, onNavigate }) {
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <div className="min-w-0">
           <p className="text-[0.68rem] font-black uppercase text-emerald-700">
-            Admin Workspace
+            Admin Command Center
           </p>
           <h1 className="mt-0.5 truncate text-xl font-black text-slate-950 sm:text-2xl">
             Dashboard
           </h1>
           <p className="mt-1 line-clamp-2 text-sm text-slate-500">
-            Track inventory, work, purchasing, and financial momentum.
+            See what needs action, what changed, and where inventory stands.
           </p>
         </div>
 
@@ -1008,8 +1096,8 @@ function DashboardAttentionList({ metrics, onNavigate }) {
                 >
                   {formatNumber(metric.count)}
                 </span>
-                <span className="hidden text-xs font-bold text-slate-400 sm:inline">
-                  Open
+                <span className="hidden text-xs font-bold text-slate-500 sm:inline">
+                  {metric.actionText ?? "Open"}
                 </span>
                 <AppIcon
                   className="text-slate-400 sm:hidden"
@@ -1030,6 +1118,7 @@ function DashboardAttentionPanel({
   attentionQueue,
   onNavigate,
   onSelectVehicle,
+  onViewPurchaseOrders,
 }) {
   return (
     <div className="grid min-w-0 gap-3 xl:grid-cols-[0.92fr_1.08fr]">
@@ -1038,6 +1127,7 @@ function DashboardAttentionPanel({
         items={attentionQueue}
         onNavigate={onNavigate}
         onSelectVehicle={onSelectVehicle}
+        onViewPurchaseOrders={onViewPurchaseOrders}
       />
     </div>
   );
@@ -1045,16 +1135,19 @@ function DashboardAttentionPanel({
 
 function DashboardOverviewPanel({
   activeVehiclesCount,
+  laborLogs,
   openPurchaseOrderCount,
   openRepairJobsCount,
   partQueueCounts,
+  profiles,
   qualityCheckCount,
   readyForSaleCount,
   recentActivityLogs,
+  repairQueueCounts,
   vehiclesById,
   onNavigate,
 }) {
-  const overviewRows = [
+  const operationsRows = [
     {
       helperText: "Vehicles not sold or archived",
       icon: "car",
@@ -1088,6 +1181,14 @@ function DashboardOverviewPanel({
       value: formatNumber(openPurchaseOrderCount),
     },
     {
+      helperText: "Work blocked by part movement",
+      icon: "clock",
+      label: "Waiting Parts",
+      page: "Repairs",
+      tone: "amber",
+      value: formatNumber(repairQueueCounts.waiting_parts ?? 0),
+    },
+    {
       helperText: "Final review before sale",
       icon: "status",
       label: "Quality Check",
@@ -1109,7 +1210,7 @@ function DashboardOverviewPanel({
     <div className="grid min-w-0 gap-3 xl:grid-cols-[0.9fr_1.1fr]">
       <DashboardSection title="Operations Snapshot">
         <div className="divide-y divide-slate-100">
-          {overviewRows.map((row) => (
+          {operationsRows.map((row) => (
             <DashboardActionRow
               helperText={row.helperText}
               icon={row.icon}
@@ -1123,10 +1224,17 @@ function DashboardOverviewPanel({
         </div>
       </DashboardSection>
 
-      <RecentActivity
-        activityLogs={recentActivityLogs}
-        vehiclesById={vehiclesById}
-      />
+      <div className="grid min-w-0 gap-3">
+        <RecentActivity
+          activityLogs={recentActivityLogs}
+          vehiclesById={vehiclesById}
+        />
+        <TeamActivitySection
+          laborLogs={laborLogs}
+          profiles={profiles}
+          vehiclesById={vehiclesById}
+        />
+      </div>
     </div>
   );
 }
@@ -1136,6 +1244,8 @@ function DashboardFinancePanel({
   activeVehiclesCount,
   averageActiveInvestment,
   estimatedActiveProfit,
+  prebookedVehiclesCount,
+  readyForSaleCount,
   soldRevenue,
   soldVehiclesCount,
 }) {
@@ -1197,6 +1307,20 @@ function DashboardFinancePanel({
             tone={estimatedActiveProfit < 0 ? "red" : "green"}
             value={formatCurrency(estimatedActiveProfit)}
           />
+          <DashboardActionRow
+            helperText="Available to sell"
+            icon="check"
+            label="Ready for Sale"
+            tone="green"
+            value={formatNumber(readyForSaleCount)}
+          />
+          <DashboardActionRow
+            helperText="Reservations attached"
+            icon="dollar"
+            label="Prebooked Vehicles"
+            tone="purple"
+            value={formatNumber(prebookedVehiclesCount)}
+          />
         </div>
       </DashboardSection>
     </div>
@@ -1257,19 +1381,45 @@ function getQueueTone(item) {
     return "red";
   }
 
-  if (item.status === "pending" || item.status === "waiting_parts") {
+  if (
+    item.status === "pending" ||
+    item.status === "waiting_parts" ||
+    item.staleLabel
+  ) {
     return "amber";
   }
 
-  if (item.status === "ordered" || item.status === "in_progress") {
+  if (
+    item.status === "ordered" ||
+    item.status === "in_progress" ||
+    item.status === "partial_received"
+  ) {
     return "blue";
+  }
+
+  if (item.status === "ready_for_sale") {
+    return "green";
+  }
+
+  if (item.status === "quality_check") {
+    return "purple";
   }
 
   return "gray";
 }
 
-function AttentionQueue({ items, onNavigate, onSelectVehicle }) {
+function AttentionQueue({
+  items,
+  onNavigate,
+  onSelectVehicle,
+  onViewPurchaseOrders,
+}) {
   function handleAction(item) {
+    if (item.purchaseOrderId) {
+      onViewPurchaseOrders?.({ poId: item.purchaseOrderId });
+      return;
+    }
+
     if (item.actionPage) {
       onNavigate?.(item.actionPage);
       return;
@@ -1312,6 +1462,11 @@ function AttentionQueue({ items, onNavigate, onSelectVehicle }) {
                   <Badge className={`${genericBadgeClassName(item.status)} hidden sm:inline-flex`}>
                     {formatLabel(item.status, item.statusLabels)}
                   </Badge>
+                  {item.staleLabel && (
+                    <Badge className="hidden bg-amber-50 text-amber-700 ring-amber-200 sm:inline-flex">
+                      {item.staleLabel}
+                    </Badge>
+                  )}
                 </div>
                 <p className="mt-0.5 truncate text-xs text-slate-500">
                   {item.type} - {getVehicleLabel(item.vehicle)}
@@ -1321,11 +1476,16 @@ function AttentionQueue({ items, onNavigate, onSelectVehicle }) {
                 </p>
               </div>
 
-              <AppIcon
-                className="shrink-0 text-slate-400"
-                name="chevron-right"
-                size={18}
-              />
+              <span className="flex shrink-0 items-center gap-1.5">
+                <span className="hidden text-xs font-bold text-slate-500 sm:inline">
+                  {item.actionText ?? "Open"}
+                </span>
+                <AppIcon
+                  className="text-slate-400"
+                  name="chevron-right"
+                  size={18}
+                />
+              </span>
             </button>
           ))}
         </div>
@@ -1379,11 +1539,152 @@ function RecentActivity({ activityLogs, vehiclesById }) {
   );
 }
 
-function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
+function getProfileDisplayName(profile) {
+  return profile?.full_name || profile?.email || "Team member";
+}
+
+function buildTeamTodayRows(laborLogs, profilesById) {
+  const rowsByTechnician = laborLogs.reduce((rows, laborLog) => {
+    const technicianId = laborLog.technician_id || "unknown";
+    const currentRow = rows[technicianId] ?? {
+      hours: 0,
+      profile: profilesById[technicianId] ?? null,
+      vehicleIds: new Set(),
+    };
+
+    currentRow.hours += numberOrZero(laborLog.hours);
+
+    if (laborLog.vehicle_id) {
+      currentRow.vehicleIds.add(laborLog.vehicle_id);
+    }
+
+    rows[technicianId] = currentRow;
+    return rows;
+  }, {});
+
+  return Object.entries(rowsByTechnician)
+    .map(([technicianId, row]) => ({
+      hours: row.hours,
+      id: technicianId,
+      name: getProfileDisplayName(row.profile),
+      vehicleCount: row.vehicleIds.size,
+    }))
+    .sort((firstRow, secondRow) => secondRow.hours - firstRow.hours)
+    .slice(0, 4);
+}
+
+function TeamActivitySection({ laborLogs, profiles, vehiclesById }) {
+  const profilesById = Object.fromEntries(
+    profiles.map((profile) => [profile.id, profile])
+  );
+  const teamRows = buildTeamTodayRows(laborLogs, profilesById);
+  const totalHours = laborLogs.reduce(
+    (total, laborLog) => total + numberOrZero(laborLog.hours),
+    0
+  );
+  const missingRateCount = profiles.filter(
+    (profile) =>
+      profile.is_active &&
+      profile.role === "technician" &&
+      numberOrZero(profile.hourly_rate) <= 0
+  ).length;
+  const recentLaborLogs = laborLogs.slice(0, 3);
+
+  return (
+    <DashboardSection title="Team Today">
+      <div className="grid grid-cols-2 gap-2 p-3">
+        <div className="rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+          <p className="text-[0.65rem] font-black uppercase text-slate-500">
+            Labor Hours
+          </p>
+          <p className="mt-0.5 text-lg font-black tabular-nums text-slate-950">
+            {formatNumber(totalHours)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+          <p className="text-[0.65rem] font-black uppercase text-slate-500">
+            Active Techs
+          </p>
+          <p className="mt-0.5 text-lg font-black tabular-nums text-slate-950">
+            {formatNumber(teamRows.length)}
+          </p>
+        </div>
+      </div>
+
+      {missingRateCount > 0 && (
+        <div className="mx-3 mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+          {formatNumber(missingRateCount)} technician
+          {missingRateCount === 1 ? "" : "s"} need hourly rate setup.
+        </div>
+      )}
+
+      {teamRows.length === 0 ? (
+        <div className="mx-3 mb-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-500">
+          No labor logged today.
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {teamRows.map((row) => (
+            <div
+              className="flex items-center justify-between gap-3 px-3 py-2.5 sm:px-4"
+              key={row.id}
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-slate-950">
+                  {row.name}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {formatNumber(row.vehicleCount)} vehicle
+                  {row.vehicleCount === 1 ? "" : "s"}
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-black tabular-nums text-blue-700 ring-1 ring-inset ring-blue-200">
+                {formatNumber(row.hours)}h
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {recentLaborLogs.length > 0 && (
+        <div className="border-t border-slate-100 px-3 py-2.5 sm:px-4">
+          <p className="mb-2 text-[0.65rem] font-black uppercase text-slate-400">
+            Recent Labor
+          </p>
+          <div className="space-y-1.5">
+            {recentLaborLogs.map((laborLog) => {
+              const profile = profilesById[laborLog.technician_id];
+
+              return (
+                <p
+                  className="truncate text-xs font-semibold text-slate-600"
+                  key={laborLog.id}
+                >
+                  {getProfileDisplayName(profile)} -{" "}
+                  {formatNumber(laborLog.hours)}h -{" "}
+                  {getVehicleLabel(vehiclesById[laborLog.vehicle_id])}
+                </p>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </DashboardSection>
+  );
+}
+
+function Dashboard({
+  currentProfile,
+  onNavigate,
+  onSelectVehicle,
+  onViewPurchaseOrders,
+}) {
   const [activityLogs, setActivityLogs] = useState([]);
   const [investmentSummaries, setInvestmentSummaries] = useState([]);
+  const [laborLogs, setLaborLogs] = useState([]);
   const [partRequests, setPartRequests] = useState([]);
   const [prebookingBadges, setPrebookingBadges] = useState([]);
+  const [profiles, setProfiles] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [repairJobs, setRepairJobs] = useState([]);
   const [returnDeductionsByVehicleId, setReturnDeductionsByVehicleId] =
@@ -1421,8 +1722,10 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
           setErrorMessage("Could not refresh dashboard.");
           setActivityLogs([]);
           setInvestmentSummaries([]);
+          setLaborLogs([]);
           setPartRequests([]);
           setPrebookingBadges([]);
+          setProfiles([]);
           setPurchaseOrders([]);
           setRepairJobs([]);
           setReturnDeductionsByVehicleId({});
@@ -1434,8 +1737,10 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
 
         setActivityLogs(data.activityLogs);
         setInvestmentSummaries(data.investmentSummaries);
+        setLaborLogs(data.laborLogs);
         setPartRequests(data.partRequests);
         setPrebookingBadges(data.prebookingBadges);
+        setProfiles(data.profiles);
         setPurchaseOrders(data.purchaseOrders);
         setRepairJobs(data.repairJobs);
         setReturnDeductionsByVehicleId(data.returnDeductionsByVehicleId);
@@ -1448,8 +1753,10 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
           setErrorMessage("Could not refresh dashboard.");
           setActivityLogs([]);
           setInvestmentSummaries([]);
+          setLaborLogs([]);
           setPartRequests([]);
           setPrebookingBadges([]);
+          setProfiles([]);
           setPurchaseOrders([]);
           setRepairJobs([]);
           setReturnDeductionsByVehicleId({});
@@ -1536,7 +1843,9 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
     partRequests,
     purchaseOrders,
     repairJobs,
+    soldVehicleIds,
     thirdPartyRepairs,
+    vehicles,
     vehiclesById,
   });
   const totalAttentionCount = attentionMetrics.reduce(
@@ -1621,15 +1930,18 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
             onChange={setActiveDashboardSection}
           />
 
-          {activeDashboardSection === "overview" && (
+          {activeDashboardSection === "operations" && (
             <DashboardOverviewPanel
               activeVehiclesCount={activeVehicles.length}
+              laborLogs={laborLogs}
               openPurchaseOrderCount={openPurchaseOrderCount}
               openRepairJobsCount={openRepairJobsCount}
               partQueueCounts={partQueueCounts}
+              profiles={profiles}
               qualityCheckCount={qualityCheckCount}
               readyForSaleCount={readyForSaleCount}
               recentActivityLogs={activityLogs}
+              repairQueueCounts={repairQueueCounts}
               vehiclesById={vehiclesById}
               onNavigate={onNavigate}
             />
@@ -1641,6 +1953,7 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
               attentionQueue={attentionQueue}
               onNavigate={onNavigate}
               onSelectVehicle={onSelectVehicle}
+              onViewPurchaseOrders={onViewPurchaseOrders}
             />
           )}
 
@@ -1650,6 +1963,8 @@ function Dashboard({ currentProfile, onNavigate, onSelectVehicle }) {
               activeVehiclesCount={activeVehicles.length}
               averageActiveInvestment={averageActiveInvestment}
               estimatedActiveProfit={estimatedActiveProfit}
+              prebookedVehiclesCount={prebookingBadges.length}
+              readyForSaleCount={readyForSaleCount}
               soldRevenue={soldRevenue}
               soldVehiclesCount={soldVehiclesCount}
             />
