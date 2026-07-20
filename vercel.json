@@ -1,0 +1,28 @@
+{
+  "rewrites": [
+    {
+      "source": "/reset-password",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/vehicles/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/purchase-orders",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/parts",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/repairs",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/team",
+      "destination": "/index.html"
+    }
+  ]
+}

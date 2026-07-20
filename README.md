@@ -16,6 +16,13 @@ For production deployment, add your deployed app URL:
 https://YOUR-VERCEL-DOMAIN/reset-password
 ```
 
+## PWA Support
+
+This app includes Phase 1 PWA support. It is online-first: installation,
+standalone launch, and basic app shell/static asset caching are supported, but
+database actions, Supabase Auth, photos, documents, and workflow updates require
+an internet connection.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
