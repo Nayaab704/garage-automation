@@ -41,6 +41,26 @@ import {
 
 const statusOptions = workOrderStatusOptions;
 
+function getInitialRepairsTab() {
+  if (typeof window === "undefined") {
+    return "all";
+  }
+
+  const tab = new URLSearchParams(window.location.search).get("tab");
+
+  return REPAIR_QUEUE_TABS.some((queueTab) => queueTab.key === tab)
+    ? tab
+    : "all";
+}
+
+function getInitialRepairsSearch() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return new URLSearchParams(window.location.search).get("search") ?? "";
+}
+
 function formatDate(value) {
   if (!value) {
     return "Not available";
@@ -402,7 +422,7 @@ function RepairJobCard({
 }
 
 function RepairsPage({ currentProfile, onSelectVehicle }) {
-  const [activeTab, setActiveTab] = useState("all");
+  const [activeTab, setActiveTab] = useState(getInitialRepairsTab);
   const [activeLaborJob, setActiveLaborJob] = useState(null);
   const [activePartJob, setActivePartJob] = useState(null);
   const [activePhotoJob, setActivePhotoJob] = useState(null);
@@ -411,7 +431,7 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
   const [isLoading, setIsLoading] = useState(true);
   const [jobs, setJobs] = useState([]);
   const [profiles, setProfiles] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(getInitialRepairsSearch);
   const [selectedServiceCategoryFilterId, setSelectedServiceCategoryFilterId] =
     useState("");
   const [selectedVehicleFilterId, setSelectedVehicleFilterId] = useState("");

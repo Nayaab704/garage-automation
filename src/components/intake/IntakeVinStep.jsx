@@ -9,7 +9,7 @@ function IntakeVinStep({
   vin,
 }) {
   return (
-    <section className="mx-auto w-full max-w-2xl rounded-[2rem] border border-white/75 bg-white/90 px-4 py-5 text-center shadow-[0_28px_90px_rgba(2,6,23,0.34),0_0_0_1px_rgba(255,255,255,0.55)_inset] backdrop-blur-xl sm:rounded-[2.25rem] sm:px-9 sm:py-8">
+    <section className="mx-auto w-full max-w-2xl rounded-[2rem] border border-white/80 bg-white/95 px-4 py-5 text-center shadow-[0_24px_70px_rgba(15,23,42,0.18),0_0_0_1px_rgba(255,255,255,0.75)_inset] backdrop-blur-sm sm:rounded-[2.25rem] sm:px-9 sm:py-8">
       <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-50 via-white to-blue-100 text-blue-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_16px_32px_rgba(37,99,235,0.18)] ring-1 ring-blue-200/80 sm:h-20 sm:w-20 sm:rounded-[1.75rem]">
         <AppIcon name="car" size={32} />
       </div>
@@ -17,7 +17,7 @@ function IntakeVinStep({
       <p className="mt-4 text-[0.68rem] font-black uppercase tracking-[0.22em] text-blue-700">
         Vehicle Intake
       </p>
-      <h2 className="mt-1 text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">
+      <h2 className="mt-1 text-3xl font-black text-slate-950 sm:text-5xl">
         New Vehicle
       </h2>
       <p className="mx-auto mt-2 max-w-md text-sm font-semibold leading-6 text-slate-500 sm:text-base">

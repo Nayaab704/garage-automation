@@ -7,6 +7,10 @@ import {
   searchVendorPartQuotes,
 } from "../../lib/vendorPriceMemory";
 import { formatUserFirstName } from "../../lib/userDisplay";
+import {
+  filterPartsSupplierVendorRecords,
+  filterPartsSupplierVendors,
+} from "../../lib/vendorTypes";
 import AppIcon from "../ui/AppIcon";
 import FormMessage from "../ui/FormMessage";
 import { buttonClassNames, formControlClassNames } from "../ui/uiStyles";
@@ -273,7 +277,7 @@ function AddVendorQuoteInline({
   if (!hasVendors) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-3 text-sm text-slate-500">
-        Add vendors from the Vendors page first.
+        No parts supplier vendors found. Add one from Vendors.
       </div>
     );
   }
@@ -370,6 +374,7 @@ function VendorPriceSuggestions({
   vendors = [],
   workOrder,
 }) {
+  const partsSupplierVendors = filterPartsSupplierVendors(vendors);
   const [quotes, setQuotes] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
@@ -380,7 +385,9 @@ function VendorPriceSuggestions({
   const normalizedPartName = normalizePartName(partName);
   const canSearch = normalizedPartName.length >= 2;
   const hasCurrentSearchResults = searchedPartName === normalizedPartName;
-  const visibleQuotes = hasCurrentSearchResults ? quotes : [];
+  const visibleQuotes = hasCurrentSearchResults
+    ? filterPartsSupplierVendorRecords(quotes, vendors)
+    : [];
   const visibleSearchError = hasCurrentSearchResults ? searchError : "";
 
   useEffect(() => {
@@ -475,7 +482,7 @@ function VendorPriceSuggestions({
             partName={partName}
             quantity={quantity}
             vehicle={vehicle}
-            vendors={vendors}
+            vendors={partsSupplierVendors}
             workOrder={workOrder}
           />
         </div>

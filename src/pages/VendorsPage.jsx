@@ -12,23 +12,16 @@ import {
   fetchVendorsWithStats,
   withEmptyVendorStats,
 } from "../lib/vendors";
+import {
+  VENDOR_TYPE_FILTER_OPTIONS,
+  getVendorTypeLabel,
+  isAuctionVendorType,
+  isGeneralVendor,
+  isPartsSupplierVendorType,
+  isThirdPartyRepairVendorType,
+} from "../lib/vendorTypes";
 import { formatUserFirstName } from "../lib/userDisplay";
 import useDebouncedValue from "../hooks/useDebouncedValue";
-
-const vendorTypeOptions = [
-  { value: "all", label: "All Types" },
-  { value: "parts", label: "Parts Supplier" },
-  { value: "service", label: "Service / Repair Vendor" },
-  { value: "auction", label: "Auction / Source" },
-  { value: "other", label: "Other" },
-];
-
-const vendorTypeLabels = {
-  auction: "Auction / Source",
-  other: "Other",
-  parts: "Parts Supplier",
-  service: "Service / Repair Vendor",
-};
 
 const historyStatusLabels = {
   purchased: "Purchased",
@@ -90,20 +83,20 @@ function displayValue(value) {
     : value;
 }
 
-function getVendorTypeLabel(vendorType) {
-  return vendorTypeLabels[vendorType] ?? displayValue(vendorType);
-}
-
 function getVendorTypeClassName(vendorType) {
-  if (vendorType === "parts") {
+  if (isPartsSupplierVendorType(vendorType)) {
     return "bg-blue-50 text-blue-700 ring-blue-200";
   }
 
-  if (vendorType === "service") {
+  if (isThirdPartyRepairVendorType(vendorType)) {
     return "bg-emerald-50 text-emerald-700 ring-emerald-200";
   }
 
-  if (vendorType === "auction") {
+  if (isGeneralVendor({ vendor_type: vendorType })) {
+    return "bg-violet-50 text-violet-700 ring-violet-200";
+  }
+
+  if (isAuctionVendorType(vendorType)) {
     return "bg-amber-50 text-amber-700 ring-amber-200";
   }
 
@@ -279,7 +272,7 @@ function VendorTypeFilter({ onChange, value }) {
         onChange={onChange}
         value={value}
       >
-        {vendorTypeOptions.map((option) => (
+        {VENDOR_TYPE_FILTER_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>
@@ -287,6 +280,30 @@ function VendorTypeFilter({ onChange, value }) {
       </select>
     </label>
   );
+}
+
+function vendorMatchesTypeFilter(vendor, selectedVendorType) {
+  if (selectedVendorType === "all") {
+    return true;
+  }
+
+  if (selectedVendorType === "parts") {
+    return isPartsSupplierVendorType(vendor.vendor_type);
+  }
+
+  if (selectedVendorType === "service") {
+    return isThirdPartyRepairVendorType(vendor.vendor_type);
+  }
+
+  if (selectedVendorType === "other") {
+    return isGeneralVendor(vendor);
+  }
+
+  if (selectedVendorType === "auction") {
+    return isAuctionVendorType(vendor.vendor_type);
+  }
+
+  return false;
 }
 
 function VendorCardMetric({ label, value }) {
@@ -592,9 +609,7 @@ function VendorsPage({ currentProfile }) {
 
   const filteredVendors = useMemo(() => {
     return vendors.filter((vendor) => {
-      const matchesType =
-        selectedVendorType === "all" ||
-        vendor.vendor_type === selectedVendorType;
+      const matchesType = vendorMatchesTypeFilter(vendor, selectedVendorType);
 
       return matchesType && vendorMatchesSearch(vendor, debouncedSearchTerm);
     });
@@ -605,8 +620,9 @@ function VendorsPage({ currentProfile }) {
       return vendors.length;
     }
 
-    return vendors.filter((vendor) => vendor.vendor_type === selectedVendorType)
-      .length;
+    return vendors.filter((vendor) =>
+      vendorMatchesTypeFilter(vendor, selectedVendorType)
+    ).length;
   }, [selectedVendorType, vendors]);
 
   const selectedVendor = useMemo(

@@ -5,6 +5,7 @@ import {
 } from "../../lib/vendorPriceMemory";
 import { selectQuoteForPartRequest } from "../../lib/partsQueue";
 import { formatUserFirstName } from "../../lib/userDisplay";
+import { filterPartsSupplierVendorRecords } from "../../lib/vendorTypes";
 import AppIcon from "../ui/AppIcon";
 import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
@@ -73,11 +74,13 @@ function PartPriceHistoryModal({
   onUseQuote,
   part,
   selectedQuoteId = "",
+  vendors = [],
 }) {
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [quotes, setQuotes] = useState([]);
   const [selectingQuoteId, setSelectingQuoteId] = useState("");
+  const visibleQuotes = filterPartsSupplierVendorRecords(quotes, vendors);
 
   useEffect(() => {
     let isMounted = true;
@@ -161,7 +164,7 @@ function PartPriceHistoryModal({
         <FormMessage tone="error">{errorMessage}</FormMessage>
       )}
 
-      {!isLoading && !errorMessage && quotes.length === 0 && (
+      {!isLoading && !errorMessage && visibleQuotes.length === 0 && (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center">
           <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm">
             <AppIcon name="search" size={20} />
@@ -175,9 +178,9 @@ function PartPriceHistoryModal({
         </div>
       )}
 
-      {!isLoading && !errorMessage && quotes.length > 0 && (
+      {!isLoading && !errorMessage && visibleQuotes.length > 0 && (
         <div className="space-y-3">
-          {quotes.map((quote) => {
+          {visibleQuotes.map((quote) => {
             const normalizedQuote = normalizeQuoteForSelection(quote);
             const hasLinkedVendor = Boolean(normalizedQuote.vendor_id);
             const isSelected = selectedQuoteId === quote.id;

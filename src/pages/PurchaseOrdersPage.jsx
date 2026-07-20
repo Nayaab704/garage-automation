@@ -94,6 +94,18 @@ function getPurchaseOrderFocusFromUrl() {
   };
 }
 
+function getInitialPurchaseOrderTab() {
+  if (typeof window === "undefined") {
+    return "ordered";
+  }
+
+  const tab = new URLSearchParams(window.location.search).get("tab");
+
+  return PURCHASE_ORDER_TABS.some((queueTab) => queueTab.key === tab)
+    ? tab
+    : "ordered";
+}
+
 function targetsMatch(firstTarget, secondTarget) {
   return (
     String(firstTarget?.poId ?? "") === String(secondTarget?.poId ?? "") &&
@@ -535,7 +547,10 @@ async function fetchPurchaseOrdersData() {
           .in("id", selectedQuoteIds)
       : { data: [], error: null },
     vendorIds.length > 0
-      ? supabase.from("vendors").select("id, name, phone, email").in("id", vendorIds)
+      ? supabase
+          .from("vendors")
+          .select("id, name, phone, email, vendor_type")
+          .in("id", vendorIds)
       : { data: [], error: null },
   ]);
 
@@ -1109,7 +1124,7 @@ function PurchaseOrdersPage({
   onFocusHandled,
   onSelectVehicle,
 }) {
-  const [activeTab, setActiveTab] = useState("ordered");
+  const [activeTab, setActiveTab] = useState(getInitialPurchaseOrderTab);
   const [confirmReceivedOrder, setConfirmReceivedOrder] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [expandedPurchaseOrderIds, setExpandedPurchaseOrderIds] = useState([]);

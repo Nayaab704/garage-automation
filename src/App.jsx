@@ -37,6 +37,32 @@ const appRoutePaths = {
   Vendors: "vendors",
 };
 const PROFILE_LOAD_TIMEOUT_MS = 15000;
+const routeTabSearchValues = {
+  Parts: new Set([
+    "needs_po",
+    "ordered",
+    "received",
+    "returned",
+    "in_house",
+    "pending_review",
+    "all",
+  ]),
+  "Purchase Orders": new Set(["ordered", "received", "cancelled", "all"]),
+  Repairs: new Set([
+    "all",
+    "in_progress",
+    "waiting_parts",
+    "urgent",
+    "completed",
+  ]),
+  Vehicles: new Set(["active", "ready_for_sale", "sold"]),
+};
+const vehicleStatusSearchValues = new Set([
+  "all_active",
+  "inspection",
+  "quality_check",
+  "repair",
+]);
 
 function getDefaultLandingPageForRole(role) {
   return role === "technician" ? "My Work" : FALLBACK_PAGE;
@@ -120,26 +146,61 @@ function getPathForRoute(route) {
 }
 
 function getSearchForRoute(route, routeSearchParams = null) {
-  if (route?.page !== "Purchase Orders" || typeof window === "undefined") {
+  if (!route?.page || typeof window === "undefined") {
     return "";
   }
 
   const currentParams = new URLSearchParams(window.location.search);
-  const poId = routeSearchParams?.poId ?? currentParams.get("poId");
-  const itemId = routeSearchParams?.itemId ?? currentParams.get("itemId");
-
-  if (!poId) {
-    return "";
-  }
-
   const nextParams = new URLSearchParams();
-  nextParams.set("poId", poId);
+  const tab = String(routeSearchParams?.tab ?? "").trim();
 
-  if (itemId) {
-    nextParams.set("itemId", itemId);
+  if (routeTabSearchValues[route.page]?.has(tab)) {
+    nextParams.set("tab", tab);
   }
 
-  return `?${nextParams.toString()}`;
+  if (route.page === "Purchase Orders") {
+    const currentPoId = !routeSearchParams ? currentParams.get("poId") : "";
+    const currentItemId = !routeSearchParams ? currentParams.get("itemId") : "";
+    const poId =
+      routeSearchParams?.poId ?? currentPoId;
+    const itemId = routeSearchParams?.itemId ?? currentItemId;
+
+    if (poId) {
+      nextParams.set("poId", poId);
+    }
+
+    if (itemId) {
+      nextParams.set("itemId", itemId);
+    }
+  }
+
+  if (route.page === "Repairs") {
+    const search = String(routeSearchParams?.search ?? "").trim();
+
+    if (search) {
+      nextParams.set("search", search);
+    }
+  }
+
+  if (route.page === "Vehicles") {
+    const status = String(routeSearchParams?.status ?? "").trim();
+
+    if (vehicleStatusSearchValues.has(status)) {
+      nextParams.set("status", status);
+    }
+
+    if (routeSearchParams?.prebooked === "1") {
+      nextParams.set("prebooked", "1");
+    }
+
+    if (routeSearchParams?.thirdParty === "1") {
+      nextParams.set("thirdParty", "1");
+    }
+  }
+
+  const search = nextParams.toString();
+
+  return search ? `?${search}` : "";
 }
 
 function createBrowserUrlForRoute(route, routeSearchParams = null) {
@@ -640,8 +701,8 @@ function App() {
     myWorkFallbackPage,
   ]);
 
-  function handlePageChange(pageName) {
-    navigateToRoute(pageName);
+  function handlePageChange(pageName, routeSearchParams = null) {
+    navigateToRoute(pageName, null, routeSearchParams);
   }
 
   function handleViewPurchaseOrders(target = null) {
@@ -775,8 +836,6 @@ function App() {
         <Dashboard
           currentProfile={currentProfile}
           onNavigate={handlePageChange}
-          onSelectVehicle={handleSelectVehicle}
-          onViewPurchaseOrders={handleViewPurchaseOrders}
         />
       );
     }

@@ -123,7 +123,7 @@ export async function fetchRepairsQueue() {
     supabase
       .from("profiles")
       .select("id, full_name, email, role, phone, hourly_rate"),
-    supabase.from("vendors").select("id, name").order("name", {
+    supabase.from("vendors").select("id, name, phone, email, vendor_type").order("name", {
       ascending: true,
     }),
     repairJobIds.length > 0

@@ -96,7 +96,7 @@ function IntakePage({ currentProfile, onViewVehicles }) {
     <div
       className={`relative ${
         isVinStep
-          ? "-mx-4 -my-5 min-h-[calc(100svh-8rem)] overflow-hidden bg-slate-950 px-3 py-4 sm:-mx-6 sm:px-6 sm:py-6 lg:-mx-8 lg:min-h-[calc(100svh-4rem)] lg:px-8"
+          ? "-mx-4 -my-5 min-h-[calc(100svh-8rem)] overflow-hidden bg-slate-100 px-3 py-4 sm:-mx-6 sm:px-6 sm:py-6 lg:-mx-8 lg:min-h-[calc(100svh-4rem)] lg:px-8"
           : "px-1 py-5 sm:px-3 lg:px-6"
       }`}
     >

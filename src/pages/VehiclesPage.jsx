@@ -86,6 +86,39 @@ const activeStatusQueryValues = activeVehicleWorkflowStatuses.flatMap(
   (status) => workflowStatusQueryValues[status] ?? [status]
 );
 
+const vehicleTabSearchValues = new Set(["active", "ready_for_sale", "sold"]);
+const vehicleStatusSearchValues = new Set([
+  "all_active",
+  "inspection",
+  "quality_check",
+  "repair",
+]);
+
+function getInitialVehicleFilters() {
+  if (typeof window === "undefined") {
+    return {
+      activeStatusFilter: "all_active",
+      activeTab: "active",
+      hasPrebookingFilter: false,
+      hasThirdPartyFilter: false,
+    };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const tab = params.get("tab");
+  const status = params.get("status");
+  const activeTab = vehicleTabSearchValues.has(tab) ? tab : "active";
+
+  return {
+    activeStatusFilter: vehicleStatusSearchValues.has(status)
+      ? status
+      : "all_active",
+    activeTab: vehicleStatusSearchValues.has(status) ? "active" : activeTab,
+    hasPrebookingFilter: params.get("prebooked") === "1",
+    hasThirdPartyFilter: params.get("thirdParty") === "1",
+  };
+}
+
 function getActiveFilterCount(
   searchText,
   titleStatusFilter,
@@ -701,13 +734,21 @@ function VehiclesPage({
   const [salesByVehicleId, setSalesByVehicleId] = useState({});
   const [thirdPartyVehiclesByVehicleId, setThirdPartyVehiclesByVehicleId] =
     useState({});
-  const [activeTab, setActiveTab] = useState("active");
-  const [activeStatusFilter, setActiveStatusFilter] = useState("all_active");
+  const [activeTab, setActiveTab] = useState(
+    () => getInitialVehicleFilters().activeTab
+  );
+  const [activeStatusFilter, setActiveStatusFilter] = useState(
+    () => getInitialVehicleFilters().activeStatusFilter
+  );
   const [searchText, setSearchText] = useState("");
   const [debouncedSearchText, setDebouncedSearchText] = useState("");
   const [titleStatusFilter, setTitleStatusFilter] = useState("all");
-  const [hasPrebookingFilter, setHasPrebookingFilter] = useState(false);
-  const [hasThirdPartyFilter, setHasThirdPartyFilter] = useState(false);
+  const [hasPrebookingFilter, setHasPrebookingFilter] = useState(
+    () => getInitialVehicleFilters().hasPrebookingFilter
+  );
+  const [hasThirdPartyFilter, setHasThirdPartyFilter] = useState(
+    () => getInitialVehicleFilters().hasThirdPartyFilter
+  );
   const [areFiltersOpen, setAreFiltersOpen] = useState(false);
   const [counts, setCounts] = useState({
     active: 0,

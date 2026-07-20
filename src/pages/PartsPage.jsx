@@ -12,6 +12,7 @@ import { buttonClassNames } from "../components/ui/uiStyles";
 import CreatePurchaseOrderForm from "../components/vehicle-detail/CreatePurchaseOrderForm";
 import { logVehicleActivity } from "../lib/activityLogger";
 import {
+  PART_QUEUE_TABS,
   getPartQueueCounts,
   getSelectedVendorId,
   isPartInHouse,
@@ -41,6 +42,18 @@ import {
 
 const partRequestColumns =
   "id, vehicle_id, repair_job_id, part_name, quantity, status, notes, part_source, approval_status, approved_by, approved_at, unit_cost, selected_vendor_id, selected_quote_id, quoted_unit_cost, quoted_total_cost, created_by, created_at";
+
+function getInitialPartsTab() {
+  if (typeof window === "undefined") {
+    return "needs_po";
+  }
+
+  const tab = new URLSearchParams(window.location.search).get("tab");
+
+  return PART_QUEUE_TABS.some((queueTab) => queueTab.key === tab)
+    ? tab
+    : "needs_po";
+}
 
 function canApprovePartsForProfile(profile) {
   return profile?.role === "admin" || profile?.role === "owner";
@@ -115,7 +128,7 @@ function PartsPage({
   onSelectVehicle,
   onViewPurchaseOrders,
 }) {
-  const [activeTab, setActiveTab] = useState("needs_po");
+  const [activeTab, setActiveTab] = useState(getInitialPartsTab);
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [partQueue, setPartQueue] = useState([]);
@@ -795,6 +808,7 @@ function PartsPage({
           onUseQuote={handleUseQuoteForPart}
           part={priceHistoryPart}
           selectedQuoteId={priceHistoryPart.selected_quote_id}
+          vendors={vendors}
         />
       )}
 

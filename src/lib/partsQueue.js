@@ -173,7 +173,7 @@ export async function fetchPartsQueue() {
           .select("id, full_name, email, role")
           .in("id", profileIds)
       : { data: [], error: null },
-    supabase.from("vendors").select("id, name").order("name", {
+    supabase.from("vendors").select("id, name, phone, email, vendor_type").order("name", {
       ascending: true,
     }),
     partRequestIds.length > 0

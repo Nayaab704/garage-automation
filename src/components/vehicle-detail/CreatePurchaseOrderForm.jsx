@@ -7,6 +7,10 @@ import { logVehicleActivity } from "../../lib/activityLogger";
 import { isPartNeedsPo } from "../../lib/partWorkflowUtils";
 import { supabase } from "../../lib/supabaseClient";
 import { markQuotePurchased } from "../../lib/vendorPriceMemory";
+import {
+  filterPartsSupplierVendors,
+  isPartsSupplierVendor,
+} from "../../lib/vendorTypes";
 
 const emptyForm = {
   vendor_id: "",
@@ -276,6 +280,10 @@ function CreatePurchaseOrderForm({
     () => getInitialFormData(defaultPartRequest, initialVendorId),
     [defaultPartRequest, initialVendorId]
   );
+  const partsSupplierVendors = useMemo(
+    () => filterPartsSupplierVendors(vendors),
+    [vendors]
+  );
   const [formData, setFormData] = useState(() =>
     initialFormData
   );
@@ -299,17 +307,27 @@ function CreatePurchaseOrderForm({
       formData.vendor_id ||
       initialVendorId ||
       getPartRequestVendorId(vendorSourcePart);
+    const loadedVendor = vendors.find((vendor) => vendor.id === selectedVendorId);
 
-    return selectedVendorId
-      ? {
-          id: selectedVendorId,
-          name: getPartRequestVendorName(vendorSourcePart),
-        }
-      : null;
-  }, [formData.vendor_id, initialPartRequest, initialVendorId, selectedPartRequest]);
+    if (!selectedVendorId || (loadedVendor && !isPartsSupplierVendor(loadedVendor))) {
+      return null;
+    }
+
+    return {
+      ...loadedVendor,
+      id: selectedVendorId,
+      name: loadedVendor?.name ?? getPartRequestVendorName(vendorSourcePart),
+    };
+  }, [
+    formData.vendor_id,
+    initialPartRequest,
+    initialVendorId,
+    selectedPartRequest,
+    vendors,
+  ]);
   const vendorOptions = useMemo(
-    () => mergeVendorOptions(vendors, selectedVendorOption),
-    [selectedVendorOption, vendors]
+    () => mergeVendorOptions(partsSupplierVendors, selectedVendorOption),
+    [partsSupplierVendors, selectedVendorOption]
   );
   const selectedPriceSourcePart = selectedPartRequest ?? initialPartRequest;
   const hasSelectedVendorPrice = Boolean(
@@ -317,6 +335,10 @@ function CreatePurchaseOrderForm({
       (selectedPriceSourcePart?.selected_quote_id ||
         selectedPriceSourcePart?.selectedQuote?.id)
   );
+  const selectedPriceVendorId = getPartRequestVendorId(selectedPriceSourcePart);
+  const hasUsableSelectedVendorPrice =
+    hasSelectedVendorPrice &&
+    vendorOptions.some((vendor) => vendor.id === selectedPriceVendorId);
   const selectedPriceVendorName = getPartRequestVendorName(selectedPriceSourcePart);
   const costSummary = useMemo(() => getCostSummary(formData), [formData]);
 
@@ -383,8 +405,16 @@ function CreatePurchaseOrderForm({
       "Tax cannot be negative."
     );
 
+    if (vendorOptions.length === 0) {
+      return { error: "No parts supplier vendors found. Add one from Vendors." };
+    }
+
     if (!formData.vendor_id) {
       return { error: "Vendor is required." };
+    }
+
+    if (!vendorOptions.some((vendor) => vendor.id === formData.vendor_id)) {
+      return { error: "Select a parts supplier vendor." };
     }
 
     if (!formData.part_request_id) {
@@ -677,6 +707,11 @@ function CreatePurchaseOrderForm({
               value={formData.vendor_id}
             >
               <option value="">Select a vendor</option>
+              {vendorOptions.length === 0 && (
+                <option disabled value="__no_parts_vendors">
+                  No parts supplier vendors found. Add one from Vendors.
+                </option>
+              )}
               {vendorOptions.map((vendor) => (
                 <option key={vendor.id} value={vendor.id}>
                   {getVendorName(vendor)}
@@ -725,7 +760,7 @@ function CreatePurchaseOrderForm({
             </span>
           </label>
 
-          {hasSelectedVendorPrice ? (
+          {hasUsableSelectedVendorPrice ? (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
               Using selected price from {selectedPriceVendorName}.
             </div>

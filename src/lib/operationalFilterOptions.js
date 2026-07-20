@@ -9,6 +9,7 @@ import {
   normalizeServiceCategoryKey,
 } from "./partWorkflowUtils";
 import { getRepairServiceCategoryFilterValues } from "./repairWorkflowUtils";
+import { isPartsSupplierVendor } from "./vendorTypes";
 import { getVehicleColorDisplay } from "./vehicleColorDisplay";
 
 function uniqueValues(values) {
@@ -193,6 +194,33 @@ function addVendorOption(optionMap, { date, email, id, name, phone }) {
   });
 }
 
+function createPartsVendorLookup(vendors = []) {
+  return {
+    allowedIds: new Set(
+      vendors
+        .filter(isPartsSupplierVendor)
+        .map((vendor) => vendor.id)
+        .filter(Boolean)
+        .map(String)
+    ),
+    knownIds: new Set(vendors.map((vendor) => vendor.id).filter(Boolean).map(String)),
+  };
+}
+
+function shouldIncludePartsVendor({ id, vendor }, partsVendorLookup) {
+  if (vendor && !isPartsSupplierVendor(vendor)) {
+    return false;
+  }
+
+  const vendorId = id ? String(id) : "";
+
+  if (vendorId && partsVendorLookup.knownIds.has(vendorId)) {
+    return partsVendorLookup.allowedIds.has(vendorId);
+  }
+
+  return true;
+}
+
 function addVehicleOption(optionMap, { date, vehicle }) {
   const context = getVehicleContext(vehicle);
 
@@ -262,54 +290,79 @@ function getQuoteVendorName(quote) {
   );
 }
 
-function addPartVendorUsage(optionMap, part) {
+function addPartVendorUsage(optionMap, part, partsVendorLookup) {
   const partDate = part?.created_at;
 
-  addVendorOption(optionMap, {
-    date: partDate,
-    id: part?.selected_vendor_id ?? part?.selectedVendor?.id,
-    name: part?.selectedVendor?.name,
-  });
+  if (
+    shouldIncludePartsVendor(
+      {
+        id: part?.selected_vendor_id ?? part?.selectedVendor?.id,
+        vendor: part?.selectedVendor,
+      },
+      partsVendorLookup
+    )
+  ) {
+    addVendorOption(optionMap, {
+      date: partDate,
+      id: part?.selected_vendor_id ?? part?.selectedVendor?.id,
+      name: part?.selectedVendor?.name,
+    });
+  }
 
   for (const quote of [
     part?.selectedQuote,
     part?.latestQuote,
     ...(part?.quotes ?? []),
   ]) {
-    addVendorOption(optionMap, {
-      date: quote?.quoted_at ?? quote?.created_at ?? partDate,
-      id: quote?.vendor_id,
-      name: getQuoteVendorName(quote),
-    });
+    if (shouldIncludePartsVendor({ id: quote?.vendor_id }, partsVendorLookup)) {
+      addVendorOption(optionMap, {
+        date: quote?.quoted_at ?? quote?.created_at ?? partDate,
+        id: quote?.vendor_id,
+        name: getQuoteVendorName(quote),
+      });
+    }
   }
 
   for (const item of part?.purchaseOrderItems ?? []) {
-    addVendorOption(optionMap, {
-      date:
-        item?.purchaseOrder?.ordered_at ??
-        item?.purchaseOrder?.created_at ??
-        item?.created_at ??
-        partDate,
-      id: item?.purchaseOrder?.vendor_id ?? item?.purchaseOrder?.vendor?.id,
-      name: item?.purchaseOrder?.vendor?.name,
-    });
+    if (
+      shouldIncludePartsVendor(
+        {
+          id: item?.purchaseOrder?.vendor_id ?? item?.purchaseOrder?.vendor?.id,
+          vendor: item?.purchaseOrder?.vendor,
+        },
+        partsVendorLookup
+      )
+    ) {
+      addVendorOption(optionMap, {
+        date:
+          item?.purchaseOrder?.ordered_at ??
+          item?.purchaseOrder?.created_at ??
+          item?.created_at ??
+          partDate,
+        id: item?.purchaseOrder?.vendor_id ?? item?.purchaseOrder?.vendor?.id,
+        name: item?.purchaseOrder?.vendor?.name,
+      });
+    }
   }
 }
 
 export function getPartsVendorFilterOptions(parts = [], vendors = []) {
   const optionMap = new Map();
+  const partsVendorLookup = createPartsVendorLookup(vendors);
 
   for (const vendor of vendors) {
-    addVendorOption(optionMap, {
-      email: vendor.email,
-      id: vendor.id,
-      name: vendor.name,
-      phone: vendor.phone,
-    });
+    if (isPartsSupplierVendor(vendor)) {
+      addVendorOption(optionMap, {
+        email: vendor.email,
+        id: vendor.id,
+        name: vendor.name,
+        phone: vendor.phone,
+      });
+    }
   }
 
   for (const part of parts) {
-    addPartVendorUsage(optionMap, part);
+    addPartVendorUsage(optionMap, part, partsVendorLookup);
   }
 
   return finalizeOptions(optionMap);
@@ -420,31 +473,52 @@ export function getPurchaseOrderVendorFilterOptions(
   vendorsById = {}
 ) {
   const optionMap = new Map();
+  const vendors = Object.values(vendorsById);
+  const partsVendorLookup = createPartsVendorLookup(vendors);
 
-  for (const vendor of Object.values(vendorsById)) {
-    addVendorOption(optionMap, {
-      email: vendor.email,
-      id: vendor.id,
-      name: vendor.name,
-      phone: vendor.phone,
-    });
+  for (const vendor of vendors) {
+    if (isPartsSupplierVendor(vendor)) {
+      addVendorOption(optionMap, {
+        email: vendor.email,
+        id: vendor.id,
+        name: vendor.name,
+        phone: vendor.phone,
+      });
+    }
   }
 
   for (const purchaseOrder of purchaseOrders) {
-    addVendorOption(optionMap, {
-      date: purchaseOrder.ordered_at ?? purchaseOrder.created_at,
-      email: purchaseOrder.vendor?.email,
-      id: purchaseOrder.vendor_id ?? purchaseOrder.vendor?.id,
-      name: purchaseOrder.vendor?.name,
-      phone: purchaseOrder.vendor?.phone,
-    });
+    if (
+      shouldIncludePartsVendor(
+        {
+          id: purchaseOrder.vendor_id ?? purchaseOrder.vendor?.id,
+          vendor: purchaseOrder.vendor,
+        },
+        partsVendorLookup
+      )
+    ) {
+      addVendorOption(optionMap, {
+        date: purchaseOrder.ordered_at ?? purchaseOrder.created_at,
+        email: purchaseOrder.vendor?.email,
+        id: purchaseOrder.vendor_id ?? purchaseOrder.vendor?.id,
+        name: purchaseOrder.vendor?.name,
+        phone: purchaseOrder.vendor?.phone,
+      });
+    }
 
     for (const item of purchaseOrder.items ?? []) {
-      addVendorOption(optionMap, {
-        date: item.created_at ?? purchaseOrder.created_at,
-        id: item.partRequest?.selected_vendor_id,
-        name: getQuoteVendorName(item.partRequest?.selectedQuote),
-      });
+      if (
+        shouldIncludePartsVendor(
+          { id: item.partRequest?.selected_vendor_id },
+          partsVendorLookup
+        )
+      ) {
+        addVendorOption(optionMap, {
+          date: item.created_at ?? purchaseOrder.created_at,
+          id: item.partRequest?.selected_vendor_id,
+          name: getQuoteVendorName(item.partRequest?.selectedQuote),
+        });
+      }
     }
   }
 

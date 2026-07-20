@@ -6,6 +6,7 @@ import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
 import { THIRD_PARTY_REPAIR_IN_PROGRESS_STATUS } from "../../lib/thirdPartyRepairWorkflow";
+import { filterThirdPartyRepairVendors } from "../../lib/vendorTypes";
 
 const emptyForm = {
   vendor_id: "",
@@ -58,6 +59,7 @@ function AddThirdPartyRepairForm({
   vendors = [],
   workOrder,
 }) {
+  const thirdPartyRepairVendors = filterThirdPartyRepairVendors(vendors);
   const [formData, setFormData] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -88,6 +90,14 @@ function AddThirdPartyRepairForm({
 
     if (!vehicleId || !workOrder?.id) {
       setErrorMessage("Unable to add third-party repair without a work order.");
+      return;
+    }
+
+    if (
+      formData.vendor_id &&
+      !thirdPartyRepairVendors.some((vendor) => vendor.id === formData.vendor_id)
+    ) {
+      setErrorMessage("Select a third-party repair vendor.");
       return;
     }
 
@@ -130,7 +140,7 @@ function AddThirdPartyRepairForm({
           service_rendered: thirdPartyRepair.service_rendered,
           vendor: thirdPartyRepair.vendor_id
             ? getVendorName(
-                vendors.find(
+                thirdPartyRepairVendors.find(
                   (vendor) => vendor.id === thirdPartyRepair.vendor_id
                 ) ?? {}
               )
@@ -172,12 +182,22 @@ function AddThirdPartyRepairForm({
               value={formData.vendor_id}
             >
               <option value="">No vendor assigned</option>
-              {vendors.map((vendor) => (
+              {thirdPartyRepairVendors.length === 0 && (
+                <option disabled value="__no_third_party_vendors">
+                  No third-party repair vendors found. Add one from Vendors.
+                </option>
+              )}
+              {thirdPartyRepairVendors.map((vendor) => (
                 <option key={vendor.id} value={vendor.id}>
                   {getVendorName(vendor)}
                 </option>
               ))}
             </select>
+            {thirdPartyRepairVendors.length === 0 && (
+              <span className="mt-2 block text-xs font-semibold leading-5 text-slate-500">
+                No third-party repair vendors found. Add one from Vendors.
+              </span>
+            )}
           </label>
         </fieldset>
 

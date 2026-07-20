@@ -4,13 +4,7 @@ import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
 import { formControlClassNames } from "../ui/uiStyles";
 import { supabase } from "../../lib/supabaseClient";
-
-const vendorTypeOptions = [
-  { value: "parts", label: "Parts Supplier" },
-  { value: "service", label: "Service / Repair Vendor" },
-  { value: "auction", label: "Auction / Source" },
-  { value: "other", label: "Other" },
-];
+import { VENDOR_TYPE_OPTIONS } from "../../lib/vendorTypes";
 
 const emptyForm = {
   address: "",
@@ -123,7 +117,7 @@ function AddVendorForm({ onClose, onVendorAdded }) {
                 onChange={handleChange}
                 value={formData.vendor_type}
               >
-                {vendorTypeOptions.map((option) => (
+                {VENDOR_TYPE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
