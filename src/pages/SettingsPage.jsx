@@ -3,6 +3,7 @@ import {
   formatProfileRole,
   getProfileRoleClassName,
 } from "../lib/currentUserProfile";
+import AppIcon from "../components/ui/AppIcon";
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 
@@ -16,6 +17,10 @@ const roleOptions = [
 
 const profileSelectFields =
   "id, auth_user_id, full_name, email, role, phone, hourly_rate, is_active, removed_at, created_at";
+const emptyPasswordForm = {
+  confirmPassword: "",
+  newPassword: "",
+};
 
 function displayValue(value) {
   return value === null || value === undefined || value === ""
@@ -306,6 +311,167 @@ function ProfileSettingsCard({ currentProfile, onCurrentProfileUpdated }) {
   );
 }
 
+function PasswordField({
+  id,
+  isVisible,
+  label,
+  name,
+  onChange,
+  onToggleVisibility,
+  value,
+}) {
+  return (
+    <label className="block" htmlFor={id}>
+      <span className="text-sm font-semibold text-zinc-700">{label}</span>
+      <div className="relative">
+        <input
+          autoComplete="new-password"
+          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 pr-12 text-sm font-semibold text-zinc-900 shadow-sm outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+          id={id}
+          minLength={8}
+          name={name}
+          onChange={onChange}
+          required
+          type={isVisible ? "text" : "password"}
+          value={value}
+        />
+        <button
+          aria-label={isVisible ? `Hide ${label}` : `Show ${label}`}
+          className="absolute right-1.5 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          onClick={onToggleVisibility}
+          type="button"
+        >
+          <AppIcon name={isVisible ? "eye-off" : "eye"} size={18} />
+        </button>
+      </div>
+    </label>
+  );
+}
+
+function ChangePasswordCard() {
+  const [formData, setFormData] = useState(emptyPasswordForm);
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] =
+    useState(false);
+  const [isNewPasswordVisible, setIsNewPasswordVisible] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
+  function handleChange(event) {
+    const { name, value } = event.target;
+
+    setFormData((currentFormData) => ({
+      ...currentFormData,
+      [name]: value,
+    }));
+  }
+
+  function validateForm() {
+    if (formData.newPassword.length < 8) {
+      return "Password must be at least 8 characters.";
+    }
+
+    if (formData.newPassword !== formData.confirmPassword) {
+      return "Passwords do not match.";
+    }
+
+    return "";
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    const validationError = validateForm();
+
+    if (validationError) {
+      setErrorMessage(validationError);
+      setSuccessMessage("");
+      return;
+    }
+
+    setIsSaving(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: formData.newPassword,
+      });
+
+      if (error) {
+        setErrorMessage(error.message || "Unable to update password.");
+        return;
+      }
+
+      setFormData(emptyPasswordForm);
+      setSuccessMessage("Password updated successfully.");
+    } catch (error) {
+      setErrorMessage(error.message ?? "Unable to update password.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <section className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
+      <div>
+        <h2 className="text-xl font-bold text-zinc-950">Change Password</h2>
+        <p className="mt-2 text-sm text-zinc-600">
+          Update your sign-in password securely through Supabase Auth.
+        </p>
+      </div>
+
+      <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <PasswordField
+            id="settings-new-password"
+            isVisible={isNewPasswordVisible}
+            label="New Password"
+            name="newPassword"
+            onChange={handleChange}
+            onToggleVisibility={() =>
+              setIsNewPasswordVisible((currentValue) => !currentValue)
+            }
+            value={formData.newPassword}
+          />
+
+          <PasswordField
+            id="settings-confirm-password"
+            isVisible={isConfirmPasswordVisible}
+            label="Confirm New Password"
+            name="confirmPassword"
+            onChange={handleChange}
+            onToggleVisibility={() =>
+              setIsConfirmPasswordVisible((currentValue) => !currentValue)
+            }
+            value={formData.confirmPassword}
+          />
+        </div>
+
+        <button
+          className="inline-flex min-h-10 w-full items-center justify-center rounded-md bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+          disabled={isSaving}
+          type="submit"
+        >
+          {isSaving ? "Updating..." : "Update Password"}
+        </button>
+      </form>
+
+      {errorMessage && (
+        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          {errorMessage}
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          {successMessage}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function SettingsPage({ currentProfile, onCurrentProfileUpdated }) {
   const [profiles, setProfiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -481,6 +647,8 @@ function SettingsPage({ currentProfile, onCurrentProfileUpdated }) {
           onCurrentProfileUpdated={onCurrentProfileUpdated}
         />
 
+        <ChangePasswordCard />
+
         <section className="rounded-lg border border-zinc-200 bg-white p-8 shadow-sm">
           <h2 className="text-xl font-bold text-zinc-950">Team Management</h2>
           <p className="mt-2 text-zinc-600">
@@ -498,6 +666,8 @@ function SettingsPage({ currentProfile, onCurrentProfileUpdated }) {
         key={currentProfile?.id ?? "current-profile"}
         onCurrentProfileUpdated={onCurrentProfileUpdated}
       />
+
+      <ChangePasswordCard />
 
       <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-bold text-zinc-950">Team Management</h2>

@@ -13,6 +13,7 @@ const MyWorkPage = lazy(() => import("./pages/MyWorkPage"));
 const PartsPage = lazy(() => import("./pages/PartsPage"));
 const PurchaseOrdersPage = lazy(() => import("./pages/PurchaseOrdersPage"));
 const RepairsPage = lazy(() => import("./pages/RepairsPage"));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const TeamManagementPage = lazy(() => import("./pages/TeamManagementPage"));
 const VehicleDetailPage = lazy(() => import("./pages/VehicleDetailPage"));
@@ -235,6 +236,20 @@ function getInitialAppRoute() {
 
 function getInitialHistoryDepth() {
   return 0;
+}
+
+function isResetPasswordRoute() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const path = window.location.pathname.replace(/^\/+|\/+$/g, "");
+  const hashPath = window.location.hash
+    .replace(/^#/, "")
+    .split("?")[0]
+    .replace(/^\/+|\/+$/g, "");
+
+  return path === "reset-password" || hashPath === "reset-password";
 }
 
 function areRoutesEqual(firstRoute, secondRoute) {
@@ -526,7 +541,7 @@ function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      if (!nextSession) {
+      if (!nextSession && !isResetPasswordRoute()) {
         const fallbackRoute = createAppRoute(FALLBACK_PAGE);
 
         writeBrowserHistoryRoute(fallbackRoute, 0, "replaceState");
@@ -835,6 +850,18 @@ function App() {
     }
   }
 
+  function handleResetPasswordComplete() {
+    const fallbackRoute = createAppRoute(FALLBACK_PAGE);
+
+    writeBrowserHistoryRoute(fallbackRoute, 0, "replaceState");
+    setCurrentRoute(fallbackRoute);
+    setAppHistoryDepth(0);
+    hasInitializedHistoryRef.current = false;
+    initialRouteWasExplicitRef.current = false;
+    setSession(null);
+    setCurrentProfile(null);
+  }
+
   function renderActivePage() {
     if (effectiveActivePage === "Dashboard") {
       return (
@@ -945,6 +972,14 @@ function App() {
     }
 
     return <PlaceholderPage title={effectiveActivePage} />;
+  }
+
+  if (isResetPasswordRoute()) {
+    return (
+      <Suspense fallback={<PageLoadingFallback title="Reset Password" />}>
+        <ResetPasswordPage onComplete={handleResetPasswordComplete} />
+      </Suspense>
+    );
   }
 
   if (isAuthLoading) {

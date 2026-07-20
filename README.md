@@ -1,5 +1,21 @@
 # React + Vite
 
+## Supabase Auth Redirect URLs
+
+Password reset emails redirect users back to `/reset-password`.
+
+For local testing, add this redirect URL in Supabase Auth settings:
+
+```text
+http://localhost:5173/reset-password
+```
+
+For production deployment, add your deployed app URL:
+
+```text
+https://YOUR-VERCEL-DOMAIN/reset-password
+```
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

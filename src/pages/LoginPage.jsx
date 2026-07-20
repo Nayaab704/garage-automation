@@ -115,6 +115,42 @@ function LoginPage() {
     }
   }
 
+  async function handleForgotPassword() {
+    const email = formData.email.trim();
+
+    if (!email) {
+      setErrorMessage("Email is required.");
+      return;
+    }
+
+    setLoadingAction("forgot-password");
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const redirectTo =
+        typeof window === "undefined"
+          ? undefined
+          : `${window.location.origin}/reset-password`;
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo,
+      });
+
+      if (error) {
+        setErrorMessage("Could not send reset email. Please try again.");
+        return;
+      }
+
+      setSuccessMessage(
+        "If an account exists, a password reset link has been sent to your email."
+      );
+    } catch {
+      setErrorMessage("Could not send reset email. Please try again.");
+    } finally {
+      setLoadingAction("");
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
 
@@ -123,11 +159,29 @@ function LoginPage() {
       return;
     }
 
+    if (authMode === "forgot-password") {
+      await handleForgotPassword();
+      return;
+    }
+
     await handleSignIn();
   }
 
   const isSubmitting = loadingAction !== "";
   const isSignUp = authMode === "sign-up";
+  const isForgotPassword = authMode === "forgot-password";
+  const submitLabel =
+    loadingAction === "sign-in"
+      ? "Signing In..."
+      : loadingAction === "sign-up"
+        ? "Signing Up..."
+        : loadingAction === "forgot-password"
+          ? "Sending..."
+          : isForgotPassword
+            ? "Send Reset Link"
+            : isSignUp
+              ? "Sign Up"
+              : "Sign In";
 
   return (
     <AppBackground>
@@ -136,10 +190,16 @@ function LoginPage() {
           <div className="mb-6">
             <BrandLogo showTagline size="large" />
             <h1 className="mt-2 text-2xl font-bold text-zinc-950">
-              {isSignUp ? "Create your account" : "Sign in to continue"}
+              {isForgotPassword
+                ? "Reset your password"
+                : isSignUp
+                  ? "Create your account"
+                  : "Sign in to continue"}
             </h1>
             <p className="mt-2 text-sm text-zinc-500">
-              {isSignUp
+              {isForgotPassword
+                ? "Enter your email and we will send a secure reset link."
+                : isSignUp
                 ? "Add your name so the workspace can greet and identify you clearly."
                 : "Use your email and password to access the garage dashboard."}
             </p>
@@ -176,34 +236,49 @@ function LoginPage() {
               />
             </label>
 
-            <label className="block" htmlFor="login-password">
-              <span className={formControlClassNames.label}>Password</span>
-              <div className="relative">
-                <input
-                  autoComplete={isSignUp ? "new-password" : "current-password"}
-                  className={`${formControlClassNames.input} pr-14`}
-                  id="login-password"
-                  name="password"
-                  onChange={handleChange}
-                  required
-                  type={isPasswordVisible ? "text" : "password"}
-                  value={formData.password}
-                />
-                <button
-                  aria-label={isPasswordVisible ? "Hide password" : "Show password"}
-                  className="absolute right-2 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  onClick={() =>
-                    setIsPasswordVisible((currentValue) => !currentValue)
-                  }
-                  type="button"
-                >
-                  <AppIcon
-                    name={isPasswordVisible ? "eye-off" : "eye"}
-                    size={20}
-                  />
-                </button>
+            {!isForgotPassword && (
+              <div>
+                <label className="block" htmlFor="login-password">
+                  <span className={formControlClassNames.label}>Password</span>
+                  <div className="relative">
+                    <input
+                      autoComplete={isSignUp ? "new-password" : "current-password"}
+                      className={`${formControlClassNames.input} pr-14`}
+                      id="login-password"
+                      name="password"
+                      onChange={handleChange}
+                      required
+                      type={isPasswordVisible ? "text" : "password"}
+                      value={formData.password}
+                    />
+                    <button
+                      aria-label={isPasswordVisible ? "Hide password" : "Show password"}
+                      className="absolute right-2 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      onClick={() =>
+                        setIsPasswordVisible((currentValue) => !currentValue)
+                      }
+                      type="button"
+                    >
+                      <AppIcon
+                        name={isPasswordVisible ? "eye-off" : "eye"}
+                        size={20}
+                      />
+                    </button>
+                  </div>
+                </label>
+
+                {!isSignUp && (
+                  <button
+                    className="mt-2 text-sm font-bold text-blue-700 transition hover:text-blue-800"
+                    disabled={isSubmitting}
+                    onClick={() => handleModeChange("forgot-password")}
+                    type="button"
+                  >
+                    Forgot password?
+                  </button>
+                )}
               </div>
-            </label>
+            )}
 
             {errorMessage && (
               <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -223,24 +298,20 @@ function LoginPage() {
                 disabled={isSubmitting}
                 type="submit"
               >
-                {loadingAction === "sign-in"
-                  ? "Signing In..."
-                  : loadingAction === "sign-up"
-                    ? "Signing Up..."
-                    : isSignUp
-                      ? "Sign Up"
-                      : "Sign In"}
+                {submitLabel}
               </button>
 
               <button
                 className={buttonClassNames.secondary}
                 disabled={isSubmitting}
                 onClick={() =>
-                  handleModeChange(isSignUp ? "sign-in" : "sign-up")
+                  handleModeChange(
+                    isSignUp || isForgotPassword ? "sign-in" : "sign-up"
+                  )
                 }
                 type="button"
               >
-                {isSignUp ? "Back to Sign In" : "Create Account"}
+                {isSignUp || isForgotPassword ? "Back to Sign In" : "Create Account"}
               </button>
             </div>
           </form>
