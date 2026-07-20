@@ -449,6 +449,7 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
   const canManageLabor = hasPermission(role, "labor:manage");
   const canManagePhotos = hasPermission(role, "photo:manage");
   const canManageWorkOrderParts = canManageRepairJobs || canManagePartRequests;
+  const canViewTeamRates = role === "admin" || role === "owner";
 
   const vehicleFilterOptions = useMemo(
     () => getRepairsVehicleFilterOptions(jobs),
@@ -522,7 +523,7 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
     setErrorMessage("");
 
     try {
-      const { data, error } = await fetchRepairsQueue();
+      const { data, error } = await fetchRepairsQueue({ canViewTeamRates });
 
       if (error) {
         console.error("Could not load repairs:", error);
@@ -552,7 +553,7 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
       setErrorMessage("");
 
       try {
-        const { data, error } = await fetchRepairsQueue();
+        const { data, error } = await fetchRepairsQueue({ canViewTeamRates });
 
         if (!isMounted) {
           return;
@@ -585,7 +586,7 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [canViewTeamRates]);
 
   async function handleStatusChange(job, newStatus) {
     if (!canManageRepairJobs) {

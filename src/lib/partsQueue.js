@@ -169,7 +169,7 @@ export async function fetchPartsQueue() {
       : { data: [], error: null },
     profileIds.length > 0
       ? supabase
-          .from("profiles")
+          .from("profile_display_names")
           .select("id, full_name, email, role")
           .in("id", profileIds)
       : { data: [], error: null },
@@ -321,7 +321,7 @@ export async function fetchPartsQueue() {
   const additionalProfilesResponse =
     additionalProfileIds.length > 0
       ? await supabase
-          .from("profiles")
+          .from("profile_display_names")
           .select("id, full_name, email, role")
           .in("id", additionalProfileIds)
       : { data: [], error: null };

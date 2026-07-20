@@ -261,7 +261,7 @@ export async function fetchVendorsWithStats() {
   const profilesResponse =
     profileIds.length > 0
       ? await supabase
-          .from("profiles")
+          .from("profile_display_names")
           .select("id, full_name, email")
           .in("id", profileIds)
       : { data: [], error: null };

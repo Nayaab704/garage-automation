@@ -51,6 +51,10 @@ function getTechnicianName(profile) {
   );
 }
 
+function isAdminRole(role) {
+  return role === "admin" || role === "owner";
+}
+
 function parsePositiveNumber(value, label) {
   const numberValue = Number(value);
 
@@ -72,6 +76,7 @@ function parseNonnegativeNumber(value, label) {
 }
 
 function AddLaborLogForm({
+  currentProfile,
   onClose,
   onActivityLogged,
   onLaborLogAdded,
@@ -83,6 +88,11 @@ function AddLaborLogForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const canPickTechnician = isAdminRole(currentProfile?.role);
+  const selectedTechnician = canPickTechnician
+    ? profiles.find((profile) => profile.id === formData.technician_id)
+    : currentProfile;
+  const selectedHourlyRate = getProfileHourlyRate(selectedTechnician);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -90,7 +100,7 @@ function AddLaborLogForm({
     setFormData((currentFormData) => ({
       ...currentFormData,
       [name]: value,
-      ...(name === "technician_id"
+      ...(canPickTechnician && name === "technician_id"
         ? {
             hourly_rate: String(
               getProfileHourlyRate(
@@ -104,16 +114,13 @@ function AddLaborLogForm({
 
   function validateForm() {
     const hours = parsePositiveNumber(formData.hours, "Hours");
-    const hourlyRate = parseNonnegativeNumber(
-      formData.hourly_rate,
-      "Hourly rate"
-    );
+    const hourlyRate = parseNonnegativeNumber(selectedHourlyRate, "Hourly rate");
 
     if (!formData.repair_job_id) {
       return { error: "Repair job is required." };
     }
 
-    if (!formData.technician_id) {
+    if (!selectedTechnician?.id) {
       return { error: "Technician is required." };
     }
 
@@ -152,7 +159,7 @@ function AddLaborLogForm({
       const laborLog = {
         vehicle_id: vehicleId,
         repair_job_id: formData.repair_job_id,
-        technician_id: formData.technician_id,
+        technician_id: selectedTechnician.id,
         hours: validation.values.hours,
         hourly_rate: validation.values.hourlyRate,
         labor_cost: calculateLaborCost(
@@ -179,9 +186,7 @@ function AddLaborLogForm({
               ) ?? {}
             ),
             technician: getTechnicianName(
-              profiles.find(
-                (profile) => profile.id === laborLog.technician_id
-              ) ?? {}
+              selectedTechnician ?? {}
             ),
             hours: laborLog.hours,
             hourly_rate: laborLog.hourly_rate,
@@ -213,14 +218,14 @@ function AddLaborLogForm({
             <p className="mt-1 text-sm font-bold text-slate-800">
               {Number(formData.hours || 0) > 0
                 ? `${Number(formData.hours || 0)}h x ${formatHourlyRate(
-                    formData.hourly_rate
+                    selectedHourlyRate
                   )} = ${formatCurrency(
-                    calculateLaborCost(formData.hours, formData.hourly_rate)
+                    calculateLaborCost(formData.hours, selectedHourlyRate)
                   )}`
-                : `${formatHourlyRate(formData.hourly_rate)} rate selected`}
+                : `${formatHourlyRate(selectedHourlyRate)} rate selected`}
             </p>
-            {formData.technician_id &&
-              Number(formData.hourly_rate || 0) === 0 &&
+            {selectedTechnician?.id &&
+              Number(selectedHourlyRate || 0) === 0 &&
               Number(formData.hours || 0) > 0 && (
                 <p className="mt-2 text-xs font-semibold text-amber-700">
                   No hourly rate set for this technician. Labor cost will save as $0.00.
@@ -250,26 +255,28 @@ function AddLaborLogForm({
               </select>
             </label>
 
-            <label className="block" htmlFor="labor-technician">
-              <span className={formControlClassNames.label}>
-                Technician
-              </span>
-              <select
-                className={formControlClassNames.select}
-                id="labor-technician"
-                name="technician_id"
-                onChange={handleChange}
-                required
-                value={formData.technician_id}
-              >
-                <option value="">Select a technician</option>
-                {profiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {getTechnicianName(profile)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {canPickTechnician && (
+              <label className="block" htmlFor="labor-technician">
+                <span className={formControlClassNames.label}>
+                  Technician
+                </span>
+                <select
+                  className={formControlClassNames.select}
+                  id="labor-technician"
+                  name="technician_id"
+                  onChange={handleChange}
+                  required
+                  value={formData.technician_id}
+                >
+                  <option value="">Select a technician</option>
+                  {profiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {getTechnicianName(profile)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -301,7 +308,7 @@ function AddLaborLogForm({
                 required
                 step="0.01"
                 type="number"
-                value={formData.hourly_rate}
+                value={selectedHourlyRate}
               />
             </label>
           </div>

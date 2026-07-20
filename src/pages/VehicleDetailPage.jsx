@@ -173,7 +173,15 @@ async function fetchFinalChecks(vehicleId) {
     .eq("vehicle_id", vehicleId);
 }
 
-async function fetchVehicleDetails(vehicleId, { canManagePrebookings = false } = {}) {
+async function fetchVehicleDetails(
+  vehicleId,
+  {
+    canManagePrebookings = false,
+    canViewAdminFinancial = false,
+    canViewSaleDetails = false,
+    canViewTeamRates = false,
+  } = {}
+) {
   const prebookingsQuery = canManagePrebookings
     ? supabase
         .from("vehicle_prebookings")
@@ -184,6 +192,21 @@ async function fetchVehicleDetails(vehicleId, { canManagePrebookings = false } =
         .from("active_vehicle_prebooking_badges")
         .select(activePrebookingBadgeColumns)
         .eq("vehicle_id", vehicleId);
+  const profileColumns = canViewTeamRates
+    ? "id, full_name, email, role, phone, hourly_rate"
+    : "id, full_name, email, role";
+  const profileSource = canViewTeamRates ? "profiles" : "profile_display_names";
+  const costEntriesQuery = canViewAdminFinancial
+    ? supabase.from("cost_entries").select("*").eq("vehicle_id", vehicleId)
+    : { data: [], error: null };
+  const salesQuery = canViewSaleDetails
+    ? supabase
+        .from("sales")
+        .select("*")
+        .eq("vehicle_id", vehicleId)
+        .order("sale_date", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+    : { data: [], error: null };
   const [
     vehicleResponse,
     repairJobsResponse,
@@ -209,9 +232,9 @@ async function fetchVehicleDetails(vehicleId, { canManagePrebookings = false } =
       .eq("vehicle_id", vehicleId)
       .order("created_at", { ascending: false }),
     supabase
-      .from("profiles")
-      .select("id, full_name, email, role, phone, hourly_rate"),
-    supabase.from("cost_entries").select("*").eq("vehicle_id", vehicleId),
+      .from(profileSource)
+      .select(profileColumns),
+    costEntriesQuery,
     supabase
       .from("vehicle_photos")
       .select("*")
@@ -237,12 +260,7 @@ async function fetchVehicleDetails(vehicleId, { canManagePrebookings = false } =
     supabase.from("purchase_orders").select("*").eq("vehicle_id", vehicleId),
     supabase.from("vendors").select("*"),
     prebookingsQuery,
-    supabase
-      .from("sales")
-      .select("*")
-      .eq("vehicle_id", vehicleId)
-      .order("sale_date", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false }),
+    salesQuery,
   ]);
 
   const purchaseOrderIds = (purchaseOrdersResponse.data ?? [])
@@ -269,7 +287,7 @@ async function fetchVehicleDetails(vehicleId, { canManagePrebookings = false } =
           .select("*")
           .in("sale_id", saleIds);
 
-  const investmentSummaryResponse = vehicleResponse.error
+  const investmentSummaryResponse = vehicleResponse.error || !canViewAdminFinancial
     ? { data: null, error: null }
     : await fetchInvestmentSummary(vehicleId, vehicleResponse.data?.stock_number);
   const finalChecksResponse = vehicleResponse.error
@@ -443,6 +461,10 @@ function VehicleDetailPage({
   const vehiclePhotosRef = useRef(null);
   const role = currentProfile?.role;
   const canManagePrebookings = hasPermission(role, "sale:manage");
+  const canViewAdminFinancial = role === "admin" || role === "owner";
+  const canViewTeamRates = canViewAdminFinancial;
+  const canSellVehicle = hasPermission(role, "sale:manage");
+  const canViewSaleDetails = canSellVehicle;
 
   useEffect(() => {
     let isMounted = true;
@@ -461,6 +483,9 @@ function VehicleDetailPage({
       try {
         const responses = await fetchVehicleDetails(vehicleId, {
           canManagePrebookings,
+          canViewAdminFinancial,
+          canViewSaleDetails,
+          canViewTeamRates,
         });
 
         if (!isMounted) {
@@ -522,7 +547,14 @@ function VehicleDetailPage({
     return () => {
       isMounted = false;
     };
-  }, [canManagePrebookings, refreshCount, vehicleId]);
+  }, [
+    canManagePrebookings,
+    canViewAdminFinancial,
+    canViewSaleDetails,
+    canViewTeamRates,
+    refreshCount,
+    vehicleId,
+  ]);
 
   function refreshVehicleDetails() {
     setRefreshCount((currentCount) => currentCount + 1);
@@ -549,7 +581,7 @@ function VehicleDetailPage({
   }
 
   async function refreshInvestmentSummary() {
-    if (!vehicleId) {
+    if (!vehicleId || !canViewAdminFinancial) {
       return;
     }
 
@@ -1327,8 +1359,6 @@ function VehicleDetailPage({
     (role === "admin" || role === "owner" || role === "technician") &&
     (canManagePhotos || canManageRepairJobs);
   const canManageDocuments = canManagePhotos;
-  const canSellVehicle = hasPermission(role, "sale:manage");
-  const canViewSaleDetails = canSellVehicle;
   const activeSale = sales[0] ?? null;
   const canMarkSold =
     canSellVehicle &&
@@ -1496,14 +1526,16 @@ function VehicleDetailPage({
             />
           </div>
 
-          <ExtraCostsSection
-            canManage={canManageExtraCosts}
-            costEntries={costEntries}
-            onActivityLogged={refreshActivityTimeline}
-            onExtraCostAdded={handleExtraCostAdded}
-            onExtraCostDeleted={handleExtraCostDeleted}
-            vehicleId={vehicleId}
-          />
+          {canManageExtraCosts && (
+            <ExtraCostsSection
+              canManage={canManageExtraCosts}
+              costEntries={costEntries}
+              onActivityLogged={refreshActivityTimeline}
+              onExtraCostAdded={handleExtraCostAdded}
+              onExtraCostDeleted={handleExtraCostDeleted}
+              vehicleId={vehicleId}
+            />
+          )}
 
           <FinalCheckSection
             currentProfile={currentProfile}

@@ -210,11 +210,9 @@ function ProfileSettingsCard({ currentProfile, onCurrentProfileUpdated }) {
 
     try {
       const { data, error } = await supabase
-        .from("profiles")
-        .update({ full_name: nextFullName })
-        .eq("id", currentProfile.id)
-        .select(profileSelectFields)
-        .single();
+        .rpc("update_current_profile_name", {
+          p_full_name: nextFullName,
+        });
 
       if (error) {
         setErrorMessage(error.message);

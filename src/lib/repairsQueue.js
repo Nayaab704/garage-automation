@@ -85,7 +85,11 @@ function enrichParts({
   });
 }
 
-export async function fetchRepairsQueue() {
+export async function fetchRepairsQueue({ canViewTeamRates = false } = {}) {
+  const profileColumns = canViewTeamRates
+    ? "id, full_name, email, role, phone, hourly_rate"
+    : "id, full_name, email, role";
+  const profileSource = canViewTeamRates ? "profiles" : "profile_display_names";
   const repairJobsResponse = await supabase
     .from("repair_jobs")
     .select(repairJobColumns)
@@ -121,8 +125,8 @@ export async function fetchRepairsQueue() {
       .select("id, slug, name, is_active, sort_order")
       .order("sort_order", { ascending: true }),
     supabase
-      .from("profiles")
-      .select("id, full_name, email, role, phone, hourly_rate"),
+      .from(profileSource)
+      .select(profileColumns),
     supabase.from("vendors").select("id, name, phone, email, vendor_type").order("name", {
       ascending: true,
     }),

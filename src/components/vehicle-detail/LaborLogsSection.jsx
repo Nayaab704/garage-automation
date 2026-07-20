@@ -151,6 +151,7 @@ function LaborLogCard({
 
 function LaborLogsSection({
   canManage = false,
+  currentProfile,
   laborLogs = [],
   onActivityLogged,
   onLaborLogAdded,
@@ -272,6 +273,7 @@ function LaborLogsSection({
 
       {isFormOpen && canManage && (
         <AddLaborLogForm
+          currentProfile={currentProfile}
           onClose={() => setIsFormOpen(false)}
           onActivityLogged={onActivityLogged}
           onLaborLogAdded={onLaborLogAdded}

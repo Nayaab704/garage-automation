@@ -1543,7 +1543,21 @@ function DocumentsTab({ documents, photos, thirdPartyRepairs }) {
   );
 }
 
-async function fetchVehicleFileData(vehicleId) {
+async function fetchVehicleFileData(
+  vehicleId,
+  { canViewAdminFinancial = false, canViewSaleDetails = false } = {}
+) {
+  const costEntriesQuery = canViewAdminFinancial
+    ? supabase.from("cost_entries").select("*").eq("vehicle_id", vehicleId)
+    : { data: [], error: null };
+  const salesQuery = canViewSaleDetails
+    ? supabase
+        .from("sales")
+        .select("*")
+        .eq("vehicle_id", vehicleId)
+        .order("sale_date", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+    : { data: [], error: null };
   const [
     vehicleResponse,
     photosResponse,
@@ -1593,8 +1607,10 @@ async function fetchVehicleFileData(vehicleId) {
       .select("*")
       .eq("vehicle_id", vehicleId)
       .order("created_at", { ascending: false }),
-    supabase.from("profiles").select("id, full_name, email, role"),
-    supabase.from("cost_entries").select("*").eq("vehicle_id", vehicleId),
+    supabase
+      .from("profile_display_names")
+      .select("id, full_name, email, role"),
+    costEntriesQuery,
     supabase
       .from("vehicle_documents")
       .select(vehicleDocumentColumns)
@@ -1611,12 +1627,7 @@ async function fetchVehicleFileData(vehicleId) {
       .select(activePrebookingBadgeColumns)
       .eq("vehicle_id", vehicleId)
       .maybeSingle(),
-    supabase
-      .from("sales")
-      .select("*")
-      .eq("vehicle_id", vehicleId)
-      .order("sale_date", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false }),
+    salesQuery,
   ]);
 
   if (vehicleResponse.error) {
@@ -1637,11 +1648,13 @@ async function fetchVehicleFileData(vehicleId) {
           .from("purchase_order_items")
           .select("*")
           .in("purchase_order_id", purchaseOrderIds);
-  const investmentSummaryResponse = await supabase
-    .from("vehicle_investment_summary")
-    .select("*")
-    .eq("vehicle_id", vehicleId)
-    .maybeSingle();
+  const investmentSummaryResponse = canViewAdminFinancial
+    ? await supabase
+        .from("vehicle_investment_summary")
+        .select("*")
+        .eq("vehicle_id", vehicleId)
+        .maybeSingle()
+    : { data: null, error: null };
   const firstError =
     photosResponse.error ??
     repairJobsResponse.error ??
@@ -1712,6 +1725,9 @@ function VehicleFilePage({
     hasPermission(currentProfile?.role, "purchase_order:manage") ||
     hasPermission(currentProfile?.role, "part_request:manage") ||
     hasPermission(currentProfile?.role, "repair:manage");
+  const canViewAdminFinancial = ["admin", "owner"].includes(
+    currentProfile?.role
+  );
   const canViewSaleDetails = hasPermission(currentProfile?.role, "sale:manage");
 
   useEffect(() => {
@@ -1728,7 +1744,10 @@ function VehicleFilePage({
       setErrorMessage("");
 
       try {
-        const response = await fetchVehicleFileData(vehicleId);
+        const response = await fetchVehicleFileData(vehicleId, {
+          canViewAdminFinancial,
+          canViewSaleDetails,
+        });
 
         if (!isMounted) {
           return;
@@ -1760,7 +1779,7 @@ function VehicleFilePage({
     return () => {
       isMounted = false;
     };
-  }, [canViewVehicleFile, vehicleId]);
+  }, [canViewAdminFinancial, canViewSaleDetails, canViewVehicleFile, vehicleId]);
 
   const primaryPhoto = data
     ? getVehiclePrimaryPhoto(data.vehicle, data.photos)

@@ -439,7 +439,27 @@ function createActionCenterGroups({
   }));
 }
 
-async function fetchDashboardData() {
+async function fetchDashboardData({
+  canViewAdminFinancial = false,
+  canViewSaleDetails = false,
+  canViewTeamRates = false,
+} = {}) {
+  const investmentSummariesQuery = canViewAdminFinancial
+    ? supabase
+        .from("vehicle_investment_summary")
+        .select("stock_number, make, model, total_invested, estimated_profit")
+        .order("stock_number", { ascending: true })
+    : { data: [], error: null };
+  const salesQuery = canViewSaleDetails
+    ? supabase
+        .from("sales")
+        .select("id, vehicle_id, sale_price, sale_date")
+        .order("sale_date", { ascending: false })
+    : { data: [], error: null };
+  const profileColumns = canViewTeamRates
+    ? "id, full_name, email, role, hourly_rate, is_active"
+    : "id, full_name, email, role";
+  const profileSource = canViewTeamRates ? "profiles" : "profile_display_names";
   const [
     summariesResponse,
     vehiclesResponse,
@@ -454,20 +474,14 @@ async function fetchDashboardData() {
     laborLogsResponse,
     profilesResponse,
   ] = await Promise.all([
-    supabase
-      .from("vehicle_investment_summary")
-      .select("stock_number, make, model, total_invested, estimated_profit")
-      .order("stock_number", { ascending: true }),
+    investmentSummariesQuery,
     supabase
       .from("vehicles")
       .select(
         "id, stock_number, year, make, model, status, sale_status, created_at"
       )
       .order("stock_number", { ascending: true }),
-    supabase
-      .from("sales")
-      .select("id, vehicle_id, sale_price, sale_date")
-      .order("sale_date", { ascending: false }),
+    salesQuery,
     supabase
       .from("part_requests")
       .select(
@@ -508,8 +522,8 @@ async function fetchDashboardData() {
       .order("created_at", { ascending: false })
       .limit(50),
     supabase
-      .from("profiles")
-      .select("id, full_name, email, role, hourly_rate, is_active")
+      .from(profileSource)
+      .select(profileColumns)
       .order("full_name", { ascending: true }),
   ]);
 
@@ -1188,12 +1202,17 @@ function TeamActivitySection({ laborLogs, profiles, vehiclesById }) {
     (total, laborLog) => total + numberOrZero(laborLog.hours),
     0
   );
-  const missingRateCount = profiles.filter(
-    (profile) =>
-      profile.is_active &&
-      profile.role === "technician" &&
-      numberOrZero(profile.hourly_rate) <= 0
-  ).length;
+  const canInspectHourlyRates = profiles.some((profile) =>
+    Object.prototype.hasOwnProperty.call(profile, "hourly_rate")
+  );
+  const missingRateCount = canInspectHourlyRates
+    ? profiles.filter(
+        (profile) =>
+          profile.is_active &&
+          profile.role === "technician" &&
+          numberOrZero(profile.hourly_rate) <= 0
+      ).length
+    : 0;
   const recentLaborLogs = laborLogs.slice(0, 3);
 
   return (
@@ -1306,6 +1325,12 @@ function Dashboard({
     "dashboard:view"
   );
   const canStartIntake = hasPermission(currentProfile?.role, "vehicle:create");
+  const canViewAdminFinancial = ["admin", "owner"].includes(
+    currentProfile?.role
+  );
+  const canViewSaleDetails =
+    canViewAdminFinancial || hasPermission(currentProfile?.role, "sale:manage");
+  const canViewTeamRates = canViewAdminFinancial;
 
   useEffect(() => {
     let isMounted = true;
@@ -1315,7 +1340,11 @@ function Dashboard({
       setErrorMessage("");
 
       try {
-        const { data, error } = await fetchDashboardData();
+        const { data, error } = await fetchDashboardData({
+          canViewAdminFinancial,
+          canViewSaleDetails,
+          canViewTeamRates,
+        });
 
         if (!isMounted) {
           return;
@@ -1382,7 +1411,12 @@ function Dashboard({
     return () => {
       isMounted = false;
     };
-  }, [canViewDashboard]);
+  }, [
+    canViewAdminFinancial,
+    canViewDashboard,
+    canViewSaleDetails,
+    canViewTeamRates,
+  ]);
 
   const vehiclesById = useMemo(() => {
     return Object.fromEntries(vehicles.map((vehicle) => [vehicle.id, vehicle]));

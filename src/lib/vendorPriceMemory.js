@@ -119,7 +119,7 @@ async function enrichQuotesWithCreators(quotes = []) {
   }
 
   const profilesResponse = await supabase
-    .from("profiles")
+    .from("profile_display_names")
     .select("id, full_name, email")
     .in("id", profileIds);
 
