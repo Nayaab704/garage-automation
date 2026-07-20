@@ -142,7 +142,7 @@ function getRecordById(records, id) {
 
 function getProfileName(profiles, profileId) {
   const profile = getRecordById(profiles, profileId);
-  return profile ? formatUserFirstName(profile) : "";
+  return profile ? formatUserFirstName(profile) : profileId ? "Removed user" : "";
 }
 
 function getVendorName(vendors, vendorId) {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import BrandLogo from "../components/branding/BrandLogo";
 import AppBackground from "../components/ui/AppBackground";
+import AppIcon from "../components/ui/AppIcon";
 import {
   buttonClassNames,
   cardClassNames,
@@ -17,6 +18,7 @@ const emptyForm = {
 function LoginPage() {
   const [formData, setFormData] = useState(emptyForm);
   const [authMode, setAuthMode] = useState("sign-in");
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [loadingAction, setLoadingAction] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -176,16 +178,31 @@ function LoginPage() {
 
             <label className="block" htmlFor="login-password">
               <span className={formControlClassNames.label}>Password</span>
-              <input
-                autoComplete="current-password"
-                className={formControlClassNames.input}
-                id="login-password"
-                name="password"
-                onChange={handleChange}
-                required
-                type="password"
-                value={formData.password}
-              />
+              <div className="relative">
+                <input
+                  autoComplete={isSignUp ? "new-password" : "current-password"}
+                  className={`${formControlClassNames.input} pr-14`}
+                  id="login-password"
+                  name="password"
+                  onChange={handleChange}
+                  required
+                  type={isPasswordVisible ? "text" : "password"}
+                  value={formData.password}
+                />
+                <button
+                  aria-label={isPasswordVisible ? "Hide password" : "Show password"}
+                  className="absolute right-2 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  onClick={() =>
+                    setIsPasswordVisible((currentValue) => !currentValue)
+                  }
+                  type="button"
+                >
+                  <AppIcon
+                    name={isPasswordVisible ? "eye-off" : "eye"}
+                    size={20}
+                  />
+                </button>
+              </div>
             </label>
 
             {errorMessage && (

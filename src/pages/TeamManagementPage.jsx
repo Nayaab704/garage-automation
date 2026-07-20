@@ -6,40 +6,14 @@ import {
 import { formatHourlyRate, numberOrZero } from "../lib/laborCost";
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
+import { buttonClassNames } from "../components/ui/uiStyles";
 
 const profileSelectFields =
-  "id, auth_user_id, full_name, email, role, phone, hourly_rate, is_active, created_at";
+  "id, auth_user_id, full_name, email, role, phone, hourly_rate, is_active, removed_at, created_at";
 
 const roleOptions = [
   { label: "Admin", value: "admin" },
   { label: "Technician", value: "technician" },
-];
-
-const tabOptions = [
-  {
-    emptySubtext: "New signups waiting for approval will appear here.",
-    emptyTitle: "No pending users.",
-    label: "Pending",
-    value: "pending",
-  },
-  {
-    emptySubtext: "Approved users will appear here.",
-    emptyTitle: "No active users.",
-    label: "Active",
-    value: "active",
-  },
-  {
-    emptySubtext: "Deactivated users will appear here.",
-    emptyTitle: "No inactive users.",
-    label: "Inactive",
-    value: "inactive",
-  },
-  {
-    emptySubtext: "Team profiles will appear here after users sign up.",
-    emptyTitle: "No team profiles found.",
-    label: "All",
-    value: "all",
-  },
 ];
 
 function displayValue(value) {
@@ -84,11 +58,23 @@ function getProfileName(profile) {
   return profile.full_name || profile.email || "Unnamed user";
 }
 
+function isRemovedProfile(profile) {
+  return Boolean(profile?.removed_at);
+}
+
 function getProfileStatus(profile) {
+  if (isRemovedProfile(profile)) {
+    return "Removed";
+  }
+
   return profile.is_active ? "Active" : "Pending / Inactive";
 }
 
 function getProfileStatusClassName(profile) {
+  if (isRemovedProfile(profile)) {
+    return "bg-red-50 text-red-700 ring-red-200";
+  }
+
   return profile.is_active
     ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
     : "bg-amber-50 text-amber-800 ring-amber-200";
@@ -108,12 +94,8 @@ function getRoleOptions(profile) {
   ];
 }
 
-function getActionLabel(profile, activeTab) {
-  if (profile.is_active) {
-    return "Deactivate";
-  }
-
-  return activeTab === "inactive" ? "Reactivate" : "Approve";
+function getActionLabel(profile) {
+  return profile.is_active ? "Deactivate" : "Approve / Reactivate";
 }
 
 function profileMatchesSearch(profile, searchTerm) {
@@ -127,6 +109,7 @@ function profileMatchesSearch(profile, searchTerm) {
     profile.role,
     formatProfileRole(profile.role),
     getProfileStatus(profile),
+    profile.removed_at,
   ];
 
   return searchableValues.some((value) =>
@@ -134,22 +117,24 @@ function profileMatchesSearch(profile, searchTerm) {
   );
 }
 
-function filterByTab(profile, activeTab) {
-  if (activeTab === "active") {
-    return profile.is_active === true;
-  }
-
-  if (activeTab === "pending" || activeTab === "inactive") {
-    return profile.is_active === false;
-  }
-
-  return true;
-}
-
 function sortProfiles(profiles) {
   return [...profiles].sort((firstProfile, secondProfile) => {
+    const firstRemoved = isRemovedProfile(firstProfile);
+    const secondRemoved = isRemovedProfile(secondProfile);
+
+    if (firstRemoved !== secondRemoved) {
+      return firstRemoved ? 1 : -1;
+    }
+
+    if (firstRemoved && secondRemoved) {
+      return (
+        new Date(secondProfile.removed_at ?? 0).getTime() -
+        new Date(firstProfile.removed_at ?? 0).getTime()
+      );
+    }
+
     if (firstProfile.is_active !== secondProfile.is_active) {
-      return firstProfile.is_active ? 1 : -1;
+      return firstProfile.is_active ? -1 : 1;
     }
 
     if (firstProfile.is_active && secondProfile.is_active) {
@@ -167,13 +152,79 @@ function sortProfiles(profiles) {
   });
 }
 
+function TeamSection({ children, count, emptySubtext, emptyTitle, title }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-lg font-black text-slate-950">{title}</h3>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-600 ring-1 ring-inset ring-slate-200">
+          {count}
+        </span>
+      </div>
+
+      <div className="mt-4">
+        {count === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center">
+            <p className="font-black text-slate-700">{emptyTitle}</p>
+            <p className="mt-2 text-sm text-slate-500">{emptySubtext}</p>
+          </div>
+        ) : (
+          <div className="grid gap-3">{children}</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ConfirmationModal({
+  confirmClassName = buttonClassNames.primary,
+  confirmLabel,
+  isSubmitting = false,
+  message,
+  onCancel,
+  onConfirm,
+  title,
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-3 backdrop-blur-sm sm:items-center sm:p-4">
+      <section
+        aria-modal="true"
+        className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl"
+        role="dialog"
+      >
+        <h3 className="text-lg font-black text-slate-950">{title}</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-600">{message}</p>
+
+        <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            className={`w-full sm:w-auto ${buttonClassNames.secondary}`}
+            disabled={isSubmitting}
+            onClick={onCancel}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className={`w-full sm:w-auto ${confirmClassName}`}
+            disabled={isSubmitting}
+            onClick={onConfirm}
+            type="button"
+          >
+            {isSubmitting ? "Saving..." : confirmLabel}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function TeamMemberCard({
-  activeTab,
   currentProfile,
   isUpdating,
   onActiveChange,
   onFullNameChange,
   onHourlyRateChange,
+  onRemove,
   onRoleChange,
   profile,
 }) {
@@ -184,7 +235,7 @@ function TeamMemberCard({
     numberToInputValue(profile.hourly_rate)
   );
   const isCurrentUser = profile.id === currentProfile?.id;
-  const actionLabel = getActionLabel(profile, activeTab);
+  const actionLabel = getActionLabel(profile);
   const nextActiveState = !profile.is_active;
   const currentRole = profile.role || "technician";
   const savedHourlyRate = numberOrZero(profile.hourly_rate);
@@ -196,7 +247,7 @@ function TeamMemberCard({
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(180px,0.55fr)_minmax(170px,0.62fr)_minmax(190px,0.7fr)_auto] lg:items-center">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(180px,0.55fr)_minmax(170px,0.62fr)_minmax(190px,0.7fr)_auto] xl:items-center">
         <div className="min-w-0">
           <label className="block" htmlFor={`team-full-name-${profile.id}`}>
             <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -310,7 +361,7 @@ function TeamMemberCard({
           )}
         </label>
 
-        <div className="flex flex-wrap gap-2 lg:justify-end">
+        <div className="flex flex-wrap gap-2 xl:justify-end">
           <button
             className={`inline-flex min-h-10 flex-1 items-center justify-center rounded-xl px-3 py-2 text-sm font-black shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none ${
               profile.is_active
@@ -323,7 +374,54 @@ function TeamMemberCard({
           >
             {isUpdating ? "Saving..." : actionLabel}
           </button>
+
+          <button
+            className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-black text-red-700 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
+            disabled={isUpdating || isCurrentUser}
+            onClick={() => onRemove(profile)}
+            type="button"
+          >
+            Remove from Team
+          </button>
         </div>
+      </div>
+    </article>
+  );
+}
+
+function RemovedTeamMemberCard({ isUpdating, onRestore, profile }) {
+  return (
+    <article className="rounded-2xl border border-red-100 bg-red-50/40 p-4 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <h4 className="truncate text-base font-black text-slate-950">
+            {displayValue(profile.full_name)}
+          </h4>
+          <p className="mt-1 truncate text-sm font-semibold text-slate-500">
+            {displayValue(profile.email)}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${getProfileRoleClassName(
+                profile.role
+              )}`}
+            >
+              {formatProfileRole(profile.role)}
+            </span>
+            <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700 ring-1 ring-inset ring-red-200">
+              Removed {formatDate(profile.removed_at)}
+            </span>
+          </div>
+        </div>
+
+        <button
+          className={`w-full lg:w-auto ${buttonClassNames.secondary}`}
+          disabled={isUpdating}
+          onClick={() => onRestore(profile)}
+          type="button"
+        >
+          {isUpdating ? "Restoring..." : "Restore"}
+        </button>
       </div>
     </article>
   );
@@ -331,12 +429,14 @@ function TeamMemberCard({
 
 function TeamManagementPage({ currentProfile }) {
   const [profiles, setProfiles] = useState([]);
-  const [activeTab, setActiveTab] = useState("pending");
   const [searchTerm, setSearchTerm] = useState("");
+  const [showRemovedMembers, setShowRemovedMembers] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [updatingProfileId, setUpdatingProfileId] = useState(null);
+  const [pendingRemoveProfile, setPendingRemoveProfile] = useState(null);
+  const [pendingRestoreProfile, setPendingRestoreProfile] = useState(null);
   const canManageUsers = hasPermission(currentProfile?.role, "user:manage");
 
   useEffect(() => {
@@ -387,27 +487,23 @@ function TeamManagementPage({ currentProfile }) {
     };
   }, [canManageUsers]);
 
-  const tabCounts = useMemo(() => {
-    const inactiveCount = profiles.filter((profile) => !profile.is_active).length;
-    const activeCount = profiles.filter((profile) => profile.is_active).length;
+  const filteredGroups = useMemo(() => {
+    const normalizedSearchTerm = formatSearchValue(searchTerm);
+    const matchingProfiles = profiles.filter((profile) =>
+      profileMatchesSearch(profile, normalizedSearchTerm)
+    );
 
     return {
-      active: activeCount,
-      all: profiles.length,
-      inactive: inactiveCount,
-      pending: inactiveCount,
+      activeProfiles: matchingProfiles.filter(
+        (profile) => !isRemovedProfile(profile) && profile.is_active === true
+      ),
+      inactiveProfiles: matchingProfiles.filter(
+        (profile) => !isRemovedProfile(profile) && profile.is_active !== true
+      ),
+      removedProfiles: matchingProfiles.filter(isRemovedProfile),
+      totalRemovedCount: profiles.filter(isRemovedProfile).length,
     };
-  }, [profiles]);
-
-  const visibleProfiles = useMemo(() => {
-    const normalizedSearchTerm = formatSearchValue(searchTerm);
-
-    return profiles.filter(
-      (profile) =>
-        filterByTab(profile, activeTab) &&
-        profileMatchesSearch(profile, normalizedSearchTerm)
-    );
-  }, [activeTab, profiles, searchTerm]);
+  }, [profiles, searchTerm]);
 
   function updateProfileInState(updatedProfile) {
     setProfiles((currentProfiles) =>
@@ -521,6 +617,11 @@ function TeamManagementPage({ currentProfile }) {
   }
 
   async function handleActiveChange(profile, nextIsActive) {
+    if (isRemovedProfile(profile)) {
+      setErrorMessage("Restore this user before changing access.");
+      return;
+    }
+
     if (profile.id === currentProfile?.id && nextIsActive === false) {
       setErrorMessage("You cannot deactivate your own account.");
       return;
@@ -547,10 +648,100 @@ function TeamManagementPage({ currentProfile }) {
 
       updateProfileInState(data);
       setSuccessMessage(
-        nextIsActive ? "User approved." : "User deactivated."
+        nextIsActive ? "User approved/reactivated." : "User deactivated."
       );
     } catch (error) {
       setErrorMessage(error.message ?? "Unable to update user status.");
+    } finally {
+      setUpdatingProfileId(null);
+    }
+  }
+
+  function handleRemoveRequest(profile) {
+    if (profile.id === currentProfile?.id) {
+      setErrorMessage("You cannot remove your own account.");
+      return;
+    }
+
+    setErrorMessage("");
+    setSuccessMessage("");
+    setPendingRemoveProfile(profile);
+  }
+
+  async function handleConfirmRemove() {
+    if (!pendingRemoveProfile) {
+      return;
+    }
+
+    const nextRole = pendingRemoveProfile.role || "technician";
+
+    setUpdatingProfileId(pendingRemoveProfile.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({
+          is_active: false,
+          removed_at: new Date().toISOString(),
+          role: nextRole,
+        })
+        .eq("id", pendingRemoveProfile.id)
+        .select(profileSelectFields)
+        .single();
+
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
+
+      updateProfileInState(data);
+      setPendingRemoveProfile(null);
+      setSuccessMessage("User removed from team.");
+    } catch (error) {
+      setErrorMessage(error.message ?? "Unable to remove team member.");
+    } finally {
+      setUpdatingProfileId(null);
+    }
+  }
+
+  function handleRestoreRequest(profile) {
+    setErrorMessage("");
+    setSuccessMessage("");
+    setPendingRestoreProfile(profile);
+  }
+
+  async function handleConfirmRestore() {
+    if (!pendingRestoreProfile) {
+      return;
+    }
+
+    setUpdatingProfileId(pendingRestoreProfile.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({
+          is_active: false,
+          removed_at: null,
+        })
+        .eq("id", pendingRestoreProfile.id)
+        .select(profileSelectFields)
+        .single();
+
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
+
+      updateProfileInState(data);
+      setPendingRestoreProfile(null);
+      setSuccessMessage("User restored to Inactive Members.");
+    } catch (error) {
+      setErrorMessage(error.message ?? "Unable to restore team member.");
     } finally {
       setUpdatingProfileId(null);
     }
@@ -567,9 +758,12 @@ function TeamManagementPage({ currentProfile }) {
     );
   }
 
-  const activeTabOption =
-    tabOptions.find((tabOption) => tabOption.value === activeTab) ??
-    tabOptions[0];
+  const {
+    activeProfiles,
+    inactiveProfiles,
+    removedProfiles,
+    totalRemovedCount,
+  } = filteredGroups;
 
   return (
     <section className="space-y-5">
@@ -580,54 +774,36 @@ function TeamManagementPage({ currentProfile }) {
               Team Management
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Review pending signups, approve access, manage roles, and
-              deactivate accounts when needed.
+              Review access, roles, labor rates, and soft-removed team members.
             </p>
           </div>
 
-          <label className="block w-full lg:w-80" htmlFor="team-search">
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
-              Search
-            </span>
-            <input
-              className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-              id="team-search"
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Name, email, or role"
-              type="search"
-              value={searchTerm}
-            />
-          </label>
-        </div>
+          <div className="flex w-full flex-col gap-3 lg:w-96">
+            <label className="block" htmlFor="team-search">
+              <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                Search
+              </span>
+              <input
+                className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                id="team-search"
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Name, email, role, or status"
+                type="search"
+                value={searchTerm}
+              />
+            </label>
 
-        <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
-          {tabOptions.map((tabOption) => {
-            const isSelected = activeTab === tabOption.value;
-
-            return (
-              <button
-                className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-black transition ${
-                  isSelected
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
-                key={tabOption.value}
-                onClick={() => setActiveTab(tabOption.value)}
-                type="button"
-              >
-                {tabOption.label}
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs ${
-                    isSelected
-                      ? "bg-white/20 text-white"
-                      : "bg-white text-slate-600"
-                  }`}
-                >
-                  {tabCounts[tabOption.value]}
-                </span>
-              </button>
-            );
-          })}
+            <button
+              className={buttonClassNames.secondary}
+              onClick={() => setShowRemovedMembers((isShowing) => !isShowing)}
+              type="button"
+            >
+              {showRemovedMembers ? "Hide" : "Show"} Removed Members
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                {totalRemovedCount}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -649,37 +825,99 @@ function TeamManagementPage({ currentProfile }) {
         </div>
       )}
 
-      {!isLoading && visibleProfiles.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">
-          <p className="font-black text-slate-700">
-            {searchTerm.trim()
-              ? "No matching users found."
-              : activeTabOption.emptyTitle}
-          </p>
-          <p className="mt-2 text-sm text-slate-500">
-            {searchTerm.trim()
-              ? "Try searching by name, email, or role."
-              : activeTabOption.emptySubtext}
-          </p>
-        </div>
+      {!isLoading && (
+        <>
+          <TeamSection
+            count={activeProfiles.length}
+            emptySubtext="Approved users with app access will appear here."
+            emptyTitle="No active members."
+            title="Active Members"
+          >
+            {activeProfiles.map((profile) => (
+              <TeamMemberCard
+                currentProfile={currentProfile}
+                isUpdating={updatingProfileId === profile.id}
+                key={profile.id}
+                onActiveChange={handleActiveChange}
+                onFullNameChange={handleFullNameChange}
+                onHourlyRateChange={handleHourlyRateChange}
+                onRemove={handleRemoveRequest}
+                onRoleChange={handleRoleChange}
+                profile={profile}
+              />
+            ))}
+          </TeamSection>
+
+          <TeamSection
+            count={inactiveProfiles.length}
+            emptySubtext="Pending, deactivated, and restored users appear here for review."
+            emptyTitle="No inactive members."
+            title="Inactive Members"
+          >
+            {inactiveProfiles.map((profile) => (
+              <TeamMemberCard
+                currentProfile={currentProfile}
+                isUpdating={updatingProfileId === profile.id}
+                key={profile.id}
+                onActiveChange={handleActiveChange}
+                onFullNameChange={handleFullNameChange}
+                onHourlyRateChange={handleHourlyRateChange}
+                onRemove={handleRemoveRequest}
+                onRoleChange={handleRoleChange}
+                profile={profile}
+              />
+            ))}
+          </TeamSection>
+
+          {showRemovedMembers && (
+            <TeamSection
+              count={removedProfiles.length}
+              emptySubtext={
+                searchTerm.trim()
+                  ? "Try a different search term."
+                  : "Removed members will appear here after they are soft-removed."
+              }
+              emptyTitle={
+                searchTerm.trim()
+                  ? "No matching removed members."
+                  : "No removed members."
+              }
+              title="Removed Members"
+            >
+              {removedProfiles.map((profile) => (
+                <RemovedTeamMemberCard
+                  isUpdating={updatingProfileId === profile.id}
+                  key={profile.id}
+                  onRestore={handleRestoreRequest}
+                  profile={profile}
+                />
+              ))}
+            </TeamSection>
+          )}
+        </>
       )}
 
-      {!isLoading && visibleProfiles.length > 0 && (
-        <div className="grid gap-3">
-          {visibleProfiles.map((profile) => (
-            <TeamMemberCard
-              activeTab={activeTab}
-              currentProfile={currentProfile}
-              isUpdating={updatingProfileId === profile.id}
-              key={profile.id}
-              onActiveChange={handleActiveChange}
-              onFullNameChange={handleFullNameChange}
-              onHourlyRateChange={handleHourlyRateChange}
-              onRoleChange={handleRoleChange}
-              profile={profile}
-            />
-          ))}
-        </div>
+      {pendingRemoveProfile && (
+        <ConfirmationModal
+          confirmClassName={buttonClassNames.danger}
+          confirmLabel="Remove from Team"
+          isSubmitting={updatingProfileId === pendingRemoveProfile.id}
+          message="This will remove the user from the team list and block their app access. Historical records will remain for audit purposes."
+          onCancel={() => setPendingRemoveProfile(null)}
+          onConfirm={handleConfirmRemove}
+          title="Remove team member?"
+        />
+      )}
+
+      {pendingRestoreProfile && (
+        <ConfirmationModal
+          confirmLabel="Restore"
+          isSubmitting={updatingProfileId === pendingRestoreProfile.id}
+          message="This will move the user back to Inactive Members. You can reactivate them after reviewing their details."
+          onCancel={() => setPendingRestoreProfile(null)}
+          onConfirm={handleConfirmRestore}
+          title="Restore team member?"
+        />
       )}
     </section>
   );

@@ -350,15 +350,20 @@ function PlaceholderPage({ title }) {
   );
 }
 
-function AccountPendingApproval({ isLoggingOut, onLogout }) {
+function AccountPendingApproval({
+  isLoggingOut,
+  message = "Your account is pending admin approval. Please contact the admin.",
+  onLogout,
+  title = "Account Pending Approval",
+}) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-4">
       <section className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-8 text-center shadow-sm">
         <p className="text-sm font-semibold uppercase tracking-wide text-amber-700">
-          Account Pending Approval
+          {title}
         </p>
         <h1 className="mt-3 text-2xl font-bold text-zinc-950">
-          Your account is pending admin approval. Please contact the admin.
+          {message}
         </h1>
         <button
           className="mt-6 w-full rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -583,7 +588,7 @@ function App() {
 
         setCurrentProfile(data);
 
-        if (data.is_active === true) {
+        if (data.is_active === true && !data.removed_at) {
           const route = currentRouteRef.current;
           const depth = appHistoryDepthRef.current;
           const myWorkFallbackRoute = createAppRoute(
@@ -972,6 +977,17 @@ function App() {
         isLoggingOut={isLoggingOut}
         onLogout={handleLogout}
         onRetry={handleRetryProfile}
+      />
+    );
+  }
+
+  if (currentProfile?.removed_at) {
+    return (
+      <AccountPendingApproval
+        isLoggingOut={isLoggingOut}
+        message="Your account has been removed from this team. Please contact the admin."
+        onLogout={handleLogout}
+        title="Account Removed"
       />
     );
   }

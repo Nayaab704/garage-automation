@@ -60,7 +60,7 @@ function getProfileName(profiles, profileId) {
   const profile = profiles.find((profileRecord) => profileRecord.id === profileId);
 
   if (!profile) {
-    return null;
+    return profileId ? "Removed user" : null;
   }
 
   return profile.full_name || profile.email || null;
@@ -130,7 +130,7 @@ function getReceivedAttributionText(purchaseOrder, profiles, currentProfile) {
   const receivedName = receivedByProfile
     ? formatUserFirstName(receivedByProfile)
     : purchaseOrder.received_by
-      ? "User"
+      ? "Removed user"
       : "";
   const receivedLabel = receivedName
     ? `Received by ${receivedName}`

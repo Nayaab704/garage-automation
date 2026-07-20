@@ -40,7 +40,7 @@ export async function fetchCurrentUserProfile(userId) {
   return supabase
     .from("profiles")
     .select(
-      "id, auth_user_id, email, full_name, role, phone, hourly_rate, is_active, created_at"
+      "id, auth_user_id, email, full_name, role, phone, hourly_rate, is_active, removed_at, created_at"
     )
     .eq("auth_user_id", userId)
     .maybeSingle();

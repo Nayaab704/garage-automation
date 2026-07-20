@@ -44,7 +44,7 @@ function formatNumber(value) {
 
 function getProfileName(profiles, profileId) {
   const profile = profiles.find((profileRecord) => profileRecord.id === profileId);
-  return profile?.full_name || profile?.email || "Unknown Technician";
+  return profile?.full_name || profile?.email || "Removed user";
 }
 
 function isAdminRole(role) {

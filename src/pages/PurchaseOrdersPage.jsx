@@ -272,7 +272,7 @@ function getActionFirstName(profile, profileId) {
     return "";
   }
 
-  return isLikelyUuid(profileId) ? "User" : formatUserFirstName(profileId);
+  return isLikelyUuid(profileId) ? "Removed user" : formatUserFirstName(profileId);
 }
 
 function getActionAttributionParts(actionLabel, profile, profileId, dateValue) {

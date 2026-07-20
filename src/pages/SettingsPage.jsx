@@ -15,7 +15,7 @@ const roleOptions = [
 ];
 
 const profileSelectFields =
-  "id, auth_user_id, full_name, email, role, phone, hourly_rate, is_active, created_at";
+  "id, auth_user_id, full_name, email, role, phone, hourly_rate, is_active, removed_at, created_at";
 
 function displayValue(value) {
   return value === null || value === undefined || value === ""
@@ -47,6 +47,10 @@ function numberToInputValue(value) {
   }
 
   return String(value);
+}
+
+function isRemovedProfile(profile) {
+  return Boolean(profile?.removed_at);
 }
 
 function TeamMemberCard({
@@ -311,6 +315,7 @@ function SettingsPage({ currentProfile, onCurrentProfileUpdated }) {
   const [successMessage, setSuccessMessage] = useState("");
   const [updatingProfileId, setUpdatingProfileId] = useState(null);
   const canManageUsers = hasPermission(currentProfile?.role, "user:manage");
+  const visibleProfiles = profiles.filter((profile) => !isRemovedProfile(profile));
 
   useEffect(() => {
     let isMounted = true;
@@ -521,15 +526,15 @@ function SettingsPage({ currentProfile, onCurrentProfileUpdated }) {
         </div>
       )}
 
-      {!isLoading && profiles.length === 0 && !errorMessage && (
+      {!isLoading && visibleProfiles.length === 0 && !errorMessage && (
         <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">
           No team profiles found.
         </div>
       )}
 
-      {!isLoading && profiles.length > 0 && (
+      {!isLoading && visibleProfiles.length > 0 && (
         <div className="grid gap-4">
-          {profiles.map((profile) => (
+          {visibleProfiles.map((profile) => (
             <TeamMemberCard
               currentProfile={currentProfile}
               isUpdating={updatingProfileId === profile.id}

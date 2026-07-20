@@ -80,7 +80,7 @@ function getReturnedAttributionText(
   const returnedName = returnedByProfile
     ? formatUserFirstName(returnedByProfile)
     : returnedPurchaseOrderItem.returned_by
-      ? "User"
+      ? "Removed user"
       : "";
   const returnedLabel = returnedName ? `Returned by ${returnedName}` : "Returned";
   const returnedDate = returnedPurchaseOrderItem.returned_at

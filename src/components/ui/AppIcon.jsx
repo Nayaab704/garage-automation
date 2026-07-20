@@ -84,6 +84,20 @@ const iconPaths = {
       <path d="M4 15.5 8.5 20" />
     </>
   ),
+  eye: (
+    <>
+      <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  "eye-off": (
+    <>
+      <path d="m3 3 18 18" />
+      <path d="M10.7 5.2A10.6 10.6 0 0 1 12 5c6 0 9.5 7 9.5 7a17.8 17.8 0 0 1-3.3 4.1" />
+      <path d="M6.6 6.6C3.9 8.4 2.5 12 2.5 12s3.5 7 9.5 7a9.8 9.8 0 0 0 4.1-.9" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    </>
+  ),
   file: (
     <>
       <path d="M7 3h7l5 5v13H7V3Z" />
@@ -262,6 +276,8 @@ const aliases = {
   electrical: "lightning",
   pencil: "edit",
   edit: "edit",
+  eye: "eye",
+  "eye-off": "eye-off",
   filter: "filter",
   details: "info",
   glass: "windshield",

@@ -52,7 +52,7 @@ function getProfileName(profiles, profileId) {
   const profile = profiles.find(
     (profileRecord) => profileRecord.id === profileId
   );
-  return profile?.full_name || profile?.email || "Unknown User";
+  return profile?.full_name || profile?.email || "Removed user";
 }
 
 function canUpdateCheck(currentProfile, finalCheck) {
