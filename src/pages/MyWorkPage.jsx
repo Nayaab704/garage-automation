@@ -332,7 +332,7 @@ async function fetchMyWorkData(currentProfile) {
       .limit(200),
     activityUserIds.length > 0
       ? supabase
-          .from("activity_logs")
+          .from("activity_logs_visible")
           .select("id, vehicle_id, user_id, action, details, created_at")
           .in("user_id", activityUserIds)
           .order("created_at", { ascending: false })

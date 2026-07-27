@@ -13,6 +13,7 @@ const MyWorkPage = lazy(() => import("./pages/MyWorkPage"));
 const PartsPage = lazy(() => import("./pages/PartsPage"));
 const PurchaseOrdersPage = lazy(() => import("./pages/PurchaseOrdersPage"));
 const RepairsPage = lazy(() => import("./pages/RepairsPage"));
+const ReportsPage = lazy(() => import("./pages/ReportsPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const TeamManagementPage = lazy(() => import("./pages/TeamManagementPage"));
@@ -20,6 +21,7 @@ const VehicleDetailPage = lazy(() => import("./pages/VehicleDetailPage"));
 const VehicleFilePage = lazy(() => import("./pages/VehicleFilePage"));
 const VehiclesPage = lazy(() => import("./pages/VehiclesPage"));
 const VendorsPage = lazy(() => import("./pages/VendorsPage"));
+const WarrantiesPage = lazy(() => import("./pages/WarrantiesPage"));
 
 const APP_HISTORY_ROUTE_KEY = "garageAppRoute";
 const APP_HISTORY_DEPTH_KEY = "garageAppHistoryDepth";
@@ -32,10 +34,12 @@ const appRoutePaths = {
   Parts: "parts",
   "Purchase Orders": "purchase-orders",
   Repairs: "repairs",
+  Reports: "reports",
   Settings: "settings",
   Team: "team",
   Vehicles: "vehicles",
   Vendors: "vendors",
+  Warranties: "warranties",
 };
 const PROFILE_LOAD_TIMEOUT_MS = 15000;
 const routeTabSearchValues = {
@@ -57,6 +61,7 @@ const routeTabSearchValues = {
     "completed",
   ]),
   Vehicles: new Set(["active", "ready_for_sale", "sold"]),
+  Warranties: new Set(["all", "active", "expiring", "expired", "none"]),
 };
 const vehicleStatusSearchValues = new Set([
   "all_active",
@@ -315,6 +320,10 @@ const pageDetails = {
     title: "Repairs",
     description: "Track active work orders, technician assignments, and repair status.",
   },
+  Reports: {
+    title: "Reports",
+    description: "Download warranty registers and review cleanup-ready records.",
+  },
   Parts: {
     title: "Parts",
     description: "Review requested parts and create purchase orders for work orders.",
@@ -326,6 +335,11 @@ const pageDetails = {
   Vendors: {
     title: "Vendors",
     description: "Manage supplier, service, auction, and partner contacts.",
+  },
+  Warranties: {
+    title: "Warranty Register",
+    description:
+      "Track sold vehicles, warranty coverage, expiry dates, and no-warranty sales.",
   },
   Team: {
     title: "Team Management",
@@ -474,6 +488,11 @@ function App() {
   const selectedVehicleId = currentRoute.vehicleId;
   const canViewDashboard = hasPermission(currentProfile?.role, "dashboard:view");
   const canManageUsers = hasPermission(currentProfile?.role, "user:manage");
+  const canViewReports = hasPermission(currentProfile?.role, "reports:view");
+  const canViewWarranties = hasPermission(
+    currentProfile?.role,
+    "warranty:manage"
+  );
   const defaultLandingPage = getDefaultLandingPageForRole(currentProfile?.role);
   const myWorkFallbackPage = getMyWorkFallbackPageForRole(currentProfile?.role);
   const effectiveActivePage =
@@ -483,7 +502,11 @@ function App() {
       ? defaultLandingPage
       : activePage === "Team" && !canManageUsers
         ? defaultLandingPage
-        : activePage;
+        : activePage === "Reports" && !canViewReports
+          ? defaultLandingPage
+          : activePage === "Warranties" && !canViewWarranties
+            ? defaultLandingPage
+            : activePage;
   const currentPage = pageDetails[effectiveActivePage];
   const showShellTitle = !MAIN_NAV_PAGES.includes(effectiveActivePage);
   const navigationPage = vehicleScopedPages.has(effectiveActivePage)
@@ -692,6 +715,14 @@ function App() {
         return createAppRoute(defaultLandingPage);
       }
 
+      if (route.page === "Reports" && !canViewReports) {
+        return createAppRoute(defaultLandingPage);
+      }
+
+      if (route.page === "Warranties" && !canViewWarranties) {
+        return createAppRoute(defaultLandingPage);
+      }
+
       if (vehicleScopedPages.has(route.page) && !route.vehicleId) {
         return createAppRoute(defaultLandingPage);
       }
@@ -716,6 +747,8 @@ function App() {
   }, [
     canManageUsers,
     canViewDashboard,
+    canViewReports,
+    canViewWarranties,
     currentProfile?.role,
     defaultLandingPage,
     myWorkFallbackPage,
@@ -752,6 +785,14 @@ function App() {
     }
 
     if (pageName === "Team" && !canManageUsers) {
+      return createAppRoute(defaultLandingPage);
+    }
+
+    if (pageName === "Reports" && !canViewReports) {
+      return createAppRoute(defaultLandingPage);
+    }
+
+    if (pageName === "Warranties" && !canViewWarranties) {
       return createAppRoute(defaultLandingPage);
     }
 
@@ -930,8 +971,16 @@ function App() {
       );
     }
 
+    if (effectiveActivePage === "Reports") {
+      return <ReportsPage currentProfile={currentProfile} />;
+    }
+
     if (effectiveActivePage === "Vendors") {
       return <VendorsPage currentProfile={currentProfile} />;
+    }
+
+    if (effectiveActivePage === "Warranties") {
+      return <WarrantiesPage currentProfile={currentProfile} />;
     }
 
     if (effectiveActivePage === "Team") {

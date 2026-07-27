@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AppIcon from "../ui/AppIcon";
+import { isAdminOrManagerRole } from "../../lib/permissions";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -46,9 +47,7 @@ function InvestmentSummary({ currentProfile, investmentSummary, vehicle }) {
   const estimatedProfit = investmentSummary?.estimated_profit;
   const estimatedProfitNumber = Number(estimatedProfit ?? 0);
   const profitTone = estimatedProfitNumber < 0 ? "negative" : "positive";
-  const canViewFinancialDetails = ["admin", "owner"].includes(
-    currentProfile?.role
-  );
+  const canViewFinancialDetails = isAdminOrManagerRole(currentProfile?.role);
 
   if (!canViewFinancialDetails) {
     return null;

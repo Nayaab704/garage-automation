@@ -5,7 +5,7 @@ import {
   isPartPendingReview,
 } from "../lib/partWorkflowUtils";
 import { getPurchaseOrderReturnDeduction } from "../lib/partReturns";
-import { hasPermission } from "../lib/permissions";
+import { hasPermission, isAdminOrManagerRole } from "../lib/permissions";
 import {
   getRepairQueueCounts,
   isRepairJobUrgent,
@@ -13,6 +13,7 @@ import {
 import { supabase } from "../lib/supabaseClient";
 import { isThirdPartyRepairActive } from "../lib/thirdPartyRepairWorkflow";
 import { activePrebookingBadgeColumns } from "../lib/vehiclePrebookings";
+import { getWarrantyEndDate, getWarrantyStatus } from "../lib/warranty";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -291,8 +292,10 @@ function createActionCenterGroups({
   prebookingBadges = [],
   repairJobs,
   repairQueueCounts,
+  sales = [],
   thirdPartyRepairs,
   vehicles,
+  warranties = [],
 }) {
   const urgentWorkOrderCount = repairJobs.filter((repairJob) =>
     isRepairJobUrgent(repairJob)
@@ -311,6 +314,32 @@ function createActionCenterGroups({
   ).length;
   const thirdPartyRepairCount = thirdPartyRepairs.filter(
     isThirdPartyRepairActive
+  ).length;
+  const latestSaleByVehicleId = new Map();
+
+  for (const sale of sales) {
+    if (sale?.vehicle_id && !latestSaleByVehicleId.has(sale.vehicle_id)) {
+      latestSaleByVehicleId.set(sale.vehicle_id, sale);
+    }
+  }
+
+  const latestSaleIds = new Set(
+    [...latestSaleByVehicleId.values()].map((sale) => sale.id).filter(Boolean)
+  );
+  const latestWarrantyBySaleId = new Map();
+
+  for (const warranty of warranties) {
+    if (
+      latestSaleIds.has(warranty?.sale_id) &&
+      !latestWarrantyBySaleId.has(warranty.sale_id)
+    ) {
+      latestWarrantyBySaleId.set(warranty.sale_id, warranty);
+    }
+  }
+
+  const expiredWarrantyCount = [...latestWarrantyBySaleId.values()].filter(
+    (warranty) =>
+      getWarrantyStatus(getWarrantyEndDate(warranty)).key === "expired"
   ).length;
 
   const groups = [
@@ -429,6 +458,16 @@ function createActionCenterGroups({
           subtitle: "Reservations attached to inventory vehicles.",
           tone: "purple",
         },
+        {
+          actionText: "Review",
+          count: expiredWarrantyCount,
+          icon: "warning",
+          label: "Expired Warranties",
+          page: "Warranties",
+          routeSearchParams: { tab: "expired" },
+          subtitle: "Warranty cleanup is due. No vehicles are deleted automatically.",
+          tone: "red",
+        },
       ],
     },
   ];
@@ -451,10 +490,17 @@ async function fetchDashboardData({
         .order("stock_number", { ascending: true })
     : { data: [], error: null };
   const salesQuery = canViewSaleDetails
-    ? supabase
+      ? supabase
         .from("sales")
-        .select("id, vehicle_id, sale_price, sale_date")
+        .select("id, vehicle_id, sale_price, sale_date, created_at")
         .order("sale_date", { ascending: false })
+        .order("created_at", { ascending: false })
+    : { data: [], error: null };
+  const warrantiesQuery = canViewSaleDetails
+    ? supabase
+        .from("warranties")
+        .select("*")
+        .order("created_at", { ascending: false })
     : { data: [], error: null };
   const profileColumns = canViewTeamRates
     ? "id, full_name, email, role, hourly_rate, is_active"
@@ -473,6 +519,7 @@ async function fetchDashboardData({
     activityLogsResponse,
     laborLogsResponse,
     profilesResponse,
+    warrantiesResponse,
   ] = await Promise.all([
     investmentSummariesQuery,
     supabase
@@ -511,7 +558,7 @@ async function fetchDashboardData({
       .from("active_vehicle_prebooking_badges")
       .select(activePrebookingBadgeColumns),
     supabase
-      .from("activity_logs")
+      .from("activity_logs_visible")
       .select("id, vehicle_id, action, details, created_at")
       .order("created_at", { ascending: false })
       .limit(10),
@@ -525,6 +572,7 @@ async function fetchDashboardData({
       .from(profileSource)
       .select(profileColumns)
       .order("full_name", { ascending: true }),
+    warrantiesQuery,
   ]);
 
   const firstRequiredError =
@@ -577,6 +625,9 @@ async function fetchDashboardData({
       thirdPartyRepairs: thirdPartyRepairsResponse.data ?? [],
       returnDeductionsByVehicleId,
       vehicles: vehiclesResponse.data ?? [],
+      warranties: warrantiesResponse.error
+        ? []
+        : warrantiesResponse.data ?? [],
     },
     error: null,
   };
@@ -1315,6 +1366,7 @@ function Dashboard({
   const [sales, setSales] = useState([]);
   const [thirdPartyRepairs, setThirdPartyRepairs] = useState([]);
   const [vehicles, setVehicles] = useState([]);
+  const [warranties, setWarranties] = useState([]);
   const [activeDashboardSection, setActiveDashboardSection] =
     useState("action_center");
   const [isLoading, setIsLoading] = useState(true);
@@ -1325,9 +1377,7 @@ function Dashboard({
     "dashboard:view"
   );
   const canStartIntake = hasPermission(currentProfile?.role, "vehicle:create");
-  const canViewAdminFinancial = ["admin", "owner"].includes(
-    currentProfile?.role
-  );
+  const canViewAdminFinancial = isAdminOrManagerRole(currentProfile?.role);
   const canViewSaleDetails =
     canViewAdminFinancial || hasPermission(currentProfile?.role, "sale:manage");
   const canViewTeamRates = canViewAdminFinancial;
@@ -1365,6 +1415,7 @@ function Dashboard({
           setSales([]);
           setThirdPartyRepairs([]);
           setVehicles([]);
+          setWarranties([]);
           return;
         }
 
@@ -1380,6 +1431,7 @@ function Dashboard({
         setSales(data.sales);
         setThirdPartyRepairs(data.thirdPartyRepairs);
         setVehicles(data.vehicles);
+        setWarranties(data.warranties);
       } catch (error) {
         if (isMounted) {
           console.error("Failed to load dashboard data", error);
@@ -1396,6 +1448,7 @@ function Dashboard({
           setSales([]);
           setThirdPartyRepairs([]);
           setVehicles([]);
+          setWarranties([]);
         }
       } finally {
         if (isMounted) {
@@ -1474,8 +1527,10 @@ function Dashboard({
     purchaseOrders,
     repairJobs,
     repairQueueCounts,
+    sales,
     thirdPartyRepairs,
     vehicles,
+    warranties,
   });
   const totalActionCount = actionGroups.reduce(
     (groupTotal, group) =>

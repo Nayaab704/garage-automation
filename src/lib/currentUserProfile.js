@@ -3,6 +3,7 @@ import { supabase } from "./supabaseClient";
 const roleLabels = {
   owner: "Owner",
   admin: "Admin",
+  manager: "Manager",
   technician: "Technician",
   ordering: "Ordering",
   sales: "Sales",
@@ -13,7 +14,7 @@ export function formatProfileRole(role) {
 }
 
 export function getProfileRoleClassName(role) {
-  if (role === "owner" || role === "admin") {
+  if (role === "owner" || role === "admin" || role === "manager") {
     return "bg-blue-50 text-blue-700 ring-blue-200";
   }
 

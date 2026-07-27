@@ -44,6 +44,8 @@ function isGenericDisplayName(value) {
   return [
     "admin",
     "admin user",
+    "manager",
+    "manager user",
     "ordering",
     "ordering user",
     "owner",

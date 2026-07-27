@@ -10,6 +10,7 @@ import { supabase } from "../lib/supabaseClient";
 const roleOptions = [
   { label: "Owner", value: "owner" },
   { label: "Admin", value: "admin" },
+  { label: "Manager", value: "manager" },
   { label: "Technician", value: "technician" },
   { label: "Ordering", value: "ordering" },
   { label: "Sales", value: "sales" },

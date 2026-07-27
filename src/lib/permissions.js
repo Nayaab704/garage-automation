@@ -12,13 +12,18 @@ const ALL_PERMISSIONS = [
   "photo:manage",
   "sale:manage",
   "warranty:manage",
+  "reports:view",
   "dashboard:view",
   "user:manage",
 ];
+const MANAGER_PERMISSIONS = ALL_PERMISSIONS.filter(
+  (permission) => permission !== "vehicle:delete"
+);
 
 export const ROLE_PERMISSIONS = {
   owner: ALL_PERMISSIONS,
   admin: ALL_PERMISSIONS,
+  manager: MANAGER_PERMISSIONS,
   technician: [
     "vehicle:edit",
     "repair:manage",
@@ -49,4 +54,8 @@ export function hasPermission(role, permission) {
   }
 
   return permissions.includes(permission);
+}
+
+export function isAdminOrManagerRole(role) {
+  return ["owner", "admin", "manager"].includes(role);
 }

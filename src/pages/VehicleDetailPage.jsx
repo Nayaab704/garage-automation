@@ -22,7 +22,7 @@ import {
   applyReturnDeductionToInvestmentSummary,
   getPurchaseOrderReturnDeduction,
 } from "../lib/partReturns";
-import { hasPermission } from "../lib/permissions";
+import { hasPermission, isAdminOrManagerRole } from "../lib/permissions";
 import { markPurchaseOrderReceived } from "../lib/purchaseOrderReceiving";
 import { supabase } from "../lib/supabaseClient";
 import { isThirdPartyRepairActive } from "../lib/thirdPartyRepairWorkflow";
@@ -461,10 +461,11 @@ function VehicleDetailPage({
   const vehiclePhotosRef = useRef(null);
   const role = currentProfile?.role;
   const canManagePrebookings = hasPermission(role, "sale:manage");
-  const canViewAdminFinancial = role === "admin" || role === "owner";
+  const canViewAdminFinancial = isAdminOrManagerRole(role);
   const canViewTeamRates = canViewAdminFinancial;
   const canSellVehicle = hasPermission(role, "sale:manage");
   const canViewSaleDetails = canSellVehicle;
+  const canManageWarranty = hasPermission(role, "warranty:manage");
 
   useEffect(() => {
     let isMounted = true;
@@ -1236,6 +1237,16 @@ function VehicleDetailPage({
     await refreshInvestmentSummary();
   }
 
+  function handleWarrantySaved(warranty) {
+    if (!warranty?.id) {
+      return;
+    }
+
+    setWarranties((currentWarranties) =>
+      upsertNewestById(currentWarranties, warranty)
+    );
+  }
+
   function handleVehiclePhotoAdded(photo) {
     setVehiclePhotos((currentPhotos) => upsertNewestById(currentPhotos, photo));
   }
@@ -1356,7 +1367,7 @@ function VehicleDetailPage({
   const canManageRepairJobs = hasPermission(role, "repair:manage");
   const canManageWorkOrderParts = canManageRepairJobs || canManagePartRequests;
   const canUploadDocuments =
-    (role === "admin" || role === "owner" || role === "technician") &&
+    (isAdminOrManagerRole(role) || role === "technician") &&
     (canManagePhotos || canManageRepairJobs);
   const canManageDocuments = canManagePhotos;
   const activeSale = sales[0] ?? null;
@@ -1571,6 +1582,8 @@ function VehicleDetailPage({
 
           {isVehicleSold && canViewSaleDetails && (
             <SaleWarrantySection
+              canManage={canManageWarranty}
+              onWarrantySaved={handleWarrantySaved}
               sales={sales}
               warranties={warranties}
             />

@@ -37,6 +37,18 @@ export const MAIN_NAV_ITEMS = [
   },
   { icon: "users", label: "Vendors", page: "Vendors" },
   {
+    icon: "checklist",
+    label: "Warranty Register",
+    page: "Warranties",
+    permission: "warranty:manage",
+  },
+  {
+    icon: "file",
+    label: "Reports",
+    page: "Reports",
+    permission: "reports:view",
+  },
+  {
     icon: "users",
     label: "Team",
     page: "Team",

@@ -2,25 +2,37 @@ import { useState } from "react";
 import FormActions from "../ui/FormActions";
 import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
+import WarrantyPeriodFields from "./WarrantyPeriodFields";
 import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { supabase } from "../../lib/supabaseClient";
+import {
+  DEFAULT_WARRANTY_MONTHS,
+  addWarrantyMonths,
+  getTodayDateValue,
+  normalizeWarrantyMonths,
+} from "../../lib/warranty";
 
-const emptyForm = {
-  customer_name: "",
-  customer_phone: "",
-  sale_price: "",
-  sale_date: new Date().toISOString().slice(0, 10),
-  payment_method: "",
-  warranty_type: "",
-  warranty_start_date: "",
-  warranty_end_date: "",
-  warranty_terms: "",
-  notes: "",
-};
+function createEmptyForm() {
+  const today = getTodayDateValue();
+
+  return {
+    customer_name: "",
+    customer_phone: "",
+    sale_price: "",
+    sale_date: today,
+    payment_method: "",
+    warranty_type: "",
+    warranty_start_date: today,
+    warranty_months: DEFAULT_WARRANTY_MONTHS,
+    warranty_end_date: addWarrantyMonths(today, DEFAULT_WARRANTY_MONTHS),
+    warranty_notes: "",
+    notes: "",
+  };
+}
 
 function emptyToNull(value) {
-  const trimmedValue = value.trim();
+  const trimmedValue = String(value ?? "").trim();
   return trimmedValue === "" ? null : trimmedValue;
 }
 
@@ -39,8 +51,19 @@ function hasWarrantyDetails(formData) {
     formData.warranty_type.trim() ||
       formData.warranty_start_date ||
       formData.warranty_end_date ||
-      formData.warranty_terms.trim()
+      formData.warranty_notes.trim()
   );
+}
+
+function createWarrantyValues(formData, saleId) {
+  return {
+    sale_id: saleId,
+    warranty_type: emptyToNull(formData.warranty_type),
+    start_date: emptyToNull(formData.warranty_start_date),
+    warranty_months: normalizeWarrantyMonths(formData.warranty_months),
+    end_date: emptyToNull(formData.warranty_end_date),
+    terms: emptyToNull(formData.warranty_notes),
+  };
 }
 
 function SellVehicleForm({
@@ -49,17 +72,53 @@ function SellVehicleForm({
   onVehicleSold,
   vehicle,
 }) {
-  const [formData, setFormData] = useState(emptyForm);
+  const [formData, setFormData] = useState(createEmptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [partialSaleId, setPartialSaleId] = useState(null);
 
   function handleChange(event) {
     const { name, value } = event.target;
 
+    setFormData((currentFormData) => {
+      if (name === "sale_date") {
+        const shouldFollowSaleDate =
+          !currentFormData.warranty_start_date ||
+          currentFormData.warranty_start_date === currentFormData.sale_date;
+        const warrantyStartDate = shouldFollowSaleDate
+          ? value
+          : currentFormData.warranty_start_date;
+
+        return {
+          ...currentFormData,
+          sale_date: value,
+          warranty_end_date: addWarrantyMonths(
+            warrantyStartDate,
+            currentFormData.warranty_months
+          ),
+          warranty_start_date: warrantyStartDate,
+        };
+      }
+
+      return {
+        ...currentFormData,
+        [name]: value,
+      };
+    });
+  }
+
+  function updateWarrantyPeriod({
+    months = formData.warranty_months,
+    startDate = formData.warranty_start_date,
+  }) {
+    const normalizedMonths = normalizeWarrantyMonths(months);
+
     setFormData((currentFormData) => ({
       ...currentFormData,
-      [name]: value,
+      warranty_end_date: addWarrantyMonths(startDate, normalizedMonths),
+      warranty_months: normalizedMonths,
+      warranty_start_date: startDate,
     }));
   }
 
@@ -91,6 +150,8 @@ function SellVehicleForm({
         .from("sales")
         .select("*")
         .eq("vehicle_id", vehicle.id)
+        .order("sale_date", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
@@ -101,10 +162,65 @@ function SellVehicleForm({
       }
 
       if (existingSaleResponse.data) {
-        setErrorMessage("This vehicle is already marked sold.");
+        if (partialSaleId !== existingSaleResponse.data.id) {
+          await onVehicleSold({
+            sale: existingSaleResponse.data,
+            vehicle: { ...vehicle, sale_status: "sold" },
+            warranty: null,
+          });
+          setErrorMessage(
+            "This vehicle was already sold. The values in this form were not saved. Close this form and review the existing sale."
+          );
+          return;
+        }
+
+        let existingWarranty = null;
+
+        if (hasWarrantyDetails(formData) && existingSaleResponse.data.id) {
+          const existingWarrantyResponse = await supabase
+            .from("warranties")
+            .select("*")
+            .eq("sale_id", existingSaleResponse.data.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (existingWarrantyResponse.error) {
+            console.error(
+              "Could not check vehicle warranty:",
+              existingWarrantyResponse.error
+            );
+            setErrorMessage("Could not verify warranty details. Please try again.");
+            return;
+          }
+
+          existingWarranty = existingWarrantyResponse.data;
+
+          if (!existingWarranty) {
+            const warrantyResponse = await supabase
+              .from("warranties")
+              .insert([
+                createWarrantyValues(formData, existingSaleResponse.data.id),
+              ])
+              .select("*")
+              .single();
+
+            if (warrantyResponse.error) {
+              console.error("Could not save vehicle warranty:", warrantyResponse.error);
+              setErrorMessage(
+                "The sale is saved, but the warranty could not be saved. Please try again."
+              );
+              return;
+            }
+
+            existingWarranty = warrantyResponse.data;
+          }
+        }
+
         await onVehicleSold({
           sale: existingSaleResponse.data,
           vehicle: { ...vehicle, sale_status: "sold" },
+          warranty: existingWarranty,
         });
         onClose();
         return;
@@ -145,16 +261,21 @@ function SellVehicleForm({
 
       const saleRecord = saleResponse.data ?? sale;
       const saleId = saleRecord.id;
+      const soldVehicle =
+        vehicleResponse.data ?? { ...vehicle, sale_status: "sold" };
       let warrantyRecord = null;
 
+      await logVehicleActivity({
+        vehicleId: vehicle.id,
+        action: "Vehicle sold",
+        details: {
+          sale_date: sale.sale_date,
+        },
+      });
+      onActivityLogged?.();
+
       if (hasWarrantyDetails(formData) && saleId) {
-        const warranty = {
-          sale_id: saleId,
-          warranty_type: emptyToNull(formData.warranty_type),
-          start_date: emptyToNull(formData.warranty_start_date),
-          end_date: emptyToNull(formData.warranty_end_date),
-          terms: emptyToNull(formData.warranty_terms),
-        };
+        const warranty = createWarrantyValues(formData, saleId);
 
         const warrantyResponse = await supabase
           .from("warranties")
@@ -163,8 +284,16 @@ function SellVehicleForm({
           .single();
 
         if (warrantyResponse.error) {
-          console.error("Could not sell vehicle:", warrantyResponse.error);
-          setErrorMessage("Could not sell vehicle. Please try again.");
+          console.error("Could not save vehicle warranty:", warrantyResponse.error);
+            setErrorMessage(
+              "The sale is saved, but the warranty could not be saved. Please try again."
+            );
+            setPartialSaleId(saleId);
+            await onVehicleSold({
+            sale: saleRecord,
+            vehicle: soldVehicle,
+            warranty: null,
+          });
           return;
         }
 
@@ -172,21 +301,9 @@ function SellVehicleForm({
       }
 
       setSuccessMessage("Vehicle sold successfully.");
-      await logVehicleActivity({
-        vehicleId: vehicle.id,
-        action: "Vehicle sold",
-        details: {
-          customer_name: sale.customer_name,
-          sale_price: sale.sale_price,
-          sale_date: sale.sale_date,
-          payment_method: sale.payment_method,
-          warranty_created: hasWarrantyDetails(formData),
-        },
-      });
-      onActivityLogged?.();
       await onVehicleSold({
         sale: saleRecord,
-        vehicle: vehicleResponse.data ?? { ...vehicle, sale_status: "sold" },
+        vehicle: soldVehicle,
         warranty: warrantyRecord,
       });
       onClose();
@@ -200,7 +317,7 @@ function SellVehicleForm({
 
   return (
     <ModalShell
-      description="Record sale details and optional warranty coverage."
+      description="Record sale details and choose a warranty period."
       isCloseDisabled={isSubmitting}
       onClose={onClose}
       size="lg"
@@ -295,62 +412,30 @@ function SellVehicleForm({
               Warranty
             </legend>
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <label className="block" htmlFor="warranty-type">
-                <span className={formControlClassNames.label}>
-                  Warranty Type
-                </span>
-                <input
-                  className={formControlClassNames.input}
-                  id="warranty-type"
-                  name="warranty_type"
-                  onChange={handleChange}
-                  type="text"
-                  value={formData.warranty_type}
-                />
-              </label>
-
-              <label className="block" htmlFor="warranty-start-date">
-                <span className={formControlClassNames.label}>
-                  Start Date
-                </span>
-                <input
-                  className={formControlClassNames.input}
-                  id="warranty-start-date"
-                  name="warranty_start_date"
-                  onChange={handleChange}
-                  type="date"
-                  value={formData.warranty_start_date}
-                />
-              </label>
-
-              <label className="block" htmlFor="warranty-end-date">
-                <span className={formControlClassNames.label}>
-                  End Date
-                </span>
-                <input
-                  className={formControlClassNames.input}
-                  id="warranty-end-date"
-                  name="warranty_end_date"
-                  onChange={handleChange}
-                  type="date"
-                  value={formData.warranty_end_date}
-                />
-              </label>
-            </div>
-
-            <label className="mt-4 block" htmlFor="warranty-terms">
-              <span className={formControlClassNames.label}>
-                Warranty Terms
-              </span>
-              <textarea
-                className={formControlClassNames.textarea}
-                id="warranty-terms"
-                name="warranty_terms"
-                onChange={handleChange}
-                value={formData.warranty_terms}
-              />
-            </label>
+            <WarrantyPeriodFields
+              endDate={formData.warranty_end_date}
+              idPrefix="sale-warranty"
+              months={formData.warranty_months}
+              notes={formData.warranty_notes}
+              onMonthsChange={(months) => updateWarrantyPeriod({ months })}
+              onNotesChange={(warranty_notes) =>
+                setFormData((currentFormData) => ({
+                  ...currentFormData,
+                  warranty_notes,
+                }))
+              }
+              onStartDateChange={(startDate) =>
+                updateWarrantyPeriod({ startDate })
+              }
+              onTypeChange={(warranty_type) =>
+                setFormData((currentFormData) => ({
+                  ...currentFormData,
+                  warranty_type,
+                }))
+              }
+              startDate={formData.warranty_start_date}
+              type={formData.warranty_type}
+            />
           </fieldset>
 
           <label className="block" htmlFor="sale-notes">

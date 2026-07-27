@@ -1,3 +1,14 @@
+import { useState } from "react";
+import WarrantyStatusBadge from "../WarrantyStatusBadge";
+import WarrantyEditorForm from "./WarrantyEditorForm";
+import {
+  formatWarrantyDate,
+  getWarrantyEndDate,
+  getWarrantyMonths,
+  getWarrantyNotes,
+  getWarrantyStartDate,
+} from "../../lib/warranty";
+
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
   style: "currency",
@@ -26,21 +37,7 @@ function formatCurrency(value) {
 }
 
 function formatDate(value) {
-  if (!value) {
-    return "Not available";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Not available";
-  }
-
-  return date.toLocaleDateString("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return formatWarrantyDate(value);
 }
 
 function getFirstValue(record, fieldNames) {
@@ -70,21 +67,16 @@ function DetailItem({ label, value }) {
   );
 }
 
-function SaleCard({ sale, warranty }) {
+function SaleCard({ canManage, onEditWarranty, sale, warranty }) {
   const customerName = getFirstValue(sale, ["buyer_name", "customer_name", "customer"]);
   const customerPhone = getFirstValue(sale, ["buyer_phone", "customer_phone", "phone"]);
   const paymentMethod = getFirstValue(sale, ["payment_method"]);
   const saleDate = getFirstValue(sale, ["sale_date", "sold_at", "created_at"]);
   const notes = getFirstValue(sale, ["notes"]);
-  const warrantyStartDate = warranty
-    ? getFirstValue(warranty, ["start_date", "warranty_start_date"])
-    : null;
-  const warrantyEndDate = warranty
-    ? getFirstValue(warranty, ["end_date", "warranty_end_date"])
-    : null;
-  const warrantyTerms = warranty
-    ? getFirstValue(warranty, ["terms", "warranty_terms"])
-    : null;
+  const warrantyStartDate = getWarrantyStartDate(warranty);
+  const warrantyEndDate = getWarrantyEndDate(warranty);
+  const warrantyTerms = getWarrantyNotes(warranty);
+  const warrantyMonths = getWarrantyMonths(warranty);
 
   return (
     <article className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
@@ -111,8 +103,11 @@ function SaleCard({ sale, warranty }) {
 
       {warranty ? (
         <div className="mt-5 rounded-md border border-blue-100 bg-blue-50 p-4">
-          <p className="text-sm font-bold text-blue-900">Warranty</p>
-          <dl className="mt-3 grid gap-4 sm:grid-cols-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-bold text-blue-900">Warranty</p>
+            <WarrantyStatusBadge endDate={warrantyEndDate} />
+          </div>
+          <dl className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <DetailItem
               label="Type"
               value={displayValue(warranty.warranty_type)}
@@ -120,6 +115,16 @@ function SaleCard({ sale, warranty }) {
             <DetailItem
               label="Start Date"
               value={formatDate(warrantyStartDate)}
+            />
+            <DetailItem
+              label="Period"
+              value={
+                warrantyMonths
+                  ? `${warrantyMonths} ${
+                      warrantyMonths === 1 ? "month" : "months"
+                    }`
+                  : "Not available"
+              }
             />
             <DetailItem
               label="End Date"
@@ -132,10 +137,31 @@ function SaleCard({ sale, warranty }) {
               {warrantyTerms}
             </p>
           )}
+
+          {canManage && (
+            <button
+              className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-blue-100"
+              onClick={() => onEditWarranty(sale, warranty)}
+              type="button"
+            >
+              Edit / Extend Warranty
+            </button>
+          )}
         </div>
       ) : (
-        <div className="mt-5 rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-500">
-          No warranty was recorded for this sale.
+        <div className="mt-5 rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-4">
+          <p className="text-sm text-zinc-500">
+            No warranty was recorded for this sale.
+          </p>
+          {canManage && (
+            <button
+              className="mt-3 inline-flex min-h-10 items-center justify-center rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-blue-50"
+              onClick={() => onEditWarranty(sale, null)}
+              type="button"
+            >
+              Add Warranty
+            </button>
+          )}
         </div>
       )}
 
@@ -151,32 +177,57 @@ function SaleCard({ sale, warranty }) {
   );
 }
 
-function SaleWarrantySection({ sales = [], warranties = [] }) {
-  return (
-    <section className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-5">
-      <div className="mb-4">
-        <h2 className="text-lg font-bold text-zinc-950">Sale / Warranty</h2>
-        <p className="mt-1 text-sm text-zinc-500">
-          Sale details and warranty coverage for this vehicle.
-        </p>
-      </div>
+function SaleWarrantySection({
+  canManage = false,
+  onWarrantySaved,
+  sales = [],
+  warranties = [],
+}) {
+  const [editorContext, setEditorContext] = useState(null);
 
-      {sales.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-6 text-sm text-zinc-500">
-          No sale details found for this sold vehicle.
+  return (
+    <>
+      <section className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-5">
+        <div className="mb-4">
+          <h2 className="text-lg font-bold text-zinc-950">Sale / Warranty</h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            Sale details and warranty coverage for this vehicle.
+          </p>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {sales.map((sale, index) => (
-            <SaleCard
-              key={sale.id ?? index}
-              sale={sale}
-              warranty={getWarrantyForSale(warranties, sale.id)}
-            />
-          ))}
-        </div>
+
+        {sales.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-6 text-sm text-zinc-500">
+            No sale details found for this sold vehicle.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {sales.map((sale, index) => (
+              <SaleCard
+                canManage={canManage}
+                key={sale.id ?? index}
+                onEditWarranty={(selectedSale, warranty) =>
+                  setEditorContext({ sale: selectedSale, warranty })
+                }
+                sale={sale}
+                warranty={getWarrantyForSale(warranties, sale.id)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {editorContext && (
+        <WarrantyEditorForm
+          defaultStartDate={
+            editorContext.sale.sale_date ?? editorContext.sale.created_at
+          }
+          onClose={() => setEditorContext(null)}
+          onSaved={onWarrantySaved}
+          saleId={editorContext.sale.id}
+          warranty={editorContext.warranty}
+        />
       )}
-    </section>
+    </>
   );
 }
 

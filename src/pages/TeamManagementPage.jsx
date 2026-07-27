@@ -13,6 +13,7 @@ const profileSelectFields =
 
 const roleOptions = [
   { label: "Admin", value: "admin" },
+  { label: "Manager", value: "manager" },
   { label: "Technician", value: "technician" },
 ];
 

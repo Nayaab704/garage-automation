@@ -163,7 +163,7 @@ function ActivityTimelineSection({ refreshKey = 0, vehicleId }) {
 
       try {
         const { data, error } = await supabase
-          .from("activity_logs")
+          .from("activity_logs_visible")
           .select("id, action, details, created_at")
           .eq("vehicle_id", vehicleId)
           .order("created_at", { ascending: false })

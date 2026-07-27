@@ -5,10 +5,11 @@ import VehicleColorLabel from "../components/VehicleColorLabel";
 import VehiclePrebookingBadge from "../components/VehiclePrebookingBadge";
 import VehicleSaleSummary from "../components/VehicleSaleSummary";
 import VehicleStatusBadge from "../components/VehicleStatusBadge";
+import SaleWarrantySection from "../components/vehicle-detail/SaleWarrantySection";
 import SellVehicleForm from "../components/vehicle-detail/SellVehicleForm";
 import { logVehicleActivity } from "../lib/activityLogger";
 import { getLaborLogCost, formatHourlyRate } from "../lib/laborCost";
-import { hasPermission } from "../lib/permissions";
+import { hasPermission, isAdminOrManagerRole } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 import { isThirdPartyRepairActive } from "../lib/thirdPartyRepairWorkflow";
 import { formatUserFirstName } from "../lib/userDisplay";
@@ -1278,7 +1279,7 @@ function FinancialTab({
   repairJobs,
   thirdPartyRepairs,
 }) {
-  const canViewAdminFinancial = ["admin", "owner"].includes(currentProfile?.role);
+  const canViewAdminFinancial = isAdminOrManagerRole(currentProfile?.role);
   const userLaborLogs = laborLogs.filter(
     (laborLog) => laborLog.technician_id === currentProfile?.id
   );
@@ -1386,7 +1387,7 @@ function FinancialTab({
   );
 }
 
-function getActivitySummary(details) {
+function getActivitySummary(details, { redactSaleDetails = false } = {}) {
   if (!details || typeof details !== "object") {
     return "";
   }
@@ -1394,8 +1395,23 @@ function getActivitySummary(details) {
   return Object.entries(details)
     .filter(([key, value]) => {
       const normalizedKey = key.toLowerCase();
+      const isSensitiveSaleField = [
+        "buyer",
+        "customer",
+        "deposit",
+        "email",
+        "payment",
+        "phone",
+        "sale_price",
+        "sold_price",
+        "terms",
+        "refund",
+        "warranty",
+      ].some((fieldName) => normalizedKey.includes(fieldName));
+
       return (
         !normalizedKey.endsWith("id") &&
+        !(redactSaleDetails && isSensitiveSaleField) &&
         value !== null &&
         value !== undefined &&
         value !== ""
@@ -1426,7 +1442,7 @@ function formatActivityValue(value) {
   return formatLabel(value, String(value));
 }
 
-function ActivityTab({ activityLogs, profiles }) {
+function ActivityTab({ activityLogs, canViewSaleDetails = false, profiles }) {
   if (activityLogs.length === 0) {
     return (
       <EmptyState>
@@ -1439,7 +1455,9 @@ function ActivityTab({ activityLogs, profiles }) {
     <div className="space-y-2">
       {activityLogs.map((activityLog) => {
         const person = getProfileName(profiles, activityLog.user_id);
-        const summary = getActivitySummary(activityLog.details);
+        const summary = getActivitySummary(activityLog.details, {
+          redactSaleDetails: !canViewSaleDetails,
+        });
 
         return (
           <article
@@ -1617,7 +1635,7 @@ async function fetchVehicleFileData(
       .eq("vehicle_id", vehicleId)
       .order("created_at", { ascending: false }),
     supabase
-      .from("activity_logs")
+      .from("activity_logs_visible")
       .select("id, vehicle_id, user_id, action, details, created_at")
       .eq("vehicle_id", vehicleId)
       .order("created_at", { ascending: false })
@@ -1648,6 +1666,16 @@ async function fetchVehicleFileData(
           .from("purchase_order_items")
           .select("*")
           .in("purchase_order_id", purchaseOrderIds);
+  const saleIds = (salesResponse.data ?? [])
+    .map((sale) => sale.id)
+    .filter(Boolean);
+  const warrantiesResponse =
+    salesResponse.error || saleIds.length === 0
+      ? { data: [], error: null }
+      : await supabase
+          .from("warranties")
+          .select("*")
+          .in("sale_id", saleIds);
   const investmentSummaryResponse = canViewAdminFinancial
     ? await supabase
         .from("vehicle_investment_summary")
@@ -1697,6 +1725,9 @@ async function fetchVehicleFileData(
       thirdPartyRepairs: thirdPartyRepairsResponse.data ?? [],
       vehicle: vehicleResponse.data,
       vendors: vendorsResponse.data ?? [],
+      warranties: warrantiesResponse.error
+        ? []
+        : warrantiesResponse.data ?? [],
     },
     error: null,
   };
@@ -1725,10 +1756,12 @@ function VehicleFilePage({
     hasPermission(currentProfile?.role, "purchase_order:manage") ||
     hasPermission(currentProfile?.role, "part_request:manage") ||
     hasPermission(currentProfile?.role, "repair:manage");
-  const canViewAdminFinancial = ["admin", "owner"].includes(
-    currentProfile?.role
-  );
+  const canViewAdminFinancial = isAdminOrManagerRole(currentProfile?.role);
   const canViewSaleDetails = hasPermission(currentProfile?.role, "sale:manage");
+  const canManageWarranty = hasPermission(
+    currentProfile?.role,
+    "warranty:manage"
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -1808,9 +1841,37 @@ function VehicleFilePage({
                   ),
                 ]
               : currentData.sales ?? [],
+            warranties: result?.warranty?.id
+              ? [
+                  result.warranty,
+                  ...(currentData.warranties ?? []).filter(
+                    (warranty) => warranty.id !== result.warranty.id
+                  ),
+                ]
+              : currentData.warranties ?? [],
             vehicle: result?.vehicle?.id
               ? { ...currentData.vehicle, ...result.vehicle }
               : { ...currentData.vehicle, sale_status: "sold" },
+          }
+        : currentData
+    );
+  }
+
+  function handleWarrantySaved(warranty) {
+    if (!warranty?.id) {
+      return;
+    }
+
+    setData((currentData) =>
+      currentData
+        ? {
+            ...currentData,
+            warranties: [
+              warranty,
+              ...(currentData.warranties ?? []).filter(
+                (currentWarranty) => currentWarranty.id !== warranty.id
+              ),
+            ],
           }
         : currentData
     );
@@ -1980,21 +2041,32 @@ function VehicleFilePage({
           )}
 
           {activeTab === "financial" && (
-            <FinancialTab
-              costEntries={data.costEntries}
-              currentProfile={currentProfile}
-              laborLogs={data.laborLogs}
-              partRequests={data.partRequests}
-              profiles={data.profiles}
-              purchaseOrderItems={data.purchaseOrderItems}
-              repairJobs={data.repairJobs}
-              thirdPartyRepairs={data.thirdPartyRepairs}
-            />
+            <div className="space-y-3">
+              <FinancialTab
+                costEntries={data.costEntries}
+                currentProfile={currentProfile}
+                laborLogs={data.laborLogs}
+                partRequests={data.partRequests}
+                profiles={data.profiles}
+                purchaseOrderItems={data.purchaseOrderItems}
+                repairJobs={data.repairJobs}
+                thirdPartyRepairs={data.thirdPartyRepairs}
+              />
+              {canViewSaleDetails && isVehicleSold && (
+                <SaleWarrantySection
+                  canManage={canManageWarranty}
+                  onWarrantySaved={handleWarrantySaved}
+                  sales={data.sales}
+                  warranties={data.warranties}
+                />
+              )}
+            </div>
           )}
 
           {activeTab === "activity" && (
             <ActivityTab
               activityLogs={data.activityLogs}
+              canViewSaleDetails={canViewSaleDetails}
               profiles={data.profiles}
             />
           )}
