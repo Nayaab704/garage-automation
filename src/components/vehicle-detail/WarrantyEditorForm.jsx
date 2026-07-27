@@ -7,7 +7,9 @@ import { supabase } from "../../lib/supabaseClient";
 import {
   DEFAULT_WARRANTY_MONTHS,
   addWarrantyMonths,
+  createWarrantyRecordValues,
   getTodayDateValue,
+  getWarrantyDateValue,
   getWarrantyEndDate,
   getWarrantyMonths,
   getWarrantyNotes,
@@ -16,10 +18,28 @@ import {
   normalizeWarrantyMonths,
 } from "../../lib/warranty";
 
-function emptyToNull(value) {
-  const trimmedValue = String(value ?? "").trim();
+function logWarrantySaveError(error) {
+  console.error("Could not save warranty:", error);
+  console.log("Warranty save error message:", error?.message ?? null);
+  console.log("Warranty save error details:", error?.details ?? null);
+  console.log("Warranty save error hint:", error?.hint ?? null);
+  console.log("Warranty save error code:", error?.code ?? null);
+}
 
-  return trimmedValue === "" ? null : trimmedValue;
+function getWarrantySaveErrorMessage(error) {
+  if (error?.code === "42501") {
+    return "Your account is not allowed to manage warranties. Confirm that your profile is active and has an authorized sales role.";
+  }
+
+  if (error?.code === "23503") {
+    return "The linked sale no longer exists. Refresh the Warranty Register and try again.";
+  }
+
+  if (error?.code === "23514") {
+    return "Choose a warranty period from 1 to 12 months.";
+  }
+
+  return "Could not save the warranty. Please try again.";
 }
 
 function createInitialForm(warranty, defaultStartDate) {
@@ -89,16 +109,24 @@ function WarrantyEditorForm({
     setIsSubmitting(true);
     setErrorMessage("");
 
-    const warrantyValues = {
-      end_date: formData.endDate,
-      sale_id: saleId,
-      start_date: formData.startDate,
-      terms: emptyToNull(formData.notes),
-      warranty_months: formData.shouldPersistMonths
-        ? normalizeWarrantyMonths(formData.months)
-        : null,
-      warranty_type: emptyToNull(formData.type),
-    };
+    const startDate = getWarrantyDateValue(formData.startDate);
+    const endDate = getWarrantyDateValue(formData.endDate);
+
+    if (!startDate || !endDate) {
+      setErrorMessage("Choose a valid warranty start date and period.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const warrantyValues = createWarrantyRecordValues({
+      endDate,
+      months: formData.months,
+      notes: formData.notes,
+      persistMonths: formData.shouldPersistMonths,
+      saleId,
+      startDate,
+      type: formData.type,
+    });
 
     try {
       const query = warranty?.id
@@ -107,19 +135,23 @@ function WarrantyEditorForm({
             .update(warrantyValues)
             .eq("id", warranty.id)
         : supabase.from("warranties").insert([warrantyValues]);
-      const { data, error } = await query.select("*").single();
+      const { data, error } = await query
+        .select(
+          "id,sale_id,warranty_type,start_date,end_date,terms,warranty_months,created_at"
+        )
+        .single();
 
       if (error) {
-        console.error("Could not save warranty:", error);
-        setErrorMessage("Could not save the warranty. Please try again.");
+        logWarrantySaveError(error);
+        setErrorMessage(getWarrantySaveErrorMessage(error));
         return;
       }
 
       await onSaved?.(data);
       onClose();
     } catch (error) {
-      console.error("Could not save warranty:", error);
-      setErrorMessage("Could not save the warranty. Please try again.");
+      logWarrantySaveError(error);
+      setErrorMessage(getWarrantySaveErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }

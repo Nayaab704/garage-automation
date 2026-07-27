@@ -67,6 +67,34 @@ export function getTodayDateValue(now = new Date()) {
   return parts ? datePartsToValue(parts) : "";
 }
 
+export function getWarrantyDateValue(value) {
+  const parts = getDateParts(value);
+
+  return parts ? datePartsToValue(parts) : "";
+}
+
+export function createWarrantyRecordValues({
+  endDate,
+  months,
+  notes,
+  persistMonths = true,
+  saleId,
+  startDate,
+  type,
+}) {
+  const normalizedNotes = String(notes ?? "").trim();
+  const normalizedType = String(type ?? "").trim();
+
+  return {
+    end_date: getWarrantyDateValue(endDate) || null,
+    sale_id: saleId,
+    start_date: getWarrantyDateValue(startDate) || null,
+    terms: normalizedNotes || null,
+    warranty_months: persistMonths ? normalizeWarrantyMonths(months) : null,
+    warranty_type: normalizedType || null,
+  };
+}
+
 export function normalizeWarrantyMonths(
   value,
   fallback = DEFAULT_WARRANTY_MONTHS

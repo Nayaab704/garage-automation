@@ -9,6 +9,7 @@ import { supabase } from "../../lib/supabaseClient";
 import {
   DEFAULT_WARRANTY_MONTHS,
   addWarrantyMonths,
+  createWarrantyRecordValues,
   getTodayDateValue,
   normalizeWarrantyMonths,
 } from "../../lib/warranty";
@@ -56,14 +57,14 @@ function hasWarrantyDetails(formData) {
 }
 
 function createWarrantyValues(formData, saleId) {
-  return {
-    sale_id: saleId,
-    warranty_type: emptyToNull(formData.warranty_type),
-    start_date: emptyToNull(formData.warranty_start_date),
-    warranty_months: normalizeWarrantyMonths(formData.warranty_months),
-    end_date: emptyToNull(formData.warranty_end_date),
-    terms: emptyToNull(formData.warranty_notes),
-  };
+  return createWarrantyRecordValues({
+    endDate: formData.warranty_end_date,
+    months: formData.warranty_months,
+    notes: formData.warranty_notes,
+    saleId,
+    startDate: formData.warranty_start_date,
+    type: formData.warranty_type,
+  });
 }
 
 function SellVehicleForm({

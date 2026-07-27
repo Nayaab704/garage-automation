@@ -6,8 +6,10 @@ import { buttonClassNames } from "../components/ui/uiStyles";
 import { hasPermission } from "../lib/permissions";
 import {
   formatWarrantyDate,
+  getWarrantyEndDate,
   getWarrantyMonths,
   getWarrantyStartDate,
+  getWarrantyStatus,
 } from "../lib/warranty";
 import { fetchWarrantyRegisterData } from "../lib/warrantyRegister";
 
@@ -145,7 +147,7 @@ function WarrantiesPage({ currentProfile }) {
     if (!canManage) {
       setRecords([]);
       setIsLoading(false);
-      return;
+      return false;
     }
 
     setIsLoading(true);
@@ -158,14 +160,16 @@ function WarrantiesPage({ currentProfile }) {
         console.error("Could not load warranties:", error);
         setRecords([]);
         setErrorMessage("Could not load warranty records. Please try again.");
-        return;
+        return false;
       }
 
       setRecords((data ?? []).filter(isSoldVehicleRecord));
+      return true;
     } catch (error) {
       console.error("Could not load warranties:", error);
       setRecords([]);
       setErrorMessage("Could not load warranty records. Please try again.");
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -253,6 +257,18 @@ function WarrantiesPage({ currentProfile }) {
       window.history.state,
       "",
       `${url.pathname}${url.search}${url.hash}`
+    );
+  }
+
+  async function handleWarrantySaved(savedWarranty) {
+    const didReload = await loadWarranties();
+
+    if (!didReload) {
+      return;
+    }
+
+    handleStatusFilterChange(
+      getWarrantyStatus(getWarrantyEndDate(savedWarranty)).key
     );
   }
 
@@ -367,7 +383,7 @@ function WarrantiesPage({ currentProfile }) {
             editorRecord.sale.sale_date ?? editorRecord.sale.created_at
           }
           onClose={() => setEditorRecord(null)}
-          onSaved={loadWarranties}
+          onSaved={handleWarrantySaved}
           saleId={editorRecord.sale.id}
           warranty={editorRecord.warranty}
         />
