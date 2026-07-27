@@ -34,6 +34,10 @@ export const WARRANTY_REGISTER_COLUMNS = [
   "Notes",
 ];
 
+export const EXPIRED_WARRANTY_COLUMNS = WARRANTY_REGISTER_COLUMNS.filter(
+  (column) => column !== "Vehicle Status"
+);
+
 function hasValue(value) {
   return value !== null && value !== undefined && value !== "";
 }
@@ -378,6 +382,22 @@ export function createWarrantyRegisterCsv(records) {
     .join("\r\n");
 }
 
+export function getExpiredWarrantyRow(record) {
+  return getWarrantyRegisterRow(record).filter(
+    (_, columnIndex) =>
+      WARRANTY_REGISTER_COLUMNS[columnIndex] !== "Vehicle Status"
+  );
+}
+
+export function createExpiredWarrantyCsv(records) {
+  return [
+    EXPIRED_WARRANTY_COLUMNS,
+    ...records.map(getExpiredWarrantyRow),
+  ]
+    .map((row) => row.map(escapeCsvValue).join(","))
+    .join("\r\n");
+}
+
 export function downloadCsvFile(csv, filename) {
   const blob = new Blob([`\uFEFF${csv}`], {
     type: "text/csv;charset=utf-8",
@@ -399,5 +419,5 @@ export function getWarrantyRegisterFilename(today = getTodayDateValue()) {
 }
 
 export function getExpiredWarrantyFilename(today = getTodayDateValue()) {
-  return `makkah-expired-warranty-vehicles-${today}.csv`;
+  return `makkah-expired-warranty-${today}.csv`;
 }

@@ -286,6 +286,7 @@ function formatCountPhrase(count, singular, plural = `${singular}s`) {
 }
 
 function createActionCenterGroups({
+  canArchiveExpiredWarranties = false,
   partQueueCounts,
   partRequests,
   purchaseOrders,
@@ -458,16 +459,21 @@ function createActionCenterGroups({
           subtitle: "Reservations attached to inventory vehicles.",
           tone: "purple",
         },
-        {
-          actionText: "Review",
-          count: expiredWarrantyCount,
-          icon: "warning",
-          label: "Expired Warranties",
-          page: "Warranties",
-          routeSearchParams: { tab: "expired" },
-          subtitle: "Warranty cleanup is due. No vehicles are deleted automatically.",
-          tone: "red",
-        },
+        ...(canArchiveExpiredWarranties
+          ? [
+              {
+                actionText: "Review",
+                count: expiredWarrantyCount,
+                icon: "warning",
+                label: "Expired warranties ready to archive",
+                page: "Reports",
+                routeSearchParams: { tab: "expired" },
+                subtitle:
+                  "Warranty cleanup is due. No vehicles are deleted automatically.",
+                tone: "red",
+              },
+            ]
+          : []),
       ],
     },
   ];
@@ -1521,6 +1527,7 @@ function Dashboard({
       ? activeInventoryInvestment / activeVehicles.length
       : 0;
   const actionGroups = createActionCenterGroups({
+    canArchiveExpiredWarranties: canViewAdminFinancial,
     partQueueCounts,
     partRequests,
     prebookingBadges,

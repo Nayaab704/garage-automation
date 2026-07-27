@@ -53,6 +53,7 @@ const routeTabSearchValues = {
     "all",
   ]),
   "Purchase Orders": new Set(["ordered", "received", "cancelled", "all"]),
+  Reports: new Set(["expired"]),
   Repairs: new Set([
     "all",
     "in_progress",

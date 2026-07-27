@@ -226,7 +226,7 @@ async function fetchVehicleDetails(
     prebookingsResponse,
     salesResponse,
   ] = await Promise.all([
-    supabase.from("vehicles").select("*").eq("id", vehicleId).single(),
+    supabase.from("vehicles").select("*").eq("id", vehicleId).maybeSingle(),
     supabase.from("repair_jobs").select("*").eq("vehicle_id", vehicleId),
     supabase.from("part_requests").select("*").eq("vehicle_id", vehicleId),
     supabase
@@ -290,10 +290,14 @@ async function fetchVehicleDetails(
           .select("*")
           .in("sale_id", saleIds);
 
-  const investmentSummaryResponse = vehicleResponse.error || !canViewAdminFinancial
+  const investmentSummaryResponse =
+    vehicleResponse.error ||
+    !vehicleResponse.data ||
+    !canViewAdminFinancial
     ? { data: null, error: null }
     : await fetchInvestmentSummary(vehicleId, vehicleResponse.data?.stock_number);
-  const finalChecksResponse = vehicleResponse.error
+  const finalChecksResponse =
+    vehicleResponse.error || !vehicleResponse.data
     ? { data: [], error: null }
     : await fetchFinalChecks(vehicleId);
 
@@ -1490,6 +1494,22 @@ function VehicleDetailPage({
         <section className="rounded-lg border border-red-200 bg-red-50 p-6 text-red-800">
           <h2 className="font-semibold">Unable to load vehicle details</h2>
           <p className="mt-2 text-sm">{errorMessage}</p>
+        </section>
+      )}
+
+      {!isLoading && !errorMessage && !vehicle && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+          <AppIcon
+            className="mx-auto text-slate-400"
+            name="car"
+            size={30}
+          />
+          <h2 className="mt-3 font-black text-slate-950">
+            Vehicle not found or archived.
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            This vehicle is no longer available in the active app.
+          </p>
         </section>
       )}
 

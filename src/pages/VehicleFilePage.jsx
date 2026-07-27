@@ -1977,7 +1977,9 @@ function VehicleFilePage({
 
       {!isLoading && !errorMessage && canViewVehicleFile && !data?.vehicle && (
         <section className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <h2 className="text-lg font-black text-slate-950">Vehicle not found.</h2>
+          <h2 className="text-lg font-black text-slate-950">
+            Vehicle not found or archived.
+          </h2>
           <p className="mt-2 text-sm text-slate-500">
             This vehicle may have been removed or is no longer available.
           </p>
