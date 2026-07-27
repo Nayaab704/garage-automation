@@ -95,6 +95,27 @@ export function createWarrantyRecordValues({
   };
 }
 
+export function prepareWarrantyRecordForPersistence(
+  warrantyValues,
+  { isUpdate = false } = {}
+) {
+  const persistenceValues = { ...warrantyValues };
+
+  for (const fieldName of ["warranty_type", "terms"]) {
+    if (persistenceValues[fieldName] !== null) {
+      continue;
+    }
+
+    if (isUpdate) {
+      persistenceValues[fieldName] = "";
+    } else {
+      delete persistenceValues[fieldName];
+    }
+  }
+
+  return persistenceValues;
+}
+
 export function normalizeWarrantyMonths(
   value,
   fallback = DEFAULT_WARRANTY_MONTHS
@@ -192,6 +213,34 @@ export function getWarrantyMonths(warranty) {
   }
 
   return null;
+}
+
+export function getLatestWarrantyForSale(warranties = [], saleId) {
+  if (!saleId || !Array.isArray(warranties)) {
+    return null;
+  }
+
+  return (
+    warranties
+      .filter((warranty) => warranty?.sale_id === saleId)
+      .sort((firstWarranty, secondWarranty) => {
+        const firstTime =
+          new Date(
+            firstWarranty?.updated_at ?? firstWarranty?.created_at ?? 0
+          ).getTime() || 0;
+        const secondTime =
+          new Date(
+            secondWarranty?.updated_at ?? secondWarranty?.created_at ?? 0
+          ).getTime() || 0;
+
+        return (
+          secondTime - firstTime ||
+          String(secondWarranty?.id ?? "").localeCompare(
+            String(firstWarranty?.id ?? "")
+          )
+        );
+      })[0] ?? null
+  );
 }
 
 export function getWarrantyStatus(endDate, today = getTodayDateValue()) {

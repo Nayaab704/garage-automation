@@ -1,6 +1,11 @@
 import { supabase } from "./supabaseClient";
 
-export async function logVehicleActivity({ action, details = {}, vehicleId }) {
+export async function logVehicleActivity({
+  action,
+  details = {},
+  userId = null,
+  vehicleId,
+}) {
   if (!vehicleId || !action) {
     return null;
   }
@@ -11,7 +16,7 @@ export async function logVehicleActivity({ action, details = {}, vehicleId }) {
       .insert([
         {
           vehicle_id: vehicleId,
-          user_id: null,
+          user_id: userId,
           action,
           details: details && typeof details === "object" ? details : {},
         },

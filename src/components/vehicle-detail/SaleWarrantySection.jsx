@@ -4,6 +4,7 @@ import WarrantyEditorForm from "./WarrantyEditorForm";
 import {
   formatWarrantyDate,
   getWarrantyEndDate,
+  getLatestWarrantyForSale,
   getWarrantyMonths,
   getWarrantyNotes,
   getWarrantyStartDate,
@@ -50,10 +51,6 @@ function getFirstValue(record, fieldNames) {
   }
 
   return null;
-}
-
-function getWarrantyForSale(warranties, saleId) {
-  return warranties.find((warranty) => warranty.sale_id === saleId);
 }
 
 function DetailItem({ label, value }) {
@@ -209,7 +206,7 @@ function SaleWarrantySection({
                   setEditorContext({ sale: selectedSale, warranty })
                 }
                 sale={sale}
-                warranty={getWarrantyForSale(warranties, sale.id)}
+                warranty={getLatestWarrantyForSale(warranties, sale.id)}
               />
             ))}
           </div>

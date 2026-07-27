@@ -5,6 +5,7 @@ import AddVehiclePhotoForm from "../components/vehicle-detail/AddVehiclePhotoFor
 import DeleteVehicleModal from "../components/vehicle-detail/DeleteVehicleModal";
 import ExtraCostsSection from "../components/vehicle-detail/ExtraCostsSection";
 import FinalCheckSection from "../components/vehicle-detail/FinalCheckSection";
+import RepairPhotoCleanupModal from "../components/vehicle-detail/RepairPhotoCleanupModal";
 import {
   areFinalChecksComplete,
   finalCheckTemplates,
@@ -24,6 +25,8 @@ import {
 } from "../lib/partReturns";
 import { hasPermission, isAdminOrManagerRole } from "../lib/permissions";
 import { markPurchaseOrderReceived } from "../lib/purchaseOrderReceiving";
+import { cleanupRepairPhotosForReadySale } from "../lib/repairPhotoCleanup";
+import { getRepairPhotoCleanupPlan } from "../lib/repairPhotoCleanupRules";
 import { supabase } from "../lib/supabaseClient";
 import { isThirdPartyRepairActive } from "../lib/thirdPartyRepairWorkflow";
 import { getVehiclePrimaryPhoto } from "../lib/vehicleDisplayPhoto";
@@ -451,10 +454,13 @@ function VehicleDetailPage({
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [vehicleStatusError, setVehicleStatusError] = useState("");
+  const [photoCleanupNotice, setPhotoCleanupNotice] = useState(null);
   const [isVehicleStatusUpdating, setIsVehicleStatusUpdating] = useState(false);
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
   const [isSellFormOpen, setIsSellFormOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isRepairPhotoCleanupOpen, setIsRepairPhotoCleanupOpen] =
+    useState(false);
   const [isVehiclePhotoFormOpen, setIsVehiclePhotoFormOpen] = useState(false);
   const [refreshCount, setRefreshCount] = useState(0);
   const serviceWorkRef = useRef(null);
@@ -581,6 +587,37 @@ function VehicleDetailPage({
     scrollToSection(vehiclePhotosRef);
   }
 
+  async function runRepairPhotoCleanup({ automatic = false } = {}) {
+    setPhotoCleanupNotice(null);
+
+    const summary = await cleanupRepairPhotosForReadySale(vehicleId);
+
+    if (summary.deletedPhotoIds.length > 0) {
+      const deletedPhotoIds = new Set(summary.deletedPhotoIds);
+
+      setVehiclePhotos((currentPhotos) =>
+        currentPhotos.filter((photo) => !deletedPhotoIds.has(photo.id))
+      );
+    }
+
+    if (summary.error || summary.failedCount > 0) {
+      setPhotoCleanupNotice({
+        message: "Vehicle is Ready for Sale, but photo cleanup needs review.",
+        tone: "warning",
+      });
+    } else {
+      setPhotoCleanupNotice({
+        message: `${
+          automatic ? "Ready for Sale. " : ""
+        }Removed ${summary.deletedCount} repair photos and kept main/final photos.`,
+        tone: "success",
+      });
+    }
+
+    refreshActivityTimeline();
+    return summary;
+  }
+
   async function refreshInvestmentSummary() {
     if (!vehicleId || !canViewAdminFinancial) {
       return;
@@ -641,6 +678,7 @@ function VehicleDetailPage({
     const previousStatus = vehicle.status;
 
     setVehicleStatusError("");
+    setPhotoCleanupNotice(null);
     setIsVehicleStatusUpdating(true);
     setVehicle((currentVehicle) =>
       currentVehicle
@@ -675,6 +713,24 @@ function VehicleDetailPage({
         },
       });
       refreshActivityTimeline();
+
+      if (
+        normalizedCurrentStatus !== "ready_for_sale" &&
+        normalizedNewStatus === "ready_for_sale" &&
+        isAdminOrManagerRole(role)
+      ) {
+        try {
+          await runRepairPhotoCleanup({ automatic: true });
+        } catch (cleanupError) {
+          console.error("Could not clean repair photos:", cleanupError);
+          setPhotoCleanupNotice({
+            message:
+              "Vehicle is Ready for Sale, but photo cleanup needs review.",
+            tone: "warning",
+          });
+        }
+      }
+
       return true;
     } catch (error) {
       console.error("Could not update vehicle status:", error);
@@ -1380,6 +1436,16 @@ function VehicleDetailPage({
   const hasActiveThirdPartyRepair = thirdPartyRepairs.some(
     isThirdPartyRepairActive
   );
+  const repairPhotoCleanupPlan = getRepairPhotoCleanupPlan({
+    photos: vehiclePhotos,
+    primaryPhotoId: vehicle?.primary_photo_id,
+    repairJobIds: repairJobs.map((repairJob) => repairJob.id),
+    vehicleId,
+  });
+  const canRunManualRepairPhotoCleanup =
+    isAdminOrManagerRole(role) &&
+    normalizeVehicleStatus(vehicle?.status) === "ready_for_sale" &&
+    repairPhotoCleanupPlan.candidateCount > 0;
 
   return (
     <div className="space-y-4 text-slate-950">
@@ -1453,6 +1519,18 @@ function VehicleDetailPage({
           {vehicleStatusError && (
             <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
               {vehicleStatusError}
+            </div>
+          )}
+
+          {photoCleanupNotice && (
+            <div
+              className={`rounded-md border p-3 text-sm font-semibold ${
+                photoCleanupNotice.tone === "success"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-amber-200 bg-amber-50 text-amber-800"
+              }`}
+            >
+              {photoCleanupNotice.message}
             </div>
           )}
 
@@ -1557,7 +1635,7 @@ function VehicleDetailPage({
             vehicleId={vehicleId}
           />
 
-          {canDeleteVehicle && (
+          {(canRunManualRepairPhotoCleanup || canDeleteVehicle) && (
             <section className="rounded-2xl border border-red-100 bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -1565,17 +1643,34 @@ function VehicleDetailPage({
                     Admin Actions
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Permanently remove this vehicle and its related records.
+                    Manage Ready for Sale cleanup and permanent vehicle actions.
                   </p>
                 </div>
-                <button
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100"
-                  onClick={() => setIsDeleteModalOpen(true)}
-                  type="button"
-                >
-                  <AppIcon name="warning" size={17} />
-                  Delete Vehicle
-                </button>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {canRunManualRepairPhotoCleanup && (
+                    <button
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-800 transition hover:bg-amber-100"
+                      onClick={() => {
+                        setPhotoCleanupNotice(null);
+                        setIsRepairPhotoCleanupOpen(true);
+                      }}
+                      type="button"
+                    >
+                      <AppIcon name="camera" size={17} />
+                      Clean Repair Photos
+                    </button>
+                  )}
+                  {canDeleteVehicle && (
+                    <button
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100"
+                      onClick={() => setIsDeleteModalOpen(true)}
+                      type="button"
+                    >
+                      <AppIcon name="warning" size={17} />
+                      Delete Vehicle
+                    </button>
+                  )}
+                </div>
               </div>
             </section>
           )}
@@ -1629,6 +1724,16 @@ function VehicleDetailPage({
               vehicle={vehicle}
               vehicleDocuments={vehicleDocuments}
               vehiclePhotos={vehiclePhotos}
+            />
+          )}
+
+          {isRepairPhotoCleanupOpen &&
+            isAdminOrManagerRole(role) &&
+            normalizeVehicleStatus(vehicle?.status) === "ready_for_sale" && (
+            <RepairPhotoCleanupModal
+              candidateCount={repairPhotoCleanupPlan.candidateCount}
+              onClose={() => setIsRepairPhotoCleanupOpen(false)}
+              onConfirm={() => runRepairPhotoCleanup()}
             />
           )}
         </>

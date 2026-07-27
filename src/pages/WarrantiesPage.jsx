@@ -141,6 +141,7 @@ function WarrantiesPage({ currentProfile }) {
   const [editorRecord, setEditorRecord] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const canManage = hasPermission(currentProfile?.role, "warranty:manage");
 
   const loadWarranties = useCallback(async () => {
@@ -158,7 +159,6 @@ function WarrantiesPage({ currentProfile }) {
 
       if (error) {
         console.error("Could not load warranties:", error);
-        setRecords([]);
         setErrorMessage("Could not load warranty records. Please try again.");
         return false;
       }
@@ -167,7 +167,6 @@ function WarrantiesPage({ currentProfile }) {
       return true;
     } catch (error) {
       console.error("Could not load warranties:", error);
-      setRecords([]);
       setErrorMessage("Could not load warranty records. Please try again.");
       return false;
     } finally {
@@ -261,15 +260,28 @@ function WarrantiesPage({ currentProfile }) {
   }
 
   async function handleWarrantySaved(savedWarranty) {
-    const didReload = await loadWarranties();
+    const savedEndDate = getWarrantyEndDate(savedWarranty);
+    const savedStatus = getWarrantyStatus(savedEndDate);
 
-    if (!didReload) {
-      return;
+    setRecords((currentRecords) =>
+      currentRecords.map((record) =>
+        record.sale?.id === savedWarranty?.sale_id
+          ? {
+              ...record,
+              endDate: savedEndDate,
+              status: savedStatus,
+              warranty: savedWarranty,
+            }
+          : record
+      )
+    );
+    setSuccessMessage("Warranty saved successfully.");
+
+    if (statusFilter !== "all" && statusFilter !== savedStatus.key) {
+      handleStatusFilterChange(savedStatus.key);
     }
 
-    handleStatusFilterChange(
-      getWarrantyStatus(getWarrantyEndDate(savedWarranty)).key
-    );
+    await loadWarranties();
   }
 
   if (!canManage) {
@@ -299,7 +311,10 @@ function WarrantiesPage({ currentProfile }) {
           <button
             className={buttonClassNames.secondary}
             disabled={isLoading}
-            onClick={loadWarranties}
+            onClick={() => {
+              setSuccessMessage("");
+              loadWarranties();
+            }}
             type="button"
           >
             <AppIcon name="refresh" size={18} />
@@ -340,6 +355,11 @@ function WarrantiesPage({ currentProfile }) {
           {errorMessage}
         </section>
       )}
+      {successMessage && (
+        <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+          {successMessage}
+        </section>
+      )}
 
       {isLoading ? (
         <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
@@ -370,7 +390,10 @@ function WarrantiesPage({ currentProfile }) {
             <WarrantyCard
               canManage={canManage}
               key={record.vehicleId}
-              onEdit={setEditorRecord}
+              onEdit={(selectedRecord) => {
+                setSuccessMessage("");
+                setEditorRecord(selectedRecord);
+              }}
               record={record}
             />
           ))}
