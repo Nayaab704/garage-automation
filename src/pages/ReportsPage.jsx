@@ -4,10 +4,12 @@ import AppIcon from "../components/ui/AppIcon";
 import WarrantyStatusBadge from "../components/WarrantyStatusBadge";
 import { buttonClassNames } from "../components/ui/uiStyles";
 import { isAdminOrManagerRole } from "../lib/permissions";
-import { formatWarrantyDate } from "../lib/warranty";
+import { supabase } from "../lib/supabaseClient";
+import { formatWarrantyDate, getTodayDateValue } from "../lib/warranty";
 import {
   createVehicleArchiveCsv,
   downloadCsvFile,
+  escapeCsvValue,
   fetchWarrantyRegisterData,
   getVehicleArchiveFilename,
   getVehicleArchiveRecordFingerprint,
@@ -22,6 +24,15 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
   style: "currency",
 });
+const integerFormatter = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 0,
+});
+const salesMonthFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  timeZone: "UTC",
+  year: "numeric",
+});
+const SALES_MONTH_PATTERN = /^(\d{4})-(\d{2})-\d{2}$/;
 
 function hasValue(value) {
   return value !== null && value !== undefined && value !== "";
@@ -46,6 +57,67 @@ function getCustomerName(sale) {
     sale?.customer ||
     "Customer not recorded"
   );
+}
+
+function formatSalesMonth(value) {
+  const match = SALES_MONTH_PATTERN.exec(String(value ?? ""));
+  const month = Number(match?.[2]);
+  const year = Number(match?.[1]);
+
+  if (!match || month < 1 || month > 12 || !Number.isInteger(year)) {
+    return "";
+  }
+
+  return salesMonthFormatter.format(new Date(Date.UTC(year, month - 1, 1)));
+}
+
+function getCurrentSalesYear(now = new Date()) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+  }).format(now);
+}
+
+function normalizeSalesHistoryRows(rows) {
+  return (Array.isArray(rows) ? rows : [])
+    .map((row) => ({
+      month_start: String(row?.month_start ?? "").slice(0, 10),
+      sold_count: Number.isFinite(Number(row?.sold_count))
+        ? Math.max(0, Math.trunc(Number(row.sold_count)))
+        : 0,
+    }))
+    .filter((row) => formatSalesMonth(row.month_start))
+    .sort((firstRow, secondRow) =>
+      secondRow.month_start.localeCompare(firstRow.month_start)
+    );
+}
+
+async function fetchSalesHistoryRows() {
+  const { data, error } = await supabase
+    .from("vehicle_sales_monthly_summary")
+    .select("month_start, sold_count")
+    .order("month_start", { ascending: false });
+
+  return {
+    data: error ? [] : normalizeSalesHistoryRows(data),
+    error,
+  };
+}
+
+function createSalesSummaryCsv(rows) {
+  return [
+    ["Month", "Vehicles Sold"],
+    ...rows.map((row) => [
+      formatSalesMonth(row.month_start),
+      row.sold_count,
+    ]),
+  ]
+    .map((row) => row.map(escapeCsvValue).join(","))
+    .join("\r\n");
+}
+
+function getSalesSummaryFilename(today = getTodayDateValue()) {
+  return `makkah-sales-summary-${today}.csv`;
 }
 
 function getRecordExportKey(record, profileId) {
@@ -110,11 +182,7 @@ function ArchiveExportCard({
         </span>
         <div className="min-w-0">
           <h2 className="font-black text-slate-950">Download Archive CSV</h2>
-          <p className="mt-1 text-sm leading-5 text-slate-500">
-            One permanent export for the expired vehicles currently awaiting
-            deletion.
-          </p>
-          <p className="mt-2 text-xs font-bold tabular-nums text-slate-400">
+          <p className="mt-1 text-xs font-bold tabular-nums text-slate-400">
             {recordCount} {recordCount === 1 ? "vehicle" : "vehicles"}
             {" not yet exported"}
           </p>
@@ -233,14 +301,132 @@ function ExpiredWarrantyCard({
   );
 }
 
+function SalesHistoryMetric({ className = "", label, value }) {
+  return (
+    <div
+      className={`rounded-xl border border-slate-200 bg-white px-3 py-2.5 ${className}`}
+    >
+      <dt className="text-[0.65rem] font-black uppercase tracking-wide text-slate-500">
+        {label}
+      </dt>
+      <dd className="mt-1 truncate text-lg font-black tabular-nums text-slate-950">
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function SalesHistorySection({
+  errorMessage,
+  isDownloading,
+  isLoading,
+  onDownload,
+  rows,
+  stats,
+}) {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">
+            Sales History
+          </p>
+          <h2 className="mt-1 text-xl font-black text-slate-950">
+            Monthly Sold Summary
+          </h2>
+        </div>
+        <button
+          className={`${buttonClassNames.secondary} w-full sm:w-auto`}
+          disabled={isLoading || isDownloading || rows.length === 0}
+          onClick={onDownload}
+          type="button"
+        >
+          <AppIcon name="file" size={18} />
+          {isDownloading ? "Preparing CSV..." : "Download Sales Summary CSV"}
+        </button>
+      </div>
+
+      {!isLoading && (!errorMessage || rows.length > 0) && (
+        <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <SalesHistoryMetric
+            label="Total Vehicles Sold"
+            value={integerFormatter.format(stats.totalVehiclesSold)}
+          />
+          <SalesHistoryMetric
+            label="Sold This Year"
+            value={integerFormatter.format(stats.soldThisYear)}
+          />
+          <SalesHistoryMetric
+            className="col-span-2 sm:col-span-1"
+            label="First Sale Month"
+            value={formatSalesMonth(stats.firstSaleMonth) || "Not available"}
+          />
+        </dl>
+      )}
+
+      {!isLoading && errorMessage && (
+        <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+          {errorMessage}
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 text-center">
+          <p className="text-sm font-semibold text-slate-500">
+            Loading sales history...
+          </p>
+        </div>
+      ) : errorMessage && rows.length === 0 ? null : rows.length === 0 ? (
+        <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center">
+          <p className="text-sm font-semibold text-slate-500">
+            No sales history yet.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <table className="w-full table-fixed text-left text-sm">
+            <thead className="bg-slate-100 text-xs font-black uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-3 py-2.5" scope="col">
+                  Month
+                </th>
+                <th className="px-3 py-2.5 text-right" scope="col">
+                  Vehicles Sold
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((row) => (
+                <tr key={row.month_start}>
+                  <td className="px-3 py-2.5 font-bold text-slate-800">
+                    {formatSalesMonth(row.month_start)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-black tabular-nums text-slate-950">
+                    {integerFormatter.format(row.sold_count)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ReportsPage({ currentProfile }) {
   const [records, setRecords] = useState([]);
+  const [salesHistoryRows, setSalesHistoryRows] = useState([]);
   const [exportedRecordKeys, setExportedRecordKeys] = useState(
     () => readStoredExportKeys(currentProfile?.id)
   );
   const [isLoading, setIsLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isSalesHistoryLoading, setIsSalesHistoryLoading] = useState(true);
+  const [isSalesHistoryDownloading, setIsSalesHistoryDownloading] =
+    useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [salesHistoryErrorMessage, setSalesHistoryErrorMessage] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
   const [warningMessage, setWarningMessage] = useState("");
   const [selectedDeleteRecord, setSelectedDeleteRecord] = useState(null);
@@ -299,17 +485,58 @@ function ReportsPage({ currentProfile }) {
     }
   }, [canViewReports, currentProfile?.id]);
 
+  const loadSalesHistory = useCallback(async () => {
+    if (!canViewReports) {
+      setSalesHistoryRows([]);
+      setSalesHistoryErrorMessage("");
+      setIsSalesHistoryLoading(false);
+      return;
+    }
+
+    setIsSalesHistoryLoading(true);
+    setSalesHistoryErrorMessage("");
+
+    try {
+      const { data, error } = await fetchSalesHistoryRows();
+
+      if (error) {
+        console.error("Could not load monthly sales history:", error);
+        setSalesHistoryRows([]);
+        setSalesHistoryErrorMessage(
+          "Could not load sales history. Please try again."
+        );
+        return;
+      }
+
+      setSalesHistoryRows(data);
+    } catch (error) {
+      console.error("Could not load monthly sales history:", error);
+      setSalesHistoryRows([]);
+      setSalesHistoryErrorMessage(
+        "Could not load sales history. Please try again."
+      );
+    } finally {
+      setIsSalesHistoryLoading(false);
+    }
+  }, [canViewReports]);
+
+  const refreshReports = useCallback(() => {
+    loadReportRecords();
+    loadSalesHistory();
+  }, [loadReportRecords, loadSalesHistory]);
+
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      loadReportRecords();
+      refreshReports();
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [loadReportRecords]);
+  }, [refreshReports]);
 
   useEffect(() => {
     if (
       isLoading ||
+      isSalesHistoryLoading ||
       hasFocusedCleanupRef.current ||
       typeof window === "undefined" ||
       new URLSearchParams(window.location.search).get("tab") !== "expired"
@@ -322,7 +549,7 @@ function ReportsPage({ currentProfile }) {
       behavior: "smooth",
       block: "start",
     });
-  }, [isLoading]);
+  }, [isLoading, isSalesHistoryLoading]);
 
   const expiredRecords = useMemo(
     () => records.filter((record) => record.isExpiredCleanupEligible),
@@ -338,6 +565,65 @@ function ReportsPage({ currentProfile }) {
       ),
     [currentProfile?.id, expiredRecords, exportedRecordKeys]
   );
+  const salesHistoryStats = useMemo(() => {
+    const currentYear = getCurrentSalesYear();
+
+    return {
+      firstSaleMonth: salesHistoryRows.reduce((firstMonth, row) => {
+        if (
+          row.sold_count <= 0 ||
+          (firstMonth && row.month_start >= firstMonth)
+        ) {
+          return firstMonth;
+        }
+
+        return row.month_start;
+      }, ""),
+      soldThisYear: salesHistoryRows
+        .filter((row) => row.month_start.startsWith(`${currentYear}-`))
+        .reduce((total, row) => total + row.sold_count, 0),
+      totalVehiclesSold: salesHistoryRows.reduce(
+        (total, row) => total + row.sold_count,
+        0
+      ),
+    };
+  }, [salesHistoryRows]);
+
+  async function handleDownloadSalesSummary() {
+    if (!canViewReports || isSalesHistoryDownloading) {
+      return;
+    }
+
+    setIsSalesHistoryDownloading(true);
+    setSalesHistoryErrorMessage("");
+
+    try {
+      const { data, error } = await fetchSalesHistoryRows();
+
+      if (error) {
+        console.error("Could not prepare monthly sales summary CSV:", error);
+        setSalesHistoryErrorMessage(
+          "Could not download the sales summary. Please try again."
+        );
+        return;
+      }
+
+      setSalesHistoryRows(data);
+
+      if (data.length === 0) {
+        return;
+      }
+
+      downloadCsvFile(createSalesSummaryCsv(data), getSalesSummaryFilename());
+    } catch (error) {
+      console.error("Could not prepare monthly sales summary CSV:", error);
+      setSalesHistoryErrorMessage(
+        "Could not download the sales summary. Please try again."
+      );
+    } finally {
+      setIsSalesHistoryDownloading(false);
+    }
+  }
 
   async function handleDownloadArchive() {
     if (!canViewReports || isDownloading) {
@@ -478,14 +764,16 @@ function ReportsPage({ currentProfile }) {
             <h1 className="mt-1 text-2xl font-black text-slate-950">
               Reports & Export Center
             </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Export expired vehicles once, then remove their heavy app data.
-            </p>
           </div>
           <button
             className={buttonClassNames.secondary}
-            disabled={isLoading || isDownloading}
-            onClick={loadReportRecords}
+            disabled={
+              isLoading ||
+              isDownloading ||
+              isSalesHistoryLoading ||
+              isSalesHistoryDownloading
+            }
+            onClick={refreshReports}
             type="button"
           >
             <AppIcon name="refresh" size={18} />
@@ -509,6 +797,15 @@ function ReportsPage({ currentProfile }) {
           {infoMessage}
         </section>
       )}
+
+      <SalesHistorySection
+        errorMessage={salesHistoryErrorMessage}
+        isDownloading={isSalesHistoryDownloading}
+        isLoading={isSalesHistoryLoading}
+        onDownload={handleDownloadSalesSummary}
+        rows={salesHistoryRows}
+        stats={salesHistoryStats}
+      />
 
       <section className="max-w-2xl">
         <ArchiveExportCard
@@ -541,10 +838,6 @@ function ReportsPage({ currentProfile }) {
             <h2 className="mt-1 text-xl font-black text-slate-950">
               Expired Warranty Cleanup
             </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Only sold vehicles with expired coverage and no active warranty
-              appear here. Nothing is deleted automatically.
-            </p>
           </div>
           <span className="w-fit rounded-full bg-red-50 px-3 py-1.5 text-sm font-black tabular-nums text-red-700 ring-1 ring-inset ring-red-200">
             {expiredRecords.length}
@@ -574,9 +867,6 @@ function ReportsPage({ currentProfile }) {
             <h3 className="mt-3 font-black text-slate-800">
               No expired vehicles to clean up
             </h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Sold vehicles will appear here after their warranty end date.
-            </p>
           </div>
         ) : (
           <div className="mt-4 grid gap-3 xl:grid-cols-2">

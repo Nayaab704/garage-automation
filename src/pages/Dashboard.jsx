@@ -776,6 +776,7 @@ function DashboardSection({ children, className = "", title }) {
 }
 
 function SummaryCard({
+  compact = false,
   helperText,
   icon,
   label,
@@ -783,7 +784,13 @@ function SummaryCard({
   valueClassName = "text-slate-950",
 }) {
   return (
-    <article className="flex min-h-[4.75rem] min-w-0 items-start gap-2.5 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm sm:min-h-20 sm:p-3">
+    <article
+      className={`flex min-w-0 gap-2.5 rounded-2xl border border-slate-200 bg-white shadow-sm ${
+        compact
+          ? "min-h-0 items-center p-2.5"
+          : "min-h-[4.75rem] items-start p-2.5 sm:min-h-20 sm:p-3"
+      }`}
+    >
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-100 sm:h-9 sm:w-9">
         <AppIcon name={icon} size={18} />
       </div>
@@ -1598,6 +1605,7 @@ function Dashboard({
         String(firstRow.month_start).localeCompare(String(secondRow.month_start))
       );
     const currentMonthStart = getCurrentSalesMonthStart();
+    const currentYear = currentMonthStart.slice(0, 4);
 
     return {
       firstSaleMonth:
@@ -1605,6 +1613,12 @@ function Dashboard({
       soldThisMonth: numberOrZero(
         rows.find((row) => row.month_start === currentMonthStart)?.sold_count
       ),
+      soldThisYear: rows
+        .filter((row) => String(row.month_start).startsWith(`${currentYear}-`))
+        .reduce(
+          (total, row) => total + numberOrZero(row.sold_count),
+          0
+        ),
       totalVehiclesSold: rows.reduce(
         (total, row) => total + numberOrZero(row.sold_count),
         0
@@ -1744,30 +1758,35 @@ function Dashboard({
           </section>
 
           {canViewAdminFinancial && (
-            <DashboardSection title="Lifetime Sales">
-              <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3">
+            <DashboardSection title="Sales Summary">
+              <div className="grid grid-cols-2 gap-2 p-2.5 sm:p-3 lg:grid-cols-4">
                 <SummaryCard
-                  helperText="Preserved after cleanup"
+                  compact
                   icon="check"
-                  label="Total vehicles sold"
+                  label="Total Vehicles Sold"
                   value={formatNumber(lifetimeSalesStats.totalVehiclesSold)}
                 />
                 <SummaryCard
-                  helperText="America/New_York"
+                  compact
                   icon="chart-up"
-                  label="Sold this month"
+                  label="Sold This Month"
                   value={formatNumber(lifetimeSalesStats.soldThisMonth)}
                 />
-                {lifetimeSalesStats.firstSaleMonth && (
-                  <SummaryCard
-                    helperText="Earliest recorded sale"
-                    icon="clock"
-                    label="First sale month"
-                    value={formatSalesMonth(
-                      lifetimeSalesStats.firstSaleMonth
-                    )}
-                  />
-                )}
+                <SummaryCard
+                  compact
+                  icon="chart-up"
+                  label="Sold This Year"
+                  value={formatNumber(lifetimeSalesStats.soldThisYear)}
+                />
+                <SummaryCard
+                  compact
+                  icon="clock"
+                  label="First Sale Month"
+                  value={
+                    formatSalesMonth(lifetimeSalesStats.firstSaleMonth) ||
+                    "Not available"
+                  }
+                />
               </div>
             </DashboardSection>
           )}

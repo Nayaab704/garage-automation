@@ -303,10 +303,6 @@ function WarrantiesPage({ currentProfile }) {
             <h1 className="mt-1 text-2xl font-black text-slate-950">
               Warranty Register
             </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Track sold vehicles, warranty coverage, expiry dates, and
-              no-warranty sales.
-            </p>
           </div>
           <button
             className={buttonClassNames.secondary}
@@ -334,7 +330,8 @@ function WarrantiesPage({ currentProfile }) {
 
             return (
               <button
-                className={`min-h-10 rounded-xl px-3 py-2 text-sm font-bold transition ${
+                aria-pressed={isActive}
+                className={`inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-bold transition ${
                   isActive
                     ? "bg-blue-600 text-white"
                     : "bg-slate-50 text-slate-600 hover:bg-slate-100"
@@ -343,7 +340,16 @@ function WarrantiesPage({ currentProfile }) {
                 onClick={() => handleStatusFilterChange(filter.key)}
                 type="button"
               >
-                {filter.label} <span className="tabular-nums">{count}</span>
+                <span>{filter.label}</span>
+                <span
+                  className={`inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-black tabular-nums ${
+                    isActive
+                      ? "bg-white/20 text-white"
+                      : "bg-white text-slate-500 ring-1 ring-inset ring-slate-200"
+                  }`}
+                >
+                  {count}
+                </span>
               </button>
             );
           })}
