@@ -78,6 +78,50 @@ function formatDate(value) {
   });
 }
 
+function formatSalesMonth(value) {
+  const match = /^(\d{4})-(\d{2})/.exec(String(value ?? ""));
+
+  if (!match) {
+    return "";
+  }
+
+  const date = new Date(
+    Date.UTC(Number(match[1]), Number(match[2]) - 1, 1)
+  );
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    timeZone: "UTC",
+    year: "numeric",
+  });
+}
+
+function getCurrentSalesMonthStart() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    month: "2-digit",
+    timeZone: "America/New_York",
+    year: "numeric",
+  }).formatToParts(new Date());
+  const month = parts.find((part) => part.type === "month")?.value;
+  const year = parts.find((part) => part.type === "year")?.value;
+
+  return month && year ? `${year}-${month}-01` : "";
+}
+
+function getCurrentBusinessDateValue() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "America/New_York",
+    year: "numeric",
+  }).formatToParts(new Date());
+  const day = parts.find((part) => part.type === "day")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const year = parts.find((part) => part.type === "year")?.value;
+
+  return day && month && year ? `${year}-${month}-${day}` : "";
+}
+
 function formatLabel(value, labels = {}) {
   if (labels[value]) {
     return labels[value];
@@ -327,9 +371,34 @@ function createActionCenterGroups({
   const latestSaleIds = new Set(
     [...latestSaleByVehicleId.values()].map((sale) => sale.id).filter(Boolean)
   );
+  const vehicleIdBySaleId = new Map(
+    sales
+      .filter((sale) => sale?.id && sale?.vehicle_id)
+      .map((sale) => [sale.id, sale.vehicle_id])
+  );
+  const vehiclesById = new Map(
+    vehicles
+      .filter((vehicle) => vehicle?.id)
+      .map((vehicle) => [vehicle.id, vehicle])
+  );
+  const vehicleIdsWithCurrentWarranty = new Set();
   const latestWarrantyBySaleId = new Map();
+  const businessDate = getCurrentBusinessDateValue();
 
   for (const warranty of warranties) {
+    const vehicleId = vehicleIdBySaleId.get(warranty?.sale_id);
+    const warrantyStatus = getWarrantyStatus(
+      getWarrantyEndDate(warranty),
+      businessDate
+    );
+
+    if (
+      vehicleId &&
+      ["active", "expiring"].includes(warrantyStatus.key)
+    ) {
+      vehicleIdsWithCurrentWarranty.add(vehicleId);
+    }
+
     if (
       latestSaleIds.has(warranty?.sale_id) &&
       !latestWarrantyBySaleId.has(warranty.sale_id)
@@ -339,8 +408,17 @@ function createActionCenterGroups({
   }
 
   const expiredWarrantyCount = [...latestWarrantyBySaleId.values()].filter(
-    (warranty) =>
-      getWarrantyStatus(getWarrantyEndDate(warranty)).key === "expired"
+    (warranty) => {
+      const vehicleId = vehicleIdBySaleId.get(warranty?.sale_id);
+      const vehicle = vehiclesById.get(vehicleId);
+
+      return (
+        vehicle?.sale_status === "sold" &&
+        !vehicleIdsWithCurrentWarranty.has(vehicleId) &&
+        getWarrantyStatus(getWarrantyEndDate(warranty), businessDate).key ===
+          "expired"
+      );
+    }
   ).length;
 
   const groups = [
@@ -465,7 +543,7 @@ function createActionCenterGroups({
                 actionText: "Review",
                 count: expiredWarrantyCount,
                 icon: "warning",
-                label: "Expired warranties ready to archive",
+                label: "Expired warranties ready to clean up",
                 page: "Reports",
                 routeSearchParams: { tab: "expired" },
                 subtitle:
@@ -508,6 +586,12 @@ async function fetchDashboardData({
         .select("*")
         .order("created_at", { ascending: false })
     : { data: [], error: null };
+  const monthlySalesSummaryQuery = canViewAdminFinancial
+    ? supabase
+        .from("vehicle_sales_monthly_summary")
+        .select("month_start, sold_count")
+        .order("month_start", { ascending: true })
+    : { data: [], error: null };
   const profileColumns = canViewTeamRates
     ? "id, full_name, email, role, hourly_rate, is_active"
     : "id, full_name, email, role";
@@ -526,6 +610,7 @@ async function fetchDashboardData({
     laborLogsResponse,
     profilesResponse,
     warrantiesResponse,
+    monthlySalesSummaryResponse,
   ] = await Promise.all([
     investmentSummariesQuery,
     supabase
@@ -579,10 +664,12 @@ async function fetchDashboardData({
       .select(profileColumns)
       .order("full_name", { ascending: true }),
     warrantiesQuery,
+    monthlySalesSummaryQuery,
   ]);
 
   const firstRequiredError =
     summariesResponse.error ??
+    monthlySalesSummaryResponse.error ??
     vehiclesResponse.error ??
     salesResponse.error ??
     partRequestsResponse.error ??
@@ -622,6 +709,7 @@ async function fetchDashboardData({
         : activityLogsResponse.data ?? [],
       investmentSummaries: summariesResponse.data ?? [],
       laborLogs: laborLogsResponse.error ? [] : laborLogsResponse.data ?? [],
+      monthlySalesSummary: monthlySalesSummaryResponse.data ?? [],
       partRequests,
       profiles: profilesResponse.error ? [] : profilesResponse.data ?? [],
       purchaseOrders,
@@ -1059,6 +1147,7 @@ function DashboardFinancePanel({
   activeVehiclesCount,
   averageActiveInvestment,
   estimatedActiveProfit,
+  liveSoldVehiclesCount,
   prebookedVehiclesCount,
   readyForSaleCount,
   soldRevenue,
@@ -1084,7 +1173,10 @@ function DashboardFinancePanel({
             }
           />
           <SummaryCard
-            helperText={`${formatNumber(soldVehiclesCount)} sold`}
+            helperText={formatCountPhrase(
+              liveSoldVehiclesCount,
+              "retained sale record"
+            )}
             icon="dollar"
             label="Sold Revenue"
             value={formatCurrency(soldRevenue)}
@@ -1109,7 +1201,10 @@ function DashboardFinancePanel({
             value={formatNumber(soldVehiclesCount)}
           />
           <DashboardActionRow
-            helperText="Total sale revenue"
+            helperText={formatCountPhrase(
+              liveSoldVehiclesCount,
+              "retained sale record"
+            )}
             icon="dollar"
             label="Sold Revenue"
             tone="green"
@@ -1362,6 +1457,7 @@ function Dashboard({
   const [activityLogs, setActivityLogs] = useState([]);
   const [investmentSummaries, setInvestmentSummaries] = useState([]);
   const [laborLogs, setLaborLogs] = useState([]);
+  const [monthlySalesSummary, setMonthlySalesSummary] = useState([]);
   const [partRequests, setPartRequests] = useState([]);
   const [prebookingBadges, setPrebookingBadges] = useState([]);
   const [profiles, setProfiles] = useState([]);
@@ -1412,6 +1508,7 @@ function Dashboard({
           setActivityLogs([]);
           setInvestmentSummaries([]);
           setLaborLogs([]);
+          setMonthlySalesSummary([]);
           setPartRequests([]);
           setPrebookingBadges([]);
           setProfiles([]);
@@ -1428,6 +1525,7 @@ function Dashboard({
         setActivityLogs(data.activityLogs);
         setInvestmentSummaries(data.investmentSummaries);
         setLaborLogs(data.laborLogs);
+        setMonthlySalesSummary(data.monthlySalesSummary);
         setPartRequests(data.partRequests);
         setPrebookingBadges(data.prebookingBadges);
         setProfiles(data.profiles);
@@ -1445,6 +1543,7 @@ function Dashboard({
           setActivityLogs([]);
           setInvestmentSummaries([]);
           setLaborLogs([]);
+          setMonthlySalesSummary([]);
           setPartRequests([]);
           setPrebookingBadges([]);
           setProfiles([]);
@@ -1490,7 +1589,31 @@ function Dashboard({
   const soldVehicles = vehicles.filter((vehicle) =>
     isSoldVehicle(vehicle, soldVehicleIds)
   );
-  const soldVehiclesCount = soldVehicleIds.size || soldVehicles.length;
+  const liveSoldVehiclesCount = soldVehicleIds.size || soldVehicles.length;
+  const lifetimeSalesStats = useMemo(() => {
+    const rows = monthlySalesSummary
+      .filter((row) => row?.month_start)
+      .slice()
+      .sort((firstRow, secondRow) =>
+        String(firstRow.month_start).localeCompare(String(secondRow.month_start))
+      );
+    const currentMonthStart = getCurrentSalesMonthStart();
+
+    return {
+      firstSaleMonth:
+        rows.find((row) => numberOrZero(row.sold_count) > 0)?.month_start ?? "",
+      soldThisMonth: numberOrZero(
+        rows.find((row) => row.month_start === currentMonthStart)?.sold_count
+      ),
+      totalVehiclesSold: rows.reduce(
+        (total, row) => total + numberOrZero(row.sold_count),
+        0
+      ),
+    };
+  }, [monthlySalesSummary]);
+  const soldVehiclesCount = canViewAdminFinancial
+    ? lifetimeSalesStats.totalVehiclesSold
+    : liveSoldVehiclesCount;
   const activeInvestmentRows = mergeVehiclesWithSummaries(
     vehicles,
     investmentSummaries,
@@ -1609,13 +1732,45 @@ function Dashboard({
               value={formatNumber(soldVehiclesCount)}
             />
             <SummaryCard
-              helperText="Sale revenue"
+              helperText={formatCountPhrase(
+                liveSoldVehiclesCount,
+                "retained sale record"
+              )}
               icon="dollar"
               label="Sold Revenue"
               value={formatCurrency(soldRevenue)}
               valueClassName="text-emerald-700"
             />
           </section>
+
+          {canViewAdminFinancial && (
+            <DashboardSection title="Lifetime Sales">
+              <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3">
+                <SummaryCard
+                  helperText="Preserved after cleanup"
+                  icon="check"
+                  label="Total vehicles sold"
+                  value={formatNumber(lifetimeSalesStats.totalVehiclesSold)}
+                />
+                <SummaryCard
+                  helperText="America/New_York"
+                  icon="chart-up"
+                  label="Sold this month"
+                  value={formatNumber(lifetimeSalesStats.soldThisMonth)}
+                />
+                {lifetimeSalesStats.firstSaleMonth && (
+                  <SummaryCard
+                    helperText="Earliest recorded sale"
+                    icon="clock"
+                    label="First sale month"
+                    value={formatSalesMonth(
+                      lifetimeSalesStats.firstSaleMonth
+                    )}
+                  />
+                )}
+              </div>
+            </DashboardSection>
+          )}
 
           <DashboardSectionSwitcher
             activeSection={activeDashboardSection}
@@ -1653,6 +1808,7 @@ function Dashboard({
               activeVehiclesCount={activeVehicles.length}
               averageActiveInvestment={averageActiveInvestment}
               estimatedActiveProfit={estimatedActiveProfit}
+              liveSoldVehiclesCount={liveSoldVehiclesCount}
               prebookedVehiclesCount={prebookingBadges.length}
               readyForSaleCount={readyForSaleCount}
               soldRevenue={soldRevenue}

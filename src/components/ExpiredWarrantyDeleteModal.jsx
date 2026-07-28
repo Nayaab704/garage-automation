@@ -1,19 +1,19 @@
 import { useState } from "react";
-import { archiveExpiredWarrantyVehicle } from "../lib/expiredWarrantyArchive";
+import { deleteExpiredWarrantyVehicle } from "../lib/expiredWarrantyDelete";
 import AppIcon from "./ui/AppIcon";
 import FormMessage from "./ui/FormMessage";
 import ModalShell from "./ui/ModalShell";
 import { buttonClassNames } from "./ui/uiStyles";
 
-function ExpiredWarrantyArchiveModal({ onArchived, onClose, record }) {
-  const [hasExported, setHasExported] = useState(false);
+function ExpiredWarrantyDeleteModal({ onClose, onDeleted, record }) {
+  const [hasSavedArchive, setHasSavedArchive] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  async function handleArchive(event) {
+  async function handleDelete(event) {
     event.preventDefault();
 
-    if (!hasExported || isSubmitting || !record?.vehicleId) {
+    if (!hasSavedArchive || isSubmitting || !record?.vehicleId) {
       return;
     }
 
@@ -21,7 +21,9 @@ function ExpiredWarrantyArchiveModal({ onArchived, onClose, record }) {
     setErrorMessage("");
 
     try {
-      const result = await archiveExpiredWarrantyVehicle({
+      const result = await deleteExpiredWarrantyVehicle({
+        archiveRecord: record,
+        saleId: record.sale?.id,
         vehicleId: record.vehicleId,
         warrantyEndDate: record.endDate,
         warrantyId: record.warranty?.id,
@@ -32,11 +34,11 @@ function ExpiredWarrantyArchiveModal({ onArchived, onClose, record }) {
         return;
       }
 
-      onArchived?.(result);
+      onDeleted?.(result);
     } catch (error) {
-      console.error("Could not archive expired warranty vehicle:", error);
+      console.error("Could not delete expired warranty vehicle:", error);
       setErrorMessage(
-        "Could not archive and delete the vehicle. Please try again."
+        "Could not delete the vehicle. Refresh the cleanup list and try again."
       );
     } finally {
       setIsSubmitting(false);
@@ -45,13 +47,13 @@ function ExpiredWarrantyArchiveModal({ onArchived, onClose, record }) {
 
   return (
     <ModalShell
-      description="This will remove the vehicle and related app records from active use. Main vehicle details, warranty dates, sale/customer summary, and financial summary should be exported before deleting. Photos and repair records may be permanently removed."
+      description="This vehicle's details should be saved in the archive CSV before deleting. This action removes the vehicle and related app records/photos from Supabase to save storage."
       isCloseDisabled={isSubmitting}
       onClose={onClose}
       size="sm"
-      title="Archive and delete this vehicle?"
+      title="Delete expired vehicle from app?"
     >
-      <form className="space-y-4" onSubmit={handleArchive}>
+      <form className="space-y-4" onSubmit={handleDelete}>
         <div className="rounded-2xl border border-red-200 bg-red-50 p-3">
           <div className="flex items-start gap-3">
             <AppIcon
@@ -74,14 +76,14 @@ function ExpiredWarrantyArchiveModal({ onArchived, onClose, record }) {
 
         <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3">
           <input
-            checked={hasExported}
+            checked={hasSavedArchive}
             className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-200"
             disabled={isSubmitting}
-            onChange={(event) => setHasExported(event.target.checked)}
+            onChange={(event) => setHasSavedArchive(event.target.checked)}
             type="checkbox"
           />
           <span className="text-sm font-bold leading-5 text-slate-800">
-            I have downloaded/exported this vehicle record.
+            I downloaded and saved the archive CSV.
           </span>
         </label>
 
@@ -98,10 +100,10 @@ function ExpiredWarrantyArchiveModal({ onArchived, onClose, record }) {
           </button>
           <button
             className={buttonClassNames.danger}
-            disabled={!hasExported || isSubmitting}
+            disabled={!hasSavedArchive || isSubmitting}
             type="submit"
           >
-            {isSubmitting ? "Archiving..." : "Archive & Delete"}
+            {isSubmitting ? "Deleting..." : "Delete From App"}
           </button>
         </div>
       </form>
@@ -109,4 +111,4 @@ function ExpiredWarrantyArchiveModal({ onArchived, onClose, record }) {
   );
 }
 
-export default ExpiredWarrantyArchiveModal;
+export default ExpiredWarrantyDeleteModal;

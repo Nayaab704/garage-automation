@@ -323,7 +323,8 @@ const pageDetails = {
   },
   Reports: {
     title: "Reports",
-    description: "Download warranty registers and review cleanup-ready records.",
+    description:
+      "Export expired vehicle archives and complete confirmed storage cleanup.",
   },
   Parts: {
     title: "Parts",

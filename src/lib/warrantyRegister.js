@@ -34,9 +34,10 @@ export const WARRANTY_REGISTER_COLUMNS = [
   "Notes",
 ];
 
-export const EXPIRED_WARRANTY_COLUMNS = WARRANTY_REGISTER_COLUMNS.filter(
+export const VEHICLE_ARCHIVE_COLUMNS = WARRANTY_REGISTER_COLUMNS.filter(
   (column) => column !== "Vehicle Status"
 );
+export const EXPIRED_WARRANTY_COLUMNS = VEHICLE_ARCHIVE_COLUMNS;
 
 function hasValue(value) {
   return value !== null && value !== undefined && value !== "";
@@ -64,6 +65,22 @@ function normalizeDateValue(value) {
   return hasValue(value) ? String(value).slice(0, 10) : "";
 }
 
+function getCleanupBusinessDate() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "America/New_York",
+    year: "numeric",
+  }).formatToParts(new Date());
+  const day = parts.find((part) => part.type === "day")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const year = parts.find((part) => part.type === "year")?.value;
+
+  return day && month && year
+    ? `${year}-${month}-${day}`
+    : getTodayDateValue();
+}
+
 function getRecordTime(record, fieldName) {
   const value = record?.[fieldName];
   const time = value ? new Date(value).getTime() : Number.NaN;
@@ -89,6 +106,66 @@ function compareNewestWarranty(firstWarranty, secondWarranty) {
         getRecordTime(firstWarranty, fieldName),
     0
   );
+}
+
+function compareNewestPrebooking(firstPrebooking, secondPrebooking) {
+  return ["updated_at", "created_at"].reduce(
+    (difference, fieldName) =>
+      difference ||
+      getRecordTime(secondPrebooking, fieldName) -
+        getRecordTime(firstPrebooking, fieldName),
+    0
+  );
+}
+
+function firstNonBlankValue(record, fieldNames) {
+  for (const fieldName of fieldNames) {
+    const value = record?.[fieldName];
+
+    if (
+      hasValue(value) &&
+      (typeof value !== "string" || value.trim().length > 0)
+    ) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+function enrichSaleCustomerFields(sale, prebooking) {
+  if (!sale || !prebooking) {
+    return sale;
+  }
+
+  const customerName = firstNonBlankValue(sale, [
+    "customer_name",
+    "buyer_name",
+    "customer",
+  ]);
+  const customerPhone = firstNonBlankValue(sale, [
+    "customer_phone",
+    "buyer_phone",
+    "phone",
+  ]);
+  const customerEmail = firstNonBlankValue(sale, [
+    "customer_email",
+    "buyer_email",
+    "email",
+  ]);
+
+  return {
+    ...sale,
+    customer_name:
+      customerName ||
+      firstNonBlankValue(prebooking, ["customer_name"]),
+    customer_phone:
+      customerPhone ||
+      firstNonBlankValue(prebooking, ["customer_phone"]),
+    customer_email:
+      customerEmail ||
+      firstNonBlankValue(prebooking, ["customer_email"]),
+  };
 }
 
 function combineNotes(warranty, sale) {
@@ -142,8 +219,36 @@ async function fetchAllRows(
   }
 }
 
+async function fetchAppliedPrebookings() {
+  const rows = [];
+
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("vehicle_prebookings")
+      .select(
+        "id, vehicle_id, customer_name, customer_phone, customer_email, status, created_at, updated_at"
+      )
+      .eq("status", "applied_to_sale")
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) {
+      return { data: rows, error };
+    }
+
+    const pageRows = data ?? [];
+    rows.push(...pageRows);
+
+    if (pageRows.length < PAGE_SIZE) {
+      return { data: rows, error: null };
+    }
+  }
+}
+
 export function buildWarrantyRegisterRecords({
   investmentSummaries = [],
+  prebookings = [],
   returnDeductionsByVehicleId = {},
   sales = [],
   vehicles = [],
@@ -151,10 +256,19 @@ export function buildWarrantyRegisterRecords({
 } = {}) {
   const sortedSales = [...sales].sort(compareNewestSale);
   const sortedWarranties = [...warranties].sort(compareNewestWarranty);
+  const sortedPrebookings = [...prebookings].sort(compareNewestPrebooking);
   const salesByVehicleId = new Map();
   const warrantiesBySaleId = new Map();
+  const prebookingsByVehicleId = new Map();
+  const vehicleIdsWithCurrentCoverage = new Set();
+  const vehicleIdBySaleId = new Map();
+  const cleanupBusinessDate = getCleanupBusinessDate();
 
   for (const sale of sortedSales) {
+    if (sale?.id && sale?.vehicle_id) {
+      vehicleIdBySaleId.set(sale.id, sale.vehicle_id);
+    }
+
     if (sale?.vehicle_id && !salesByVehicleId.has(sale.vehicle_id)) {
       salesByVehicleId.set(sale.vehicle_id, sale);
     }
@@ -163,6 +277,29 @@ export function buildWarrantyRegisterRecords({
   for (const warranty of sortedWarranties) {
     if (warranty?.sale_id && !warrantiesBySaleId.has(warranty.sale_id)) {
       warrantiesBySaleId.set(warranty.sale_id, warranty);
+    }
+
+    const coveredVehicleId = vehicleIdBySaleId.get(warranty?.sale_id);
+    const coverageStatus = getWarrantyStatus(
+      getWarrantyEndDate(warranty),
+      cleanupBusinessDate
+    );
+
+    if (
+      coveredVehicleId &&
+      ["active", "expiring"].includes(coverageStatus.key)
+    ) {
+      vehicleIdsWithCurrentCoverage.add(coveredVehicleId);
+    }
+  }
+
+  for (const prebooking of sortedPrebookings) {
+    if (
+      prebooking?.vehicle_id &&
+      prebooking.status === "applied_to_sale" &&
+      !prebookingsByVehicleId.has(prebooking.vehicle_id)
+    ) {
+      prebookingsByVehicleId.set(prebooking.vehicle_id, prebooking);
     }
   }
 
@@ -196,11 +333,18 @@ export function buildWarrantyRegisterRecords({
   return [...vehicleIds]
     .map((vehicleId) => {
       const vehicle = vehiclesById.get(vehicleId) ?? { id: vehicleId };
-      const sale = salesByVehicleId.get(vehicleId) ?? null;
+      const sale = enrichSaleCustomerFields(
+        salesByVehicleId.get(vehicleId) ?? null,
+        prebookingsByVehicleId.get(vehicleId) ?? null
+      );
       const warranty = sale
         ? warrantiesBySaleId.get(sale.id) ?? null
         : null;
       const endDate = getWarrantyEndDate(warranty);
+      const cleanupStatus = getWarrantyStatus(
+        endDate,
+        cleanupBusinessDate
+      );
       const investmentSummary =
         summariesByVehicleId.get(vehicleId) ??
         summariesByStockNumber.get(String(vehicle.stock_number ?? "")) ??
@@ -216,12 +360,19 @@ export function buildWarrantyRegisterRecords({
             0
           )
         : "";
+      const isExpiredCleanupEligible =
+        String(vehicle?.sale_status ?? "").trim().toLowerCase() === "sold" &&
+        Boolean(sale?.id) &&
+        Boolean(warranty?.id) &&
+        cleanupStatus.key === "expired" &&
+        !vehicleIdsWithCurrentCoverage.has(vehicleId);
 
       return {
         endDate,
         investmentSummary,
+        isExpiredCleanupEligible,
         sale,
-        status: getWarrantyStatus(endDate),
+        status: cleanupStatus,
         totalInvestment,
         vehicle,
         vehicleId,
@@ -251,6 +402,7 @@ export async function fetchWarrantyRegisterData({
     vehiclesResponse,
     salesResponse,
     warrantiesResponse,
+    prebookingsResponse,
     investmentResponse,
     purchaseOrdersResponse,
     purchaseOrderItemsResponse,
@@ -258,6 +410,7 @@ export async function fetchWarrantyRegisterData({
     fetchAllRows("vehicles"),
     fetchAllRows("sales", { orderColumn: "created_at" }),
     fetchAllRows("warranties", { orderColumn: "created_at" }),
+    fetchAppliedPrebookings(),
     includeInvestment
       ? fetchAllRows("vehicle_investment_summary", {
           ascending: true,
@@ -312,11 +465,20 @@ export async function fetchWarrantyRegisterData({
     );
   }
 
+  if (prebookingsResponse.error) {
+    warnings.push(
+      "Applied prebooking customer details could not be loaded; missing customer fields will be left blank."
+    );
+  }
+
   return {
     data: buildWarrantyRegisterRecords({
       investmentSummaries: investmentResponse.error
         ? []
         : investmentResponse.data,
+      prebookings: prebookingsResponse.error
+        ? []
+        : prebookingsResponse.data,
       returnDeductionsByVehicleId,
       sales: salesResponse.data,
       vehicles: vehiclesResponse.data,
@@ -389,13 +551,45 @@ export function getExpiredWarrantyRow(record) {
   );
 }
 
-export function createExpiredWarrantyCsv(records) {
+function hashArchiveFingerprint(value) {
+  let firstHash = 2166136261;
+  let secondHash = 3339675911;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const characterCode = value.charCodeAt(index);
+    firstHash = Math.imul(firstHash ^ characterCode, 16777619);
+    secondHash = Math.imul(secondHash ^ characterCode, 2246822519);
+  }
+
+  return [firstHash, secondHash]
+    .map((hash) => (hash >>> 0).toString(16).padStart(8, "0"))
+    .join("");
+}
+
+export function getVehicleArchiveRecordFingerprint(record) {
+  const fingerprintValue = JSON.stringify({
+    archiveRow: getExpiredWarrantyRow(record).map((value) =>
+      hasValue(value) ? String(value) : ""
+    ),
+    saleId: String(record?.sale?.id ?? ""),
+    vehicleId: String(record?.vehicleId ?? ""),
+    warrantyId: String(record?.warranty?.id ?? ""),
+  });
+
+  return `archive-v1-${hashArchiveFingerprint(fingerprintValue)}`;
+}
+
+export function createVehicleArchiveCsv(records) {
   return [
-    EXPIRED_WARRANTY_COLUMNS,
+    VEHICLE_ARCHIVE_COLUMNS,
     ...records.map(getExpiredWarrantyRow),
   ]
     .map((row) => row.map(escapeCsvValue).join(","))
     .join("\r\n");
+}
+
+export function createExpiredWarrantyCsv(records) {
+  return createVehicleArchiveCsv(records);
 }
 
 export function downloadCsvFile(csv, filename) {
@@ -419,5 +613,9 @@ export function getWarrantyRegisterFilename(today = getTodayDateValue()) {
 }
 
 export function getExpiredWarrantyFilename(today = getTodayDateValue()) {
-  return `makkah-expired-warranty-${today}.csv`;
+  return getVehicleArchiveFilename(today);
+}
+
+export function getVehicleArchiveFilename(today = getTodayDateValue()) {
+  return `makkah-vehicle-archive-${today}.csv`;
 }

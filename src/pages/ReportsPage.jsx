@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ExpiredWarrantyArchiveModal from "../components/ExpiredWarrantyArchiveModal";
+import ExpiredWarrantyDeleteModal from "../components/ExpiredWarrantyDeleteModal";
 import AppIcon from "../components/ui/AppIcon";
 import WarrantyStatusBadge from "../components/WarrantyStatusBadge";
 import { buttonClassNames } from "../components/ui/uiStyles";
-import { retryArchivedWarrantyStorageCleanup } from "../lib/expiredWarrantyArchive";
 import { isAdminOrManagerRole } from "../lib/permissions";
-import { supabase } from "../lib/supabaseClient";
 import { formatWarrantyDate } from "../lib/warranty";
 import {
-  createExpiredWarrantyCsv,
-  createWarrantyRegisterCsv,
+  createVehicleArchiveCsv,
   downloadCsvFile,
   fetchWarrantyRegisterData,
-  getExpiredWarrantyFilename,
-  getWarrantyRegisterFilename,
+  getVehicleArchiveFilename,
+  getVehicleArchiveRecordFingerprint,
 } from "../lib/warrantyRegister";
+
+const EXPORTED_RECORD_KEYS_SESSION_KEY =
+  "makkah-expired-warranty-export-keys-v2";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -22,33 +22,6 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
   style: "currency",
 });
-const ARCHIVE_PAGE_SIZE = 1000;
-const ARCHIVE_RECORD_COLUMNS =
-  "id, vehicle_id, stock_number, vin, year, make, model, trim, color, mileage, sold_date, customer_name, customer_phone, customer_email, sale_price, warranty_start_date, warranty_months, warranty_end_date, total_investment, archive_reason, archived_by, archived_at, storage_cleanup_status, storage_cleanup_failed_count, storage_cleanup_last_attempt_at";
-
-async function fetchArchiveRecords() {
-  const records = [];
-
-  for (let from = 0; ; from += ARCHIVE_PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from("vehicle_archive_records")
-      .select(ARCHIVE_RECORD_COLUMNS)
-      .eq("archive_reason", "expired_warranty")
-      .order("archived_at", { ascending: false })
-      .range(from, from + ARCHIVE_PAGE_SIZE - 1);
-
-    if (error) {
-      return { data: records, error };
-    }
-
-    const pageRecords = data ?? [];
-    records.push(...pageRecords);
-
-    if (pageRecords.length < ARCHIVE_PAGE_SIZE) {
-      return { data: records, error: null };
-    }
-  }
-}
 
 function hasValue(value) {
   return value !== null && value !== undefined && value !== "";
@@ -75,11 +48,57 @@ function getCustomerName(sale) {
   );
 }
 
-function ExportCard({
-  description,
+function getRecordExportKey(record, profileId) {
+  return `${String(profileId ?? "unknown")}:${getVehicleArchiveRecordFingerprint(
+    record
+  )}`;
+}
+
+function getExportStorageKey(profileId) {
+  return `${EXPORTED_RECORD_KEYS_SESSION_KEY}:${String(
+    profileId ?? "unknown"
+  )}`;
+}
+
+function readStoredExportKeys(profileId) {
+  if (typeof window === "undefined") {
+    return new Set();
+  }
+
+  try {
+    const storedKeys = JSON.parse(
+      window.sessionStorage.getItem(getExportStorageKey(profileId)) ?? "[]"
+    );
+
+    return new Set(
+      Array.isArray(storedKeys)
+        ? storedKeys.filter((key) => typeof key === "string" && key)
+        : []
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function persistExportKeys(keys, profileId) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(
+      getExportStorageKey(profileId),
+      JSON.stringify([...keys])
+    );
+  } catch {
+    // A blocked session store should not block CSV export or safe deletion.
+  }
+}
+
+function ArchiveExportCard({
   disabled,
-  icon = "file",
-  label,
+  isDownloaded,
+  isDownloading,
   onDownload,
   recordCount,
 }) {
@@ -87,13 +106,17 @@ function ExportCard({
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start gap-3">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-          <AppIcon name={icon} size={21} />
+          <AppIcon name="file" size={21} />
         </span>
         <div className="min-w-0">
-          <h2 className="font-black text-slate-950">{label}</h2>
-          <p className="mt-1 text-sm leading-5 text-slate-500">{description}</p>
+          <h2 className="font-black text-slate-950">Download Archive CSV</h2>
+          <p className="mt-1 text-sm leading-5 text-slate-500">
+            One permanent export for the expired vehicles currently awaiting
+            deletion.
+          </p>
           <p className="mt-2 text-xs font-bold tabular-nums text-slate-400">
             {recordCount} {recordCount === 1 ? "vehicle" : "vehicles"}
+            {" not yet exported"}
           </p>
         </div>
       </div>
@@ -104,16 +127,25 @@ function ExportCard({
         type="button"
       >
         <AppIcon name="file" size={18} />
-        {disabled ? "Preparing CSV..." : label}
+        {isDownloading
+          ? "Preparing Archive CSV..."
+          : isDownloaded
+            ? "Archive CSV Downloaded"
+            : "Download Archive CSV"}
       </button>
+      {isDownloaded && (
+        <p className="mt-2 text-center text-xs font-semibold text-emerald-700">
+          Delete is enabled for the exact vehicles in this file.
+        </p>
+      )}
     </article>
   );
 }
 
 function ExpiredWarrantyCard({
+  canDelete,
   isDownloading,
-  onArchive,
-  onDownloadRecord,
+  onDelete,
   record,
 }) {
   const { endDate, sale, status, vehicle, vehicleTitle } = record;
@@ -179,127 +211,23 @@ function ExpiredWarrantyCard({
         </div>
       </dl>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        <button
-          className={buttonClassNames.secondary}
-          disabled={isDownloading}
-          onClick={onDownloadRecord}
-          type="button"
-        >
-          <AppIcon name="file" size={17} />
-          Download Vehicle CSV
-        </button>
-        <button
-          className={buttonClassNames.danger}
-          disabled={isDownloading}
-          onClick={onArchive}
-          type="button"
-        >
-          Archive & Delete From App
-        </button>
-      </div>
-    </article>
-  );
-}
-
-function ArchivedRecordCard({ isRetrying, onRetryCleanup, record }) {
-  const vehicleTitle =
-    [record?.year, record?.make, record?.model, record?.trim]
-      .filter(hasValue)
-      .join(" ") || "Archived vehicle";
-  const stockVin = [
-    record?.stock_number ? `Stock ${record.stock_number}` : "",
-    record?.vin ? `VIN ${record.vin}` : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const cleanupStatus = record?.storage_cleanup_status || "pending";
-  const cleanupLabel =
-    cleanupStatus === "complete"
-      ? "Files Clean"
-      : cleanupStatus === "partial"
-        ? "File Cleanup Partial"
-        : "File Cleanup Pending";
-  const cleanupBadgeClassName =
-    cleanupStatus === "complete"
-      ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-      : "bg-amber-50 text-amber-800 ring-amber-200";
-
-  return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate font-black text-slate-950">{vehicleTitle}</h3>
-          <p className="mt-1 break-words text-xs font-semibold text-slate-500">
-            {stockVin || "Stock and VIN not recorded"}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 ring-1 ring-inset ring-slate-200">
-            Archived
-          </span>
-          <span
-            className={`rounded-full px-2.5 py-1 text-[0.68rem] font-bold ring-1 ring-inset ${cleanupBadgeClassName}`}
-          >
-            {cleanupLabel}
-          </span>
-        </div>
-      </div>
-      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-        <div>
-          <dt className="text-xs font-semibold text-slate-400">Customer</dt>
-          <dd className="mt-1 font-bold text-slate-800">
-            {record?.customer_name || "Not recorded"}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs font-semibold text-slate-400">Sold Date</dt>
-          <dd className="mt-1 font-bold text-slate-800">
-            {formatWarrantyDate(record?.sold_date)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs font-semibold text-slate-400">
-            Warranty End
-          </dt>
-          <dd className="mt-1 font-bold text-slate-800">
-            {formatWarrantyDate(record?.warranty_end_date)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs font-semibold text-slate-400">Sale Price</dt>
-          <dd className="mt-1 font-bold text-slate-800">
-            {formatCurrency(record?.sale_price)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs font-semibold text-slate-400">
-            Total Investment
-          </dt>
-          <dd className="mt-1 font-bold text-slate-800">
-            {hasValue(record?.total_investment)
-              ? formatCurrency(record.total_investment)
-              : "Not available"}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs font-semibold text-slate-400">Archived</dt>
-          <dd className="mt-1 font-bold text-slate-800">
-            {formatWarrantyDate(record?.archived_at)}
-          </dd>
-        </div>
-      </dl>
-
-      {cleanupStatus !== "complete" && (
-        <button
-          className={`${buttonClassNames.secondary} mt-4 w-full`}
-          disabled={isRetrying}
-          onClick={onRetryCleanup}
-          type="button"
-        >
-          <AppIcon name="refresh" size={17} />
-          {isRetrying ? "Retrying File Cleanup..." : "Retry File Cleanup"}
-        </button>
+      <button
+        className={`${buttonClassNames.danger} mt-4 w-full`}
+        disabled={!canDelete || isDownloading}
+        onClick={onDelete}
+        title={
+          canDelete
+            ? "Delete this exported expired vehicle from the app."
+            : "Download the Archive CSV before deleting."
+        }
+        type="button"
+      >
+        Delete From App
+      </button>
+      {!canDelete && (
+        <p className="mt-2 text-center text-xs font-semibold text-slate-500">
+          Download Archive CSV to enable deletion.
+        </p>
       )}
     </article>
   );
@@ -307,14 +235,15 @@ function ArchivedRecordCard({ isRetrying, onRetryCleanup, record }) {
 
 function ReportsPage({ currentProfile }) {
   const [records, setRecords] = useState([]);
-  const [archiveRecords, setArchiveRecords] = useState([]);
+  const [exportedRecordKeys, setExportedRecordKeys] = useState(
+    () => readStoredExportKeys(currentProfile?.id)
+  );
   const [isLoading, setIsLoading] = useState(true);
-  const [downloadType, setDownloadType] = useState("");
+  const [isDownloading, setIsDownloading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
   const [warningMessage, setWarningMessage] = useState("");
-  const [selectedArchiveRecord, setSelectedArchiveRecord] = useState(null);
-  const [retryingArchiveId, setRetryingArchiveId] = useState("");
+  const [selectedDeleteRecord, setSelectedDeleteRecord] = useState(null);
   const cleanupSectionRef = useRef(null);
   const hasFocusedCleanupRef = useRef(false);
   const canViewReports = isAdminOrManagerRole(currentProfile?.role);
@@ -322,7 +251,6 @@ function ReportsPage({ currentProfile }) {
   const loadReportRecords = useCallback(async () => {
     if (!canViewReports) {
       setRecords([]);
-      setArchiveRecords([]);
       setIsLoading(false);
       return;
     }
@@ -333,48 +261,43 @@ function ReportsPage({ currentProfile }) {
     setWarningMessage("");
 
     try {
-      const [registerResponse, archiveResponse] = await Promise.all([
-        fetchWarrantyRegisterData({ includeInvestment: true }),
-        fetchArchiveRecords(),
-      ]);
-      const warnings = [
-        registerResponse.warning,
-        archiveResponse.error
-          ? "Archived records could not be loaded. Please refresh after confirming the latest database migration is applied."
-          : "",
-      ].filter(Boolean);
+      const { data, error, warning } = await fetchWarrantyRegisterData({
+        includeInvestment: true,
+      });
 
-      if (registerResponse.error) {
-        console.error(
-          "Could not load warranty reports:",
-          registerResponse.error
-        );
+      if (error) {
+        console.error("Could not load warranty cleanup report:", error);
         setRecords([]);
-        setErrorMessage("Could not load warranty report data. Please try again.");
-      } else {
-        setRecords(registerResponse.data ?? []);
+        setErrorMessage("Could not load expired warranty data. Please try again.");
+        return;
       }
 
-      if (archiveResponse.error) {
-        console.error(
-          "Could not load expired warranty archive records:",
-          archiveResponse.error
+      const currentRecords = data ?? [];
+      const eligibleRecordKeys = new Set(
+        currentRecords
+          .filter((record) => record.isExpiredCleanupEligible)
+          .map((record) =>
+            getRecordExportKey(record, currentProfile?.id)
+          )
+      );
+
+      setRecords(currentRecords);
+      setExportedRecordKeys((currentKeys) => {
+        const nextKeys = new Set(
+          [...currentKeys].filter((key) => eligibleRecordKeys.has(key))
         );
-        setArchiveRecords([]);
-      } else {
-        setArchiveRecords(archiveResponse.data ?? []);
-      }
-
-      setWarningMessage(warnings.join(" "));
+        persistExportKeys(nextKeys, currentProfile?.id);
+        return nextKeys;
+      });
+      setWarningMessage(warning ?? "");
     } catch (error) {
-      console.error("Could not load warranty reports:", error);
+      console.error("Could not load warranty cleanup report:", error);
       setRecords([]);
-      setArchiveRecords([]);
-      setErrorMessage("Could not load warranty report data. Please try again.");
+      setErrorMessage("Could not load expired warranty data. Please try again.");
     } finally {
       setIsLoading(false);
     }
-  }, [canViewReports]);
+  }, [canViewReports, currentProfile?.id]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -401,24 +324,27 @@ function ReportsPage({ currentProfile }) {
     });
   }, [isLoading]);
 
-  const expiredRecords = useMemo(() => {
-    const archivedVehicleIds = new Set(
-      archiveRecords.map((record) => record.vehicle_id).filter(Boolean)
-    );
+  const expiredRecords = useMemo(
+    () => records.filter((record) => record.isExpiredCleanupEligible),
+    [records]
+  );
+  const unexportedExpiredRecords = useMemo(
+    () =>
+      expiredRecords.filter(
+        (record) =>
+          !exportedRecordKeys.has(
+            getRecordExportKey(record, currentProfile?.id)
+          )
+      ),
+    [currentProfile?.id, expiredRecords, exportedRecordKeys]
+  );
 
-    return records.filter(
-      (record) =>
-        record.status.key === "expired" &&
-        !archivedVehicleIds.has(record.vehicleId)
-    );
-  }, [archiveRecords, records]);
-
-  async function handleDownload(type, vehicleId = null) {
-    if (!canViewReports || downloadType) {
+  async function handleDownloadArchive() {
+    if (!canViewReports || isDownloading) {
       return;
     }
 
-    setDownloadType(vehicleId ? `vehicle-${vehicleId}` : type);
+    setIsDownloading(true);
     setErrorMessage("");
     setInfoMessage("");
     setWarningMessage("");
@@ -429,70 +355,84 @@ function ReportsPage({ currentProfile }) {
       });
 
       if (error) {
-        console.error("Could not prepare warranty export:", error);
-        setErrorMessage("Could not prepare the CSV. Please try again.");
+        console.error("Could not prepare vehicle archive CSV:", error);
+        setErrorMessage("Could not prepare the Archive CSV. Please try again.");
         return;
       }
 
       const currentRecords = data ?? [];
-      const archivedVehicleIds = new Set(
-        archiveRecords.map((record) => record.vehicle_id).filter(Boolean)
-      );
       const currentExpiredRecords = currentRecords.filter(
-        (record) =>
-          record.status.key === "expired" &&
-          !archivedVehicleIds.has(record.vehicleId)
+        (record) => record.isExpiredCleanupEligible
       );
-      const exportRecords = vehicleId
-        ? currentExpiredRecords.filter(
-            (record) => record.vehicleId === vehicleId
+      const currentEligibleKeys = new Set(
+        currentExpiredRecords.map((record) =>
+          getRecordExportKey(record, currentProfile?.id)
+        )
+      );
+      const stillExportedKeys = new Set(
+        [...exportedRecordKeys].filter((key) =>
+          currentEligibleKeys.has(key)
+        )
+      );
+      const recordsToExport = currentExpiredRecords.filter(
+        (record) =>
+          !stillExportedKeys.has(
+            getRecordExportKey(record, currentProfile?.id)
           )
-        : type === "expired"
-          ? currentExpiredRecords
-          : currentRecords;
+      );
 
       setRecords(currentRecords);
       setWarningMessage(warning ?? "");
 
-      if (exportRecords.length === 0) {
+      if (warning) {
+        setErrorMessage(
+          "The Archive CSV was not downloaded because some report details could not be verified. Refresh and try again."
+        );
+        return;
+      }
+
+      if (recordsToExport.length === 0) {
+        setExportedRecordKeys(stillExportedKeys);
+        persistExportKeys(stillExportedKeys, currentProfile?.id);
         setInfoMessage(
-          type === "expired"
+          currentExpiredRecords.length === 0
             ? "There are no expired warranty vehicles to export."
-            : "There are no sold or warranty vehicles to export."
+            : "Every current cleanup vehicle is already in this session's Archive CSV."
         );
         return;
       }
 
       downloadCsvFile(
-        type === "expired" || vehicleId
-          ? createExpiredWarrantyCsv(exportRecords)
-          : createWarrantyRegisterCsv(exportRecords),
-        type === "expired"
-          ? getExpiredWarrantyFilename()
-          : vehicleId
-            ? getExpiredWarrantyFilename()
-            : getWarrantyRegisterFilename()
+        createVehicleArchiveCsv(recordsToExport),
+        getVehicleArchiveFilename()
       );
+      const nextExportedKeys = new Set([
+        ...stillExportedKeys,
+        ...recordsToExport.map((record) =>
+          getRecordExportKey(record, currentProfile?.id)
+        ),
+      ]);
+      setExportedRecordKeys(nextExportedKeys);
+      persistExportKeys(nextExportedKeys, currentProfile?.id);
       setInfoMessage(
-        `${exportRecords.length} ${
-          exportRecords.length === 1 ? "row" : "rows"
-        } downloaded in one CSV file.`
+        `${recordsToExport.length} ${
+          recordsToExport.length === 1 ? "vehicle" : "vehicles"
+        } saved in the Archive CSV. Delete From App is now enabled for those exact records.`
       );
     } catch (error) {
-      console.error("Could not prepare warranty export:", error);
-      setErrorMessage("Could not prepare the CSV. Please try again.");
+      console.error("Could not prepare vehicle archive CSV:", error);
+      setErrorMessage("Could not prepare the Archive CSV. Please try again.");
     } finally {
-      setDownloadType("");
+      setIsDownloading(false);
     }
   }
 
-  function handleArchived(result) {
+  function handleDeleted(result) {
     const deletedVehicleId =
-      result?.data?.archived_vehicle_id ?? selectedArchiveRecord?.vehicleId;
-    const archivedRecord = result?.data?.archive_record;
-    const archivedStockNumber =
-      archivedRecord?.stock_number ??
-      selectedArchiveRecord?.vehicle?.stock_number ??
+      result?.data?.deleted_vehicle_id ?? selectedDeleteRecord?.vehicleId;
+    const deletedStockNumber =
+      result?.data?.deleted_stock_number ||
+      selectedDeleteRecord?.vehicle?.stock_number ||
       "Vehicle";
 
     if (deletedVehicleId) {
@@ -503,67 +443,20 @@ function ReportsPage({ currentProfile }) {
       );
     }
 
-    if (archivedRecord?.id) {
-      setArchiveRecords((currentRecords) => [
-        archivedRecord,
-        ...currentRecords.filter(
-          (record) => record.id !== archivedRecord.id
-        ),
-      ]);
-    }
-
-    setSelectedArchiveRecord(null);
-    setErrorMessage("");
-    setInfoMessage(
-      `${archivedStockNumber} was archived and removed from the active app.`
-    );
-    setWarningMessage(result?.storageWarning ?? "");
-  }
-
-  async function handleRetryArchiveCleanup(record) {
-    if (!record?.vehicle_id || retryingArchiveId) {
-      return;
-    }
-
-    setRetryingArchiveId(record.id);
-    setErrorMessage("");
-    setInfoMessage("");
-    setWarningMessage("");
-
-    try {
-      const result = await retryArchivedWarrantyStorageCleanup({
-        vehicleId: record.vehicle_id,
-      });
-
-      if (result.error) {
-        setErrorMessage(result.error.message);
-        return;
-      }
-
-      const updatedRecord = result.data?.archive_record;
-
-      if (updatedRecord?.id) {
-        setArchiveRecords((currentRecords) =>
-          currentRecords.map((currentRecord) =>
-            currentRecord.id === updatedRecord.id
-              ? updatedRecord
-              : currentRecord
-          )
-        );
-      }
-
-      setInfoMessage(
-        result.storageWarning
-          ? "File cleanup retry finished with items that still need review."
-          : "Archived vehicle file cleanup completed."
+    setExportedRecordKeys((currentKeys) => {
+      const nextKeys = new Set(currentKeys);
+      nextKeys.delete(
+        getRecordExportKey(selectedDeleteRecord, currentProfile?.id)
       );
-      setWarningMessage(result.storageWarning ?? "");
-    } catch (error) {
-      console.error("Could not retry archived vehicle file cleanup:", error);
-      setErrorMessage("Could not retry file cleanup. Please try again.");
-    } finally {
-      setRetryingArchiveId("");
-    }
+      persistExportKeys(nextKeys, currentProfile?.id);
+      return nextKeys;
+    });
+    setSelectedDeleteRecord(null);
+    setErrorMessage("");
+    setWarningMessage("");
+    setInfoMessage(
+      `${deletedStockNumber} was deleted from the active app. Lifetime monthly sales totals were kept.`
+    );
   }
 
   if (!canViewReports) {
@@ -586,12 +479,12 @@ function ReportsPage({ currentProfile }) {
               Reports & Export Center
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Download one current master CSV and review warranty cleanup due.
+              Export expired vehicles once, then remove their heavy app data.
             </p>
           </div>
           <button
             className={buttonClassNames.secondary}
-            disabled={isLoading}
+            disabled={isLoading || isDownloading}
             onClick={loadReportRecords}
             type="button"
           >
@@ -617,21 +510,21 @@ function ReportsPage({ currentProfile }) {
         </section>
       )}
 
-      <section className="grid gap-3 md:grid-cols-2">
-        <ExportCard
-          description="All sold and warranty vehicles, deduplicated to one row per vehicle."
-          disabled={Boolean(downloadType)}
-          label="Download Warranty Register"
-          onDownload={() => handleDownload("all")}
-          recordCount={records.length}
-        />
-        <ExportCard
-          description="Only vehicles whose warranty end date is before today."
-          disabled={Boolean(downloadType)}
-          icon="warning"
-          label="Download Expired Warranty CSV"
-          onDownload={() => handleDownload("expired")}
-          recordCount={expiredRecords.length}
+      <section className="max-w-2xl">
+        <ArchiveExportCard
+          disabled={
+            isLoading ||
+            isDownloading ||
+            Boolean(warningMessage) ||
+            unexportedExpiredRecords.length === 0
+          }
+          isDownloaded={
+            expiredRecords.length > 0 &&
+            unexportedExpiredRecords.length === 0
+          }
+          isDownloading={isDownloading}
+          onDownload={handleDownloadArchive}
+          recordCount={unexportedExpiredRecords.length}
         />
       </section>
 
@@ -643,14 +536,14 @@ function ReportsPage({ currentProfile }) {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-red-600">
-              Confirmed Cleanup
+              Storage Cleanup
             </p>
             <h2 className="mt-1 text-xl font-black text-slate-950">
               Expired Warranty Cleanup
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Sold vehicles with warranty dates before today. Nothing is
-              archived or deleted automatically.
+              Only sold vehicles with expired coverage and no active warranty
+              appear here. Nothing is deleted automatically.
             </p>
           </div>
           <span className="w-fit rounded-full bg-red-50 px-3 py-1.5 text-sm font-black tabular-nums text-red-700 ring-1 ring-inset ring-red-200">
@@ -679,22 +572,22 @@ function ReportsPage({ currentProfile }) {
               size={30}
             />
             <h3 className="mt-3 font-black text-slate-800">
-              No warranty cleanup due
+              No expired vehicles to clean up
             </h3>
             <p className="mt-1 text-sm text-slate-500">
-              Vehicles with old warranty end dates will appear here.
+              Sold vehicles will appear here after their warranty end date.
             </p>
           </div>
         ) : (
           <div className="mt-4 grid gap-3 xl:grid-cols-2">
             {expiredRecords.map((record) => (
               <ExpiredWarrantyCard
-                isDownloading={Boolean(downloadType)}
+                canDelete={exportedRecordKeys.has(
+                  getRecordExportKey(record, currentProfile?.id)
+                )}
+                isDownloading={isDownloading}
                 key={record.vehicleId}
-                onArchive={() => setSelectedArchiveRecord(record)}
-                onDownloadRecord={() =>
-                  handleDownload("expired", record.vehicleId)
-                }
+                onDelete={() => setSelectedDeleteRecord(record)}
                 record={record}
               />
             ))}
@@ -702,57 +595,11 @@ function ReportsPage({ currentProfile }) {
         )}
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
-              Retained Proof Records
-            </p>
-            <h2 className="mt-1 text-xl font-black text-slate-950">
-              Archived Records
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Compact vehicle, sale, warranty, and financial snapshots kept
-              after cleanup.
-            </p>
-          </div>
-          <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-black tabular-nums text-slate-700 ring-1 ring-inset ring-slate-200">
-            {archiveRecords.length}
-          </span>
-        </div>
-
-        {isLoading ? (
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center text-sm font-semibold text-slate-500">
-            Loading archived records...
-          </div>
-        ) : archiveRecords.length === 0 ? (
-          <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
-            <h3 className="font-black text-slate-800">
-              No archived records yet
-            </h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Confirmed expired-warranty cleanups will leave a snapshot here.
-            </p>
-          </div>
-        ) : (
-          <div className="mt-4 grid gap-3 xl:grid-cols-2">
-            {archiveRecords.map((record) => (
-              <ArchivedRecordCard
-                isRetrying={retryingArchiveId === record.id}
-                key={record.id}
-                onRetryCleanup={() => handleRetryArchiveCleanup(record)}
-                record={record}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {selectedArchiveRecord && (
-        <ExpiredWarrantyArchiveModal
-          onArchived={handleArchived}
-          onClose={() => setSelectedArchiveRecord(null)}
-          record={selectedArchiveRecord}
+      {selectedDeleteRecord && (
+        <ExpiredWarrantyDeleteModal
+          onClose={() => setSelectedDeleteRecord(null)}
+          onDeleted={handleDeleted}
+          record={selectedDeleteRecord}
         />
       )}
     </div>

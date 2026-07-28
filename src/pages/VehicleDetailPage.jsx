@@ -1505,7 +1505,7 @@ function VehicleDetailPage({
             size={30}
           />
           <h2 className="mt-3 font-black text-slate-950">
-            Vehicle not found or archived.
+            Vehicle not found or deleted.
           </h2>
           <p className="mt-1 text-sm text-slate-500">
             This vehicle is no longer available in the active app.
