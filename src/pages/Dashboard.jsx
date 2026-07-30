@@ -776,8 +776,7 @@ function DashboardSection({ children, className = "", title }) {
 }
 
 function SummaryCard({
-  compact = false,
-  helperText,
+  className = "",
   icon,
   label,
   value,
@@ -785,29 +784,20 @@ function SummaryCard({
 }) {
   return (
     <article
-      className={`flex min-w-0 gap-2.5 rounded-2xl border border-slate-200 bg-white shadow-sm ${
-        compact
-          ? "min-h-0 items-center p-2.5"
-          : "min-h-[4.75rem] items-start p-2.5 sm:min-h-20 sm:p-3"
-      }`}
+      className={`flex min-w-0 items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm ${className}`}
     >
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-100 sm:h-9 sm:w-9">
         <AppIcon name={icon} size={18} />
       </div>
       <div className="min-w-0">
-        <p className="truncate text-[0.65rem] font-black uppercase text-slate-500 sm:text-[0.68rem]">
+        <p className="text-[0.65rem] font-black uppercase leading-tight text-slate-500 sm:text-[0.68rem]">
           {label}
         </p>
         <p
-          className={`mt-0.5 truncate text-base font-black leading-tight tabular-nums sm:text-xl ${valueClassName}`}
+          className={`mt-0.5 break-words text-base font-black leading-tight tabular-nums sm:text-xl ${valueClassName}`}
         >
           {value}
         </p>
-        {helperText && (
-          <p className="mt-0.5 truncate text-[0.7rem] leading-4 text-slate-500 sm:text-xs">
-            {helperText}
-          </p>
-        )}
       </div>
     </article>
   );
@@ -1151,7 +1141,6 @@ function DashboardOverviewPanel({
 
 function DashboardFinancePanel({
   activeInventoryInvestment,
-  activeVehiclesCount,
   averageActiveInvestment,
   estimatedActiveProfit,
   liveSoldVehiclesCount,
@@ -1165,32 +1154,25 @@ function DashboardFinancePanel({
       <DashboardSection title="Finance Overview">
         <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2">
           <SummaryCard
-            helperText={`${formatNumber(activeVehiclesCount)} active`}
             icon="dollar"
             label="Active Investment"
             value={formatCurrency(activeInventoryInvestment)}
           />
           <SummaryCard
-            helperText="Active vehicles"
             icon="chart-up"
-            label="Estimated Profit"
+            label="Active Est. Profit"
             value={formatCurrency(estimatedActiveProfit)}
             valueClassName={
               estimatedActiveProfit < 0 ? "text-red-700" : "text-emerald-700"
             }
           />
           <SummaryCard
-            helperText={formatCountPhrase(
-              liveSoldVehiclesCount,
-              "retained sale record"
-            )}
             icon="dollar"
-            label="Sold Revenue"
+            label="Retained Sales Revenue"
             value={formatCurrency(soldRevenue)}
             valueClassName="text-emerald-700"
           />
           <SummaryCard
-            helperText="Per active vehicle"
             icon="car"
             label="Avg Investment"
             value={formatCurrency(averageActiveInvestment)}
@@ -1711,47 +1693,43 @@ function Dashboard({
 
       {!isLoading && !errorMessage && (
         <>
-          <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <section className="grid grid-cols-2 gap-2 lg:grid-cols-3">
             <SummaryCard
-              helperText="All records"
               icon="car"
               label="Total Vehicles"
               value={formatNumber(vehicles.length)}
             />
             <SummaryCard
-              helperText="Not sold or archived"
               icon="chart-up"
               label="Active Inventory"
               value={formatNumber(activeVehicles.length)}
             />
             <SummaryCard
-              helperText="Active vehicles"
               icon="dollar"
               label="Active Investment"
               value={formatCurrency(activeInventoryInvestment)}
             />
             <SummaryCard
-              helperText="Active vehicles"
               icon="chart-up"
-              label="Estimated Profit"
+              label="Active Est. Profit"
               value={formatCurrency(estimatedActiveProfit)}
               valueClassName={
                 estimatedActiveProfit < 0 ? "text-red-700" : "text-emerald-700"
               }
             />
+            {!canViewAdminFinancial && (
+              <SummaryCard
+                icon="check"
+                label="Sold Vehicles"
+                value={formatNumber(soldVehiclesCount)}
+              />
+            )}
             <SummaryCard
-              helperText="Closed sales"
-              icon="check"
-              label="Sold Vehicles"
-              value={formatNumber(soldVehiclesCount)}
-            />
-            <SummaryCard
-              helperText={formatCountPhrase(
-                liveSoldVehiclesCount,
-                "retained sale record"
-              )}
+              className={
+                canViewAdminFinancial ? "col-span-2 lg:col-span-2" : ""
+              }
               icon="dollar"
-              label="Sold Revenue"
+              label="Retained Sales Revenue"
               value={formatCurrency(soldRevenue)}
               valueClassName="text-emerald-700"
             />
@@ -1761,25 +1739,21 @@ function Dashboard({
             <DashboardSection title="Sales Summary">
               <div className="grid grid-cols-2 gap-2 p-2.5 sm:p-3 lg:grid-cols-4">
                 <SummaryCard
-                  compact
                   icon="check"
                   label="Total Vehicles Sold"
                   value={formatNumber(lifetimeSalesStats.totalVehiclesSold)}
                 />
                 <SummaryCard
-                  compact
                   icon="chart-up"
                   label="Sold This Month"
                   value={formatNumber(lifetimeSalesStats.soldThisMonth)}
                 />
                 <SummaryCard
-                  compact
                   icon="chart-up"
                   label="Sold This Year"
                   value={formatNumber(lifetimeSalesStats.soldThisYear)}
                 />
                 <SummaryCard
-                  compact
                   icon="clock"
                   label="First Sale Month"
                   value={
@@ -1824,7 +1798,6 @@ function Dashboard({
           {activeDashboardSection === "finance" && (
             <DashboardFinancePanel
               activeInventoryInvestment={activeInventoryInvestment}
-              activeVehiclesCount={activeVehicles.length}
               averageActiveInvestment={averageActiveInvestment}
               estimatedActiveProfit={estimatedActiveProfit}
               liveSoldVehiclesCount={liveSoldVehiclesCount}

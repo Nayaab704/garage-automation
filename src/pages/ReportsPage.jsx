@@ -175,7 +175,7 @@ function ArchiveExportCard({
   recordCount,
 }) {
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm sm:p-4">
       <div className="flex items-start gap-3">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
           <AppIcon name="file" size={21} />
@@ -189,21 +189,22 @@ function ArchiveExportCard({
         </div>
       </div>
       <button
-        className={`${buttonClassNames.primary} mt-4 w-full`}
+        aria-busy={isDownloading}
+        className={`${buttonClassNames.primary} mt-3 w-full`}
         disabled={disabled}
         onClick={onDownload}
         type="button"
       >
-        <AppIcon name="file" size={18} />
-        {isDownloading
-          ? "Preparing Archive CSV..."
-          : isDownloaded
-            ? "Archive CSV Downloaded"
-            : "Download Archive CSV"}
+        <AppIcon
+          className={isDownloading ? "animate-spin" : ""}
+          name={isDownloading ? "refresh" : "file"}
+          size={18}
+        />
+        Download Archive CSV
       </button>
       {isDownloaded && (
         <p className="mt-2 text-center text-xs font-semibold text-emerald-700">
-          Delete is enabled for the exact vehicles in this file.
+          Expired vehicle deletion is enabled.
         </p>
       )}
     </article>
@@ -229,8 +230,8 @@ function ExpiredWarrantyCard({
   };
 
   return (
-    <article className="rounded-2xl border border-red-100 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <article className="rounded-2xl border border-red-100 bg-white p-3.5 shadow-sm sm:p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h3 className="truncate font-black text-slate-950">{vehicleTitle}</h3>
           <p className="mt-1 break-words text-xs font-semibold text-slate-500">
@@ -240,20 +241,20 @@ function ExpiredWarrantyCard({
         <WarrantyStatusBadge status={expiredWarrantyStatus} />
       </div>
 
-      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-        <div>
+      <dl className="mt-3 grid grid-cols-2 gap-2.5 text-sm">
+        <div className="min-w-0">
           <dt className="text-xs font-semibold text-slate-400">Customer</dt>
-          <dd className="mt-1 font-bold text-slate-800">
+          <dd className="mt-1 break-words font-bold text-slate-800">
             {getCustomerName(sale)}
           </dd>
         </div>
-        <div>
+        <div className="min-w-0">
           <dt className="text-xs font-semibold text-slate-400">Sold Date</dt>
           <dd className="mt-1 font-bold text-slate-800">
             {formatWarrantyDate(sale?.sale_date || sale?.created_at)}
           </dd>
         </div>
-        <div>
+        <div className="min-w-0">
           <dt className="text-xs font-semibold text-slate-400">
             Warranty End Date
           </dt>
@@ -261,13 +262,13 @@ function ExpiredWarrantyCard({
             {formatWarrantyDate(endDate)}
           </dd>
         </div>
-        <div>
+        <div className="min-w-0">
           <dt className="text-xs font-semibold text-slate-400">Sale Price</dt>
           <dd className="mt-1 font-bold text-slate-800">
             {formatCurrency(sale?.sale_price)}
           </dd>
         </div>
-        <div>
+        <div className="col-span-2 min-w-0">
           <dt className="text-xs font-semibold text-slate-400">
             Total Investment
           </dt>
@@ -280,7 +281,7 @@ function ExpiredWarrantyCard({
       </dl>
 
       <button
-        className={`${buttonClassNames.danger} mt-4 w-full`}
+        className={`${buttonClassNames.danger} mt-3 w-full`}
         disabled={!canDelete || isDownloading}
         onClick={onDelete}
         title={
@@ -325,7 +326,7 @@ function SalesHistorySection({
   stats,
 }) {
   return (
-    <section className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm sm:p-5">
+    <section className="rounded-3xl border border-slate-200 bg-slate-50/70 p-3.5 shadow-sm sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">
@@ -336,18 +337,23 @@ function SalesHistorySection({
           </h2>
         </div>
         <button
+          aria-busy={isDownloading}
           className={`${buttonClassNames.secondary} w-full sm:w-auto`}
           disabled={isLoading || isDownloading || rows.length === 0}
           onClick={onDownload}
           type="button"
         >
-          <AppIcon name="file" size={18} />
-          {isDownloading ? "Preparing CSV..." : "Download Sales Summary CSV"}
+          <AppIcon
+            className={isDownloading ? "animate-spin" : ""}
+            name={isDownloading ? "refresh" : "file"}
+            size={18}
+          />
+          Download Sales Summary CSV
         </button>
       </div>
 
       {!isLoading && (!errorMessage || rows.length > 0) && (
-        <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
           <SalesHistoryMetric
             label="Total Vehicles Sold"
             value={integerFormatter.format(stats.totalVehiclesSold)}
@@ -365,27 +371,27 @@ function SalesHistorySection({
       )}
 
       {!isLoading && errorMessage && (
-        <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+        <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
           {errorMessage}
         </div>
       )}
 
       {isLoading ? (
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 text-center">
+        <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-5 text-center">
           <p className="text-sm font-semibold text-slate-500">
             Loading sales history...
           </p>
         </div>
       ) : errorMessage && rows.length === 0 ? null : rows.length === 0 ? (
-        <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center">
+        <div className="mt-3 rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-center">
           <p className="text-sm font-semibold text-slate-500">
             No sales history yet.
           </p>
         </div>
       ) : (
-        <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="mt-3 max-h-80 overflow-y-auto rounded-2xl border border-slate-200 bg-white">
           <table className="w-full table-fixed text-left text-sm">
-            <thead className="bg-slate-100 text-xs font-black uppercase tracking-wide text-slate-500">
+            <thead className="sticky top-0 z-10 bg-slate-100 text-xs font-black uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-3 py-2.5" scope="col">
                   Month
@@ -756,12 +762,9 @@ function ReportsPage({ currentProfile }) {
   return (
     <div className="space-y-4 text-slate-950">
       <header className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">
-              Admin / Manager
-            </p>
-            <h1 className="mt-1 text-2xl font-black text-slate-950">
+            <h1 className="text-2xl font-black text-slate-950">
               Reports & Export Center
             </h1>
           </div>
@@ -832,10 +835,7 @@ function ReportsPage({ currentProfile }) {
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-red-600">
-              Storage Cleanup
-            </p>
-            <h2 className="mt-1 text-xl font-black text-slate-950">
+            <h2 className="text-xl font-black text-slate-950">
               Expired Warranty Cleanup
             </h2>
           </div>
@@ -845,31 +845,28 @@ function ReportsPage({ currentProfile }) {
         </div>
 
         {isLoading ? (
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-8 text-center">
+          <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-5 text-center">
             <p className="text-sm font-semibold text-slate-500">
               Loading expired warranty vehicles...
             </p>
           </div>
         ) : errorMessage ? (
-          <div className="mt-4 rounded-2xl border border-red-200 bg-white p-6 text-center">
+          <div className="mt-3 rounded-2xl border border-red-200 bg-white p-4 text-center">
             <p className="text-sm font-semibold text-red-700">
-              Expired warranty vehicles are unavailable until the report data
-              can be refreshed.
+              Could not load expired warranty vehicles.
             </p>
           </div>
         ) : expiredRecords.length === 0 ? (
-          <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
+          <div className="mt-3 rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-center">
             <AppIcon
               className="mx-auto text-emerald-500"
               name="checklist"
               size={30}
             />
-            <h3 className="mt-3 font-black text-slate-800">
-              No expired vehicles to clean up
-            </h3>
+            <h3 className="mt-3 font-black text-slate-800">No cleanup needed</h3>
           </div>
         ) : (
-          <div className="mt-4 grid gap-3 xl:grid-cols-2">
+          <div className="mt-3 grid gap-3 xl:grid-cols-2">
             {expiredRecords.map((record) => (
               <ExpiredWarrantyCard
                 canDelete={exportedRecordKeys.has(

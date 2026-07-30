@@ -47,7 +47,7 @@ function ExpiredWarrantyDeleteModal({ onClose, onDeleted, record }) {
 
   return (
     <ModalShell
-      description="This vehicle's details should be saved in the archive CSV before deleting. This action removes the vehicle and related app records/photos from Supabase to save storage."
+      description="Save this vehicle in the archive CSV first. Deleting permanently removes the vehicle, related records, and photos from the app."
       isCloseDisabled={isSubmitting}
       onClose={onClose}
       size="sm"
@@ -89,7 +89,7 @@ function ExpiredWarrantyDeleteModal({ onClose, onDeleted, record }) {
 
         <FormMessage tone="error">{errorMessage}</FormMessage>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-[0.8fr_1.2fr] gap-2">
           <button
             className={buttonClassNames.secondary}
             disabled={isSubmitting}
@@ -99,11 +99,15 @@ function ExpiredWarrantyDeleteModal({ onClose, onDeleted, record }) {
             Cancel
           </button>
           <button
+            aria-busy={isSubmitting}
             className={buttonClassNames.danger}
             disabled={!hasSavedArchive || isSubmitting}
             type="submit"
           >
-            {isSubmitting ? "Deleting..." : "Delete From App"}
+            {isSubmitting && (
+              <AppIcon className="animate-spin" name="refresh" size={18} />
+            )}
+            Delete From App
           </button>
         </div>
       </form>
