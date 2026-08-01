@@ -584,6 +584,10 @@ function VehicleDetailPage({
   }
 
   function handleHeroPhotoClick() {
+    if (hasVehicleBeenSold(vehicle, sales)) {
+      return;
+    }
+
     if (canManagePhotos) {
       setIsVehiclePhotoFormOpen(true);
       return;
@@ -1281,9 +1285,24 @@ function VehicleDetailPage({
   async function handleVehicleSold(result) {
     if (result?.vehicle?.id) {
       setVehicle((currentVehicle) =>
-        mergeVehicleState(currentVehicle, result.vehicle)
+        mergeVehicleState(currentVehicle, {
+          ...result.vehicle,
+          primary_photo_id: null,
+          sale_status: "sold",
+        })
       );
     }
+
+    setVehiclePhotos([]);
+    setIsVehiclePhotoFormOpen(false);
+    setPhotoCleanupNotice(
+      result?.photoCleanup?.warning
+        ? {
+            message: result.photoCleanup.warning,
+            tone: "warning",
+          }
+        : null
+    );
 
     if (result?.sale?.id) {
       setSales((currentSales) => upsertNewestById(currentSales, result.sale));
@@ -1418,13 +1437,15 @@ function VehicleDetailPage({
 
   const isVehicleSold = hasVehicleBeenSold(vehicle, sales);
   const canChangeVehicleStatus = hasPermission(role, "vehicle:change_status");
-  const canDeleteVehicle = hasPermission(role, "vehicle:delete");
+  const canDeleteVehicle =
+    hasPermission(role, "vehicle:delete") && !isVehicleSold;
   const canEditVehicle = hasPermission(role, "vehicle:edit");
   const canManageExtraCosts = hasPermission(role, "extra_cost:manage");
   const canManageLabor = hasPermission(role, "labor:manage");
   const canManagePartRequests = hasPermission(role, "part_request:manage");
   const canManagePurchaseOrders = hasPermission(role, "purchase_order:manage");
   const canManagePhotos = hasPermission(role, "photo:manage");
+  const canManageVehiclePhotos = canManagePhotos && !isVehicleSold;
   const canManageRepairJobs = hasPermission(role, "repair:manage");
   const canManageWorkOrderParts = canManageRepairJobs || canManagePartRequests;
   const canUploadDocuments =
@@ -1436,7 +1457,10 @@ function VehicleDetailPage({
     canSellVehicle &&
     !isVehicleSold &&
     normalizeVehicleStatus(vehicle?.status) === "ready_for_sale";
-  const primaryVehiclePhoto = getVehiclePrimaryPhoto(vehicle, vehiclePhotos);
+  const displayedVehiclePhotos = isVehicleSold ? [] : vehiclePhotos;
+  const primaryVehiclePhoto = isVehicleSold
+    ? null
+    : getVehiclePrimaryPhoto(vehicle, displayedVehiclePhotos);
   const activeVehiclePrebooking = getActivePrebooking(vehiclePrebookings);
   const hasActiveThirdPartyRepair = thirdPartyRepairs.some(
     isThirdPartyRepairActive
@@ -1449,6 +1473,7 @@ function VehicleDetailPage({
   });
   const canRunManualRepairPhotoCleanup =
     isAdminOrManagerRole(role) &&
+    !isVehicleSold &&
     normalizeVehicleStatus(vehicle?.status) === "ready_for_sale" &&
     repairPhotoCleanupPlan.candidateCount > 0;
 
@@ -1520,7 +1545,7 @@ function VehicleDetailPage({
             canChangeStatus={canChangeVehicleStatus}
             canAddWorkOrder={canManageRepairJobs}
             canEdit={canEditVehicle}
-            canManagePhotos={canManagePhotos}
+            canManagePhotos={canManageVehiclePhotos}
             canMarkReady={canChangeVehicleStatus}
             canMarkSold={canMarkSold}
             isStatusUpdating={isVehicleStatusUpdating}
@@ -1585,7 +1610,7 @@ function VehicleDetailPage({
               canManage={canManageRepairJobs}
               canManageLabor={canManageLabor}
               canManageParts={canManageWorkOrderParts}
-              canManagePhotos={canManagePhotos}
+              canManagePhotos={canManageVehiclePhotos}
               canManageDocuments={canManageDocuments}
               canManagePurchaseOrders={canManagePurchaseOrders}
               canManageThirdPartyRepairs={canManageRepairJobs}
@@ -1620,23 +1645,27 @@ function VehicleDetailPage({
               thirdPartyRepairs={thirdPartyRepairs}
               vehicle={vehicle}
               vehicleId={vehicleId}
-              vehiclePhotos={vehiclePhotos}
+              vehiclePhotos={displayedVehiclePhotos}
               vendors={vendors}
             />
           </div>
 
-          <div ref={vehiclePhotosRef} className="scroll-mt-20 sm:scroll-mt-6">
-            <VehiclePhotosSection
-              canManage={canManagePhotos}
-              onActivityLogged={refreshActivityTimeline}
-              onSetMainPhoto={handleGalleryMainPhotoSelected}
-              onVehiclePhotoAdded={handleVehiclePhotoAdded}
-              onVehiclePhotoDeleted={handleVehiclePhotoDeleted}
-              primaryPhotoId={vehicle.primary_photo_id}
-              vehicleId={vehicleId}
-              vehiclePhotos={vehiclePhotos.filter((photo) => !photo.repair_job_id)}
-            />
-          </div>
+          {!isVehicleSold && (
+            <div ref={vehiclePhotosRef} className="scroll-mt-20 sm:scroll-mt-6">
+              <VehiclePhotosSection
+                canManage={canManageVehiclePhotos}
+                onActivityLogged={refreshActivityTimeline}
+                onSetMainPhoto={handleGalleryMainPhotoSelected}
+                onVehiclePhotoAdded={handleVehiclePhotoAdded}
+                onVehiclePhotoDeleted={handleVehiclePhotoDeleted}
+                primaryPhotoId={vehicle.primary_photo_id}
+                vehicleId={vehicleId}
+                vehiclePhotos={displayedVehiclePhotos.filter(
+                  (photo) => !photo.repair_job_id
+                )}
+              />
+            </div>
+          )}
 
           {canManageExtraCosts && (
             <ExtraCostsSection
@@ -1724,7 +1753,7 @@ function VehicleDetailPage({
             />
           )}
 
-          {isVehiclePhotoFormOpen && canManagePhotos && (
+          {isVehiclePhotoFormOpen && canManageVehiclePhotos && (
             <AddVehiclePhotoForm
               activityAction="Main photo updated"
               description="Upload the main image shown on this vehicle and vehicle cards."
@@ -1746,7 +1775,7 @@ function VehicleDetailPage({
               onDeleted={onBack}
               vehicle={vehicle}
               vehicleDocuments={vehicleDocuments}
-              vehiclePhotos={vehiclePhotos}
+              vehiclePhotos={displayedVehiclePhotos}
             />
           )}
 

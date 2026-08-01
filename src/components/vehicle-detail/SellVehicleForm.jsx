@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import FormActions from "../ui/FormActions";
 import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
 import WarrantyPeriodFields from "./WarrantyPeriodFields";
 import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
+import { cleanupSoldVehiclePhotos } from "../../lib/soldVehiclePhotoCleanupClient";
+import { SOLD_PHOTO_CLEANUP_WARNING } from "../../lib/soldVehiclePhotoCleanupRules";
 import { supabase } from "../../lib/supabaseClient";
 import {
   DEFAULT_WARRANTY_MONTHS,
@@ -68,6 +70,7 @@ function SellVehicleForm({
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [partialSaleId, setPartialSaleId] = useState(null);
+  const photoCleanupRef = useRef(null);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -119,6 +122,53 @@ function SellVehicleForm({
     } catch (refreshError) {
       console.error("Sale saved, but the page could not refresh:", refreshError);
     }
+  }
+
+  async function getSoldPhotoCleanup(saleId) {
+    if (photoCleanupRef.current?.saleId === saleId) {
+      return photoCleanupRef.current.result;
+    }
+
+    let result;
+
+    try {
+      result = await cleanupSoldVehiclePhotos({
+        saleId,
+        vehicleId: vehicle.id,
+      });
+    } catch (error) {
+      console.error("Sold vehicle photo cleanup failed:", error);
+      result = {
+        completed: false,
+        deletedCount: 0,
+        deletedPhotoIds: [],
+        error,
+        failedCount: 1,
+        primaryPhotoCleared: false,
+        warning: SOLD_PHOTO_CLEANUP_WARNING,
+      };
+    }
+
+    photoCleanupRef.current = { result, saleId };
+    return result;
+  }
+
+  function createVehicleSoldResult({
+    photoCleanup,
+    sale,
+    soldVehicle,
+    warranty,
+  }) {
+    return {
+      photoCleanup,
+      sale,
+      vehicle: {
+        ...soldVehicle,
+        primary_photo_id: null,
+        sale_status: "sold",
+      },
+      warranty,
+    };
   }
 
   async function saveSelectedWarranty(saleId) {
@@ -197,12 +247,22 @@ function SellVehicleForm({
       }
 
       if (existingSaleResponse.data) {
+        const photoCleanup = await getSoldPhotoCleanup(
+          existingSaleResponse.data.id
+        );
+        const soldVehicle = {
+          ...vehicle,
+          primary_photo_id: null,
+          sale_status: "sold",
+        };
+
         if (partialSaleId !== existingSaleResponse.data.id) {
-          await notifyVehicleSold({
+          await notifyVehicleSold(createVehicleSoldResult({
+            photoCleanup,
             sale: existingSaleResponse.data,
-            vehicle: { ...vehicle, sale_status: "sold" },
+            soldVehicle,
             warranty: null,
-          });
+          }));
           setErrorMessage(
             "This vehicle was already sold. The values in this form were not saved. Close this form and review the existing sale."
           );
@@ -224,11 +284,12 @@ function SellVehicleForm({
           existingWarranty = warrantyResponse.data;
         }
 
-        await notifyVehicleSold({
+        await notifyVehicleSold(createVehicleSoldResult({
+          photoCleanup,
           sale: existingSaleResponse.data,
-          vehicle: { ...vehicle, sale_status: "sold" },
+          soldVehicle,
           warranty: existingWarranty,
-        });
+        }));
         onClose();
         return;
       }
@@ -278,6 +339,7 @@ function SellVehicleForm({
       const saleId = saleRecord.id;
       const soldVehicle =
         vehicleResponse.data ?? { ...vehicle, sale_status: "sold" };
+      const photoCleanup = await getSoldPhotoCleanup(saleId);
       let warrantyRecord = null;
 
       await logVehicleActivity({
@@ -295,11 +357,12 @@ function SellVehicleForm({
         if (warrantyResponse.error) {
           setPartialWarrantyError(warrantyResponse.error);
           setPartialSaleId(saleId);
-          await notifyVehicleSold({
+          await notifyVehicleSold(createVehicleSoldResult({
+            photoCleanup,
             sale: saleRecord,
-            vehicle: soldVehicle,
+            soldVehicle,
             warranty: null,
-          });
+          }));
           return;
         }
 
@@ -307,11 +370,12 @@ function SellVehicleForm({
       }
 
       setSuccessMessage("Vehicle sold successfully.");
-      await notifyVehicleSold({
+      await notifyVehicleSold(createVehicleSoldResult({
+        photoCleanup,
         sale: saleRecord,
-        vehicle: soldVehicle,
+        soldVehicle,
         warranty: warrantyRecord,
-      });
+      }));
       onClose();
     } catch (error) {
       if (partialSaleId) {

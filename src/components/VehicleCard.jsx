@@ -1,3 +1,4 @@
+import { useState } from "react";
 import AppIcon from "./ui/AppIcon";
 import VehicleColorLabel from "./VehicleColorLabel";
 import VehiclePrebookingBadge from "./VehiclePrebookingBadge";
@@ -40,13 +41,17 @@ function hasDisplayValue(value) {
 }
 
 function VehicleThumbnail({ photo, title }) {
-  if (photo?.photo_url) {
+  const photoUrl = photo?.photo_url ?? "";
+  const [failedPhotoUrl, setFailedPhotoUrl] = useState("");
+
+  if (photoUrl && failedPhotoUrl !== photoUrl) {
     return (
       <img
         alt={title}
         className="h-28 w-full rounded-2xl object-cover sm:h-32"
         loading="lazy"
-        src={photo.photo_url}
+        onError={() => setFailedPhotoUrl(photoUrl)}
+        src={photoUrl}
       />
     );
   }
@@ -123,7 +128,7 @@ function VehicleCard({
     >
       <div className="grid h-full gap-3 p-3 sm:grid-cols-[8.5rem_minmax(0,1fr)] sm:gap-4">
         <div className="min-w-0">
-          <VehicleThumbnail photo={photo} title={title} />
+          <VehicleThumbnail photo={sold ? null : photo} title={title} />
         </div>
 
         <div className="flex min-w-0 flex-col">

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import AppIcon from "../ui/AppIcon";
 import HeroBadge from "../ui/HeroBadge";
 import VehicleColorLabel from "../VehicleColorLabel";
@@ -206,11 +207,14 @@ function VehicleHeader({
 }) {
   const title = getVehicleTitle(vehicle);
   const stockNumber = displayValue(vehicle.stock_number);
-  const thumbnailUrl = primaryPhoto?.photo_url;
   const vehicleOrigin = getVehicleOrigin(vehicle);
   const vehicleOriginLabel = formatHeroOrigin(vehicleOrigin);
   const normalizedVehicleStatus = normalizeVehicleStatus(vehicle.status);
   const isSold = isVehicleSold(vehicle, sale);
+  const thumbnailUrl = isSold ? "" : primaryPhoto?.photo_url;
+  const [failedThumbnailUrl, setFailedThumbnailUrl] = useState("");
+  const hasThumbnail =
+    Boolean(thumbnailUrl) && failedThumbnailUrl !== thumbnailUrl;
   const shouldShowReadyAction =
     canMarkReady &&
     !isSold &&
@@ -231,11 +235,12 @@ function VehicleHeader({
               onClick={onQuickPhotos}
               type="button"
             >
-              {thumbnailUrl ? (
+              {hasThumbnail ? (
                 <img
                   alt={`${title} thumbnail`}
                   className="h-full w-full object-cover"
                   loading="lazy"
+                  onError={() => setFailedThumbnailUrl(thumbnailUrl)}
                   src={thumbnailUrl}
                 />
               ) : (
@@ -248,7 +253,7 @@ function VehicleHeader({
                   )}
                 </div>
               )}
-              {canManagePhotos && thumbnailUrl && (
+              {canManagePhotos && hasThumbnail && (
                 <span className="absolute inset-x-2 bottom-2 rounded-full bg-slate-950/75 px-2 py-1 text-center text-[11px] font-bold text-white opacity-0 transition group-hover:opacity-100">
                   Change Main
                 </span>

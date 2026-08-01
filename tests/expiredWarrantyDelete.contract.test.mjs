@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const cleanupMigration = readFileSync(
@@ -42,6 +42,14 @@ const priceHistorySource = readFileSync(
     "../src/components/parts/PartPriceHistoryModal.jsx",
     import.meta.url
   ),
+  "utf8"
+);
+const warrantyRegisterSource = readFileSync(
+  new URL("../src/lib/warrantyRegister.js", import.meta.url),
+  "utf8"
+);
+const dashboardSource = readFileSync(
+  new URL("../src/pages/Dashboard.jsx", import.meta.url),
   "utf8"
 );
 
@@ -91,6 +99,7 @@ test("expired vehicle cleanup deletes only vehicle-owned records", () => {
     "vehicles",
   ];
   const protectedTables = [
+    "vehicle_archive_records",
     "vendor_part_quotes",
     "vendors",
     "vehicle_catalog_entries",
@@ -113,6 +122,106 @@ test("expired vehicle cleanup deletes only vehicle-owned records", () => {
       `${tableName} must survive expired vehicle cleanup`
     );
   }
+
+  assert.doesNotMatch(
+    functionSql,
+    /(?:insert into|update|delete from) public\.vehicle_sales_monthly_summary\b/,
+    "expired cleanup must never decrement or rewrite the retained monthly summary"
+  );
+});
+
+test("retired full archive writers stay disabled without dropping old rows", () => {
+  const migrationSql = normalizeSql(cleanupMigration);
+
+  assert.match(
+    migrationSql,
+    /drop function if exists public\.archive_expired_warranty_vehicle\(uuid\)/
+  );
+  assert.match(
+    migrationSql,
+    /drop function if exists public\.archive_expired_warranty_vehicle\( uuid, uuid, date \)/
+  );
+  assert.match(
+    migrationSql,
+    /drop function if exists public\.mark_vehicle_archive_storage_cleanup\( uuid, integer \)/
+  );
+  assert.doesNotMatch(
+    migrationSql,
+    /(?:insert into|update|delete from|drop table) public\.vehicle_archive_records\b/,
+    "replacement cleanup must neither write nor drop retained legacy archive rows"
+  );
+});
+
+test("runtime source never reads or calls the retired full archive feature", () => {
+  const sourceRoot = new URL("../src/", import.meta.url);
+  const sourceFiles = [];
+
+  function collectSourceFiles(directoryUrl) {
+    for (const entry of readdirSync(directoryUrl, { withFileTypes: true })) {
+      const entryUrl = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, directoryUrl);
+
+      if (entry.isDirectory()) {
+        collectSourceFiles(entryUrl);
+      } else if (/\.[cm]?[jt]sx?$/.test(entry.name)) {
+        sourceFiles.push(entryUrl);
+      }
+    }
+  }
+
+  collectSourceFiles(sourceRoot);
+
+  for (const sourceFile of sourceFiles) {
+    const source = readFileSync(sourceFile, "utf8");
+
+    assert.doesNotMatch(source, /\.from\(["']vehicle_archive_records["']\)/);
+    assert.doesNotMatch(
+      source,
+      /\.rpc\(["'](?:archive_expired_warranty_vehicle|mark_vehicle_archive_storage_cleanup)["']/
+    );
+  }
+});
+
+test("archive CSV keeps exactly the permanent vehicle detail columns", () => {
+  const columnsMatch = warrantyRegisterSource.match(
+    /export const WARRANTY_REGISTER_COLUMNS\s*=\s*\[([\s\S]*?)\];/
+  );
+  const warrantyColumns = [
+    ...(columnsMatch?.[1] ?? "").matchAll(/"([^"]+)"/g),
+  ].map((match) => match[1]);
+  const archiveColumns = warrantyColumns.filter(
+    (column) => column !== "Vehicle Status"
+  );
+
+  assert.deepEqual(archiveColumns, [
+    "Stock #",
+    "VIN",
+    "Year",
+    "Make",
+    "Model",
+    "Trim",
+    "Color",
+    "Mileage",
+    "Sold Date",
+    "Customer Name",
+    "Customer Phone",
+    "Customer Email",
+    "Sale Price",
+    "Warranty Start Date",
+    "Warranty Months",
+    "Warranty End Date",
+    "Warranty Status",
+    "Total Investment",
+    "Notes",
+  ]);
+});
+
+test("dashboard sold counts use only the compact monthly summary", () => {
+  assert.match(dashboardSource, /\.from\("vehicle_sales_monthly_summary"\)/);
+  assert.match(
+    dashboardSource,
+    /soldVehiclesCount=\{lifetimeSalesStats\.totalVehiclesSold\}/
+  );
+  assert.doesNotMatch(dashboardSource, /liveSoldVehiclesCount/);
 });
 
 test("expired vehicle cleanup detaches workflow links without changing quote ownership", () => {

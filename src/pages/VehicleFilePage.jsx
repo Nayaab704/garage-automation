@@ -437,6 +437,9 @@ function VehicleFileHeader({
   const title = getVehicleReportTitle(vehicle);
   const fallbackPhotoTitle = getVehicleTitle(vehicle);
   const isSold = isVehicleSold(vehicle, sale);
+  const photoUrl = isSold ? "" : photo?.photo_url ?? "";
+  const [failedPhotoUrl, setFailedPhotoUrl] = useState("");
+  const hasPhoto = Boolean(photoUrl) && failedPhotoUrl !== photoUrl;
   const vinEnding = getVinEnding(vehicle?.vin);
   const metadataItems = [
     vehicle?.stock_number ? `Stock ${vehicle.stock_number}` : "",
@@ -496,12 +499,13 @@ function VehicleFileHeader({
       <div className="p-3 sm:p-4">
         <div className="flex gap-3 sm:items-start">
           <div className="h-20 w-24 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 sm:h-24 sm:w-32">
-            {photo?.photo_url ? (
+            {hasPhoto ? (
               <img
                 alt={`${fallbackPhotoTitle} thumbnail`}
                 className="h-full w-full object-cover"
                 loading="lazy"
-                src={photo.photo_url}
+                onError={() => setFailedPhotoUrl(photoUrl)}
+                src={photoUrl}
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-slate-400">
@@ -1749,6 +1753,7 @@ function VehicleFilePage({
   const [isLoading, setIsLoading] = useState(true);
   const [isSellFormOpen, setIsSellFormOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [photoCleanupNotice, setPhotoCleanupNotice] = useState("");
   const canOpenVehicle = Boolean(vehicleId);
   const canViewVehicleFile =
     canOpenVehicle &&
@@ -1779,6 +1784,7 @@ function VehicleFilePage({
 
       setIsLoading(true);
       setErrorMessage("");
+      setPhotoCleanupNotice("");
 
       try {
         const response = await fetchVehicleFileData(vehicleId, {
@@ -1818,13 +1824,15 @@ function VehicleFilePage({
     };
   }, [canViewAdminFinancial, canViewSaleDetails, canViewVehicleFile, vehicleId]);
 
-  const primaryPhoto = data
-    ? getVehiclePrimaryPhoto(data.vehicle, data.photos)
-    : null;
   const hasActiveThirdPartyRepair =
     data?.thirdPartyRepairs?.some(isThirdPartyRepairActive) ?? false;
   const activeSale = data?.sales?.[0] ?? null;
   const isVehicleSoldRecord = isVehicleSold(data?.vehicle, activeSale);
+  const displayedPhotos = isVehicleSoldRecord ? [] : data?.photos ?? [];
+  const primaryPhoto =
+    data && !isVehicleSoldRecord
+      ? getVehiclePrimaryPhoto(data.vehicle, displayedPhotos)
+      : null;
   const canMarkSold =
     canViewSaleDetails &&
     !isVehicleSoldRecord &&
@@ -1852,12 +1860,24 @@ function VehicleFilePage({
                   ),
                 ]
               : currentData.warranties ?? [],
+            photos: [],
             vehicle: result?.vehicle?.id
-              ? { ...currentData.vehicle, ...result.vehicle }
-              : { ...currentData.vehicle, sale_status: "sold" },
+              ? {
+                  ...currentData.vehicle,
+                  ...result.vehicle,
+                  primary_photo_id: null,
+                  sale_status: "sold",
+                }
+              : {
+                  ...currentData.vehicle,
+                  primary_photo_id: null,
+                  sale_status: "sold",
+                },
           }
         : currentData
     );
+
+    setPhotoCleanupNotice(result?.photoCleanup?.warning ?? "");
   }
 
   function handleWarrantySaved(warranty) {
@@ -2003,6 +2023,12 @@ function VehicleFilePage({
             vehicle={data.vehicle}
           />
 
+          {photoCleanupNotice && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+              {photoCleanupNotice}
+            </div>
+          )}
+
           <section className="rounded-3xl border border-slate-200 bg-white p-2 shadow-sm">
             <div className="flex gap-2 overflow-x-auto pb-1">
               {tabs.map((tab) => {
@@ -2079,7 +2105,7 @@ function VehicleFilePage({
           {activeTab === "documents" && (
             <DocumentsTab
               documents={data.documents}
-              photos={data.photos}
+              photos={displayedPhotos}
               thirdPartyRepairs={data.thirdPartyRepairs}
             />
           )}

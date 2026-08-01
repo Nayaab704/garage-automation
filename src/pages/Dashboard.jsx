@@ -1143,9 +1143,9 @@ function DashboardFinancePanel({
   activeInventoryInvestment,
   averageActiveInvestment,
   estimatedActiveProfit,
-  liveSoldVehiclesCount,
   prebookedVehiclesCount,
   readyForSaleCount,
+  showSalesSummary,
   soldRevenue,
   soldVehiclesCount,
 }) {
@@ -1182,18 +1182,17 @@ function DashboardFinancePanel({
 
       <DashboardSection title="Sales Snapshot">
         <div className="divide-y divide-slate-100">
+          {showSalesSummary && (
+            <DashboardActionRow
+              helperText="Closed sales"
+              icon="check"
+              label="Sold Vehicles"
+              tone="green"
+              value={formatNumber(soldVehiclesCount)}
+            />
+          )}
           <DashboardActionRow
-            helperText="Closed sales"
-            icon="check"
-            label="Sold Vehicles"
-            tone="green"
-            value={formatNumber(soldVehiclesCount)}
-          />
-          <DashboardActionRow
-            helperText={formatCountPhrase(
-              liveSoldVehiclesCount,
-              "retained sale record"
-            )}
+            helperText="Revenue from retained sale records"
             icon="dollar"
             label="Sold Revenue"
             tone="green"
@@ -1575,10 +1574,6 @@ function Dashboard({
   const activeVehicles = vehicles.filter((vehicle) =>
     isActiveVehicle(vehicle, soldVehicleIds)
   );
-  const soldVehicles = vehicles.filter((vehicle) =>
-    isSoldVehicle(vehicle, soldVehicleIds)
-  );
-  const liveSoldVehiclesCount = soldVehicleIds.size || soldVehicles.length;
   const lifetimeSalesStats = useMemo(() => {
     const rows = monthlySalesSummary
       .filter((row) => row?.month_start)
@@ -1607,9 +1602,6 @@ function Dashboard({
       ),
     };
   }, [monthlySalesSummary]);
-  const soldVehiclesCount = canViewAdminFinancial
-    ? lifetimeSalesStats.totalVehiclesSold
-    : liveSoldVehiclesCount;
   const activeInvestmentRows = mergeVehiclesWithSummaries(
     vehicles,
     investmentSummaries,
@@ -1717,13 +1709,6 @@ function Dashboard({
                 estimatedActiveProfit < 0 ? "text-red-700" : "text-emerald-700"
               }
             />
-            {!canViewAdminFinancial && (
-              <SummaryCard
-                icon="check"
-                label="Sold Vehicles"
-                value={formatNumber(soldVehiclesCount)}
-              />
-            )}
             <SummaryCard
               className={
                 canViewAdminFinancial ? "col-span-2 lg:col-span-2" : ""
@@ -1800,11 +1785,11 @@ function Dashboard({
               activeInventoryInvestment={activeInventoryInvestment}
               averageActiveInvestment={averageActiveInvestment}
               estimatedActiveProfit={estimatedActiveProfit}
-              liveSoldVehiclesCount={liveSoldVehiclesCount}
               prebookedVehiclesCount={prebookingBadges.length}
               readyForSaleCount={readyForSaleCount}
+              showSalesSummary={canViewAdminFinancial}
               soldRevenue={soldRevenue}
-              soldVehiclesCount={soldVehiclesCount}
+              soldVehiclesCount={lifetimeSalesStats.totalVehiclesSold}
             />
           )}
 
