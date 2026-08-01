@@ -3,6 +3,7 @@ import VehicleColorLabel from "./VehicleColorLabel";
 import VehiclePrebookingBadge from "./VehiclePrebookingBadge";
 import VehicleSaleSummary from "./VehicleSaleSummary";
 import VehicleStatusBadge from "./VehicleStatusBadge";
+import { isVehicleSold } from "../lib/vehicleStatus";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
@@ -82,6 +83,7 @@ function VehicleCard({
   const mileageLabel = hasDisplayValue(vehicle.mileage)
     ? `${formatNumber(vehicle.mileage)} mi`
     : "Mileage n/a";
+  const sold = isVehicleSold(vehicle, sale);
 
   function handleOpenVehicle() {
     if (vehicle.id) {
@@ -159,10 +161,18 @@ function VehicleCard({
           </div>
 
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <VehicleStatusBadge
-              className="max-w-full truncate px-2.5 text-xs"
-              status={vehicle.status}
-            />
+            {sold ? (
+              <VehicleSaleSummary
+                canViewDetails={canViewSaleDetails}
+                compact
+                sale={sale}
+              />
+            ) : (
+              <VehicleStatusBadge
+                className="max-w-full truncate px-2.5 text-xs"
+                status={vehicle.status}
+              />
+            )}
             {prebooking && (
               <VehiclePrebookingBadge
                 interactive={canManagePrebooking}
@@ -173,13 +183,6 @@ function VehicleCard({
               />
             )}
             {hasThirdPartyRepair && <ThirdPartyBadge />}
-            {vehicle.sale_status === "sold" && (
-              <VehicleSaleSummary
-                canViewDetails={canViewSaleDetails}
-                compact
-                sale={sale}
-              />
-            )}
           </div>
 
           <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-slate-100 pt-3 text-sm">

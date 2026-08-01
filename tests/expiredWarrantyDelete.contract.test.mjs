@@ -16,6 +16,34 @@ const quoteRetentionMigration = readFileSync(
   ),
   "utf8"
 );
+const selectedQuoteMigration = readFileSync(
+  new URL(
+    "../supabase/migrations/202606180001_part_request_selected_vendor_quote.sql",
+    import.meta.url
+  ),
+  "utf8"
+);
+const rlsMigration = readFileSync(
+  new URL(
+    "../supabase/migrations/202607200002_phase1_rls.sql",
+    import.meta.url
+  ),
+  "utf8"
+);
+const vendorSuggestionSource = readFileSync(
+  new URL(
+    "../src/components/vehicle-detail/VendorPriceSuggestions.jsx",
+    import.meta.url
+  ),
+  "utf8"
+);
+const priceHistorySource = readFileSync(
+  new URL(
+    "../src/components/parts/PartPriceHistoryModal.jsx",
+    import.meta.url
+  ),
+  "utf8"
+);
 
 function normalizeSql(sql) {
   return sql.replace(/\s+/g, " ").trim().toLowerCase();
@@ -149,4 +177,38 @@ test("part request deletion uses SET NULL and never removes quote rows", () => {
     /delete from public\.vendor_part_quotes\b/,
     "the retention migration must not delete quote history"
   );
+});
+
+test("manual quote deletion clears selections without deleting parts or vendors", () => {
+  const migrationSql = normalizeSql(selectedQuoteMigration);
+  const rlsSql = normalizeSql(rlsMigration);
+
+  assert.match(
+    migrationSql,
+    /foreign key \(selected_quote_id\) references public\.vendor_part_quotes\(id\) on delete set null/,
+    "deleting a quote must only clear the part request selection"
+  );
+  assert.doesNotMatch(
+    migrationSql,
+    /delete from public\.(part_requests|vendors)\b/,
+    "quote cleanup must not delete parts or vendors"
+  );
+  assert.match(rlsSql, /'vendor_part_quotes'/);
+  assert.match(
+    rlsSql,
+    /for delete to authenticated using \(public\.is_active_member\(\)\)/,
+    "authenticated active members must retain manual quote cleanup support"
+  );
+  assert.match(
+    rlsSql,
+    /grant select, insert, update, delete on table public\.%i to authenticated/,
+    "authenticated users need the table DELETE grant for the RLS policy"
+  );
+});
+
+test("quote suggestion surfaces have a clean empty state", () => {
+  const emptyState = "No previous vendor prices found.";
+
+  assert.match(vendorSuggestionSource, new RegExp(emptyState));
+  assert.match(priceHistorySource, new RegExp(emptyState));
 });

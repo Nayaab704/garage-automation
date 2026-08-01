@@ -512,7 +512,7 @@ function VendorPriceSuggestions({
             hasCurrentSearchResults &&
             visibleQuotes.length === 0 && (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-3 text-sm text-slate-500">
-                No previous prices found.
+                No previous vendor prices found.
               </div>
             )}
 

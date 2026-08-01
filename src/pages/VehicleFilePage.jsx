@@ -15,7 +15,10 @@ import { isThirdPartyRepairActive } from "../lib/thirdPartyRepairWorkflow";
 import { formatUserFirstName } from "../lib/userDisplay";
 import { getVehiclePrimaryPhoto } from "../lib/vehicleDisplayPhoto";
 import { activePrebookingBadgeColumns } from "../lib/vehiclePrebookings";
-import { isReadyForSaleStatus } from "../lib/vehicleStatus";
+import {
+  isReadyForSaleStatus,
+  isVehicleSold,
+} from "../lib/vehicleStatus";
 import { getWorkOrderStatusLabel } from "../lib/workOrderStatus";
 import useActiveTabScroll from "../hooks/useActiveTabScroll";
 
@@ -433,7 +436,7 @@ function VehicleFileHeader({
 }) {
   const title = getVehicleReportTitle(vehicle);
   const fallbackPhotoTitle = getVehicleTitle(vehicle);
-  const isSold = vehicle?.sale_status === "sold" || Boolean(sale);
+  const isSold = isVehicleSold(vehicle, sale);
   const vinEnding = getVinEnding(vehicle?.vin);
   const metadataItems = [
     vehicle?.stock_number ? `Stock ${vehicle.stock_number}` : "",
@@ -529,22 +532,23 @@ function VehicleFileHeader({
             </div>
 
             <div className="mt-2 flex flex-wrap gap-1.5">
-              <VehicleStatusBadge
-                className="h-7 max-w-[10.5rem] truncate px-2.5 text-xs"
-                status={vehicle.status}
-              />
+              {isSold ? (
+                <VehicleSaleSummary
+                  canViewDetails={canViewSaleDetails}
+                  compact
+                  sale={sale}
+                />
+              ) : (
+                <VehicleStatusBadge
+                  className="h-7 max-w-[10.5rem] truncate px-2.5 text-xs"
+                  status={vehicle.status}
+                />
+              )}
               {activePrebooking && (
                 <VehiclePrebookingBadge
                   prebooking={activePrebooking}
                   showAmount={false}
                   showIcon={false}
-                />
-              )}
-              {isSold && (
-                <VehicleSaleSummary
-                  canViewDetails={canViewSaleDetails}
-                  compact
-                  sale={sale}
                 />
               )}
               {hasActiveThirdPartyRepair && (
@@ -1820,11 +1824,10 @@ function VehicleFilePage({
   const hasActiveThirdPartyRepair =
     data?.thirdPartyRepairs?.some(isThirdPartyRepairActive) ?? false;
   const activeSale = data?.sales?.[0] ?? null;
-  const isVehicleSold =
-    data?.vehicle?.sale_status === "sold" || Boolean(activeSale);
+  const isVehicleSoldRecord = isVehicleSold(data?.vehicle, activeSale);
   const canMarkSold =
     canViewSaleDetails &&
-    !isVehicleSold &&
+    !isVehicleSoldRecord &&
     isReadyForSaleStatus(data?.vehicle?.status);
   const tabRefs = useActiveTabScroll(activeTab);
 
@@ -2054,7 +2057,7 @@ function VehicleFilePage({
                 repairJobs={data.repairJobs}
                 thirdPartyRepairs={data.thirdPartyRepairs}
               />
-              {canViewSaleDetails && isVehicleSold && (
+              {canViewSaleDetails && isVehicleSoldRecord && (
                 <SaleWarrantySection
                   canManage={canManageWarranty}
                   onWarrantySaved={handleWarrantySaved}

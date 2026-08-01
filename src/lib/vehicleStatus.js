@@ -82,6 +82,20 @@ export function getVehicleStatusBadge(status) {
   };
 }
 
+export function isVehicleSold(vehicle, saleOrSales = null) {
+  const saleStatus = normalizeStatusValue(vehicle?.sale_status);
+  const legacyWorkflowStatus = normalizeStatusValue(vehicle?.status);
+  const hasSaleRecord = Array.isArray(saleOrSales)
+    ? saleOrSales.length > 0
+    : Boolean(saleOrSales);
+
+  return (
+    saleStatus === "sold" ||
+    legacyWorkflowStatus === "sold" ||
+    hasSaleRecord
+  );
+}
+
 export function isActiveVehicleStatus(status) {
   return activeVehicleWorkflowStatuses.includes(normalizeVehicleStatus(status));
 }

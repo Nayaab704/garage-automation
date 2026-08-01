@@ -170,7 +170,7 @@ function PartPriceHistoryModal({
             <AppIcon name="search" size={20} />
           </div>
           <p className="mt-3 text-sm font-black text-slate-800">
-            No previous prices found.
+            No previous vendor prices found.
           </p>
           <p className="mt-1 text-sm text-slate-500">
             New saved quotes will show here next time.

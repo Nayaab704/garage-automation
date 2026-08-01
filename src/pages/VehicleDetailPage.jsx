@@ -37,6 +37,7 @@ import {
 } from "../lib/vehiclePrebookings";
 import {
   getVehicleStatusAfterFinalCheckChange,
+  isVehicleSold as hasVehicleBeenSold,
   normalizeVehicleStatus,
   shouldMoveToRepair,
 } from "../lib/vehicleStatus";
@@ -1415,7 +1416,7 @@ function VehicleDetailPage({
     await persistVehicleStatus(newStatus);
   }
 
-  const isVehicleSold = vehicle?.sale_status === "sold" || sales.length > 0;
+  const isVehicleSold = hasVehicleBeenSold(vehicle, sales);
   const canChangeVehicleStatus = hasPermission(role, "vehicle:change_status");
   const canDeleteVehicle = hasPermission(role, "vehicle:delete");
   const canEditVehicle = hasPermission(role, "vehicle:edit");
@@ -1533,6 +1534,7 @@ function VehicleDetailPage({
             hasActiveThirdPartyRepair={hasActiveThirdPartyRepair}
             prebooking={activeVehiclePrebooking}
             primaryPhoto={primaryVehiclePhoto}
+            sale={activeSale}
             vehicle={vehicle}
           />
 
@@ -1558,6 +1560,7 @@ function VehicleDetailPage({
             <VehicleSaleSummary
               canViewDetails={canViewSaleDetails}
               sale={activeSale}
+              showBadge={false}
             />
           )}
 

@@ -116,7 +116,7 @@ export async function fetchRepairsQueue({ canViewTeamRates = false } = {}) {
       ? supabase
           .from("vehicles")
           .select(
-            "id, stock_number, vin, year, make, model, trim, color, color_hex, status"
+            "id, stock_number, vin, year, make, model, trim, color, color_hex, status, sale_status"
           )
           .in("id", vehicleIds)
       : { data: [], error: null },

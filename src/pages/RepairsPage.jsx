@@ -31,6 +31,7 @@ import {
   REPAIR_QUEUE_TABS,
 } from "../lib/repairWorkflowUtils";
 import { supabase } from "../lib/supabaseClient";
+import { isVehicleSold } from "../lib/vehicleStatus";
 import useActiveTabScroll from "../hooks/useActiveTabScroll";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 import {
@@ -312,7 +313,9 @@ function RepairJobCard({
                     Vehicle Status
                   </p>
                   <p className="mt-1 font-semibold text-slate-700">
-                    {formatRepairLabel(repairJob.vehicle?.status, {})}
+                    {isVehicleSold(repairJob.vehicle)
+                      ? "Sold"
+                      : formatRepairLabel(repairJob.vehicle?.status, {})}
                   </p>
                 </div>
                 <div>

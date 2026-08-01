@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import VehicleSoldBadge from "../components/VehicleSoldBadge";
 import VehicleStatusBadge from "../components/VehicleStatusBadge";
 import AppIcon from "../components/ui/AppIcon";
 import StatusBadge from "../components/ui/StatusBadge";
 import { formatCurrency, getLaborLogCost } from "../lib/laborCost";
 import { supabase } from "../lib/supabaseClient";
 import { formatUserFirstName } from "../lib/userDisplay";
+import { isVehicleSold } from "../lib/vehicleStatus";
 import { getWorkOrderStatusLabel } from "../lib/workOrderStatus";
 import useActiveTabScroll from "../hooks/useActiveTabScroll";
 
@@ -30,7 +32,7 @@ const purchaseOrderItemColumns =
   "id, purchase_order_id, part_request_id, description, quantity, status, created_at, return_status, returned_at, returned_by";
 
 const vehicleColumns =
-  "id, stock_number, vin, year, make, model, trim, color, color_hex, status";
+  "id, stock_number, vin, year, make, model, trim, color, color_hex, status, sale_status";
 
 const terminalWorkOrderStatuses = new Set([
   "archived",
@@ -1073,7 +1075,14 @@ function RecentVehicleCard({ onSelectVehicle, record }) {
       <div className="flex min-w-0 flex-col gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1">
-            <VehicleStatusBadge className="px-2 py-0.5 text-[10px]" status={vehicle.status} />
+            {isVehicleSold(vehicle) ? (
+              <VehicleSoldBadge className="h-auto px-2 py-0.5 text-[10px]" />
+            ) : (
+              <VehicleStatusBadge
+                className="px-2 py-0.5 text-[10px]"
+                status={vehicle.status}
+              />
+            )}
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 ring-1 ring-inset ring-slate-200">
               {record.actionCount} {record.actionCount === 1 ? "touch" : "touches"}
             </span>

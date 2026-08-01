@@ -4,7 +4,10 @@ import VehicleColorLabel from "../VehicleColorLabel";
 import VehiclePrebookingBadge from "../VehiclePrebookingBadge";
 import VehicleSoldBadge from "../VehicleSoldBadge";
 import VehicleStatusBadge from "../VehicleStatusBadge";
-import { normalizeVehicleStatus } from "../../lib/vehicleStatus";
+import {
+  isVehicleSold,
+  normalizeVehicleStatus,
+} from "../../lib/vehicleStatus";
 import VehicleStatusDropdown from "./VehicleStatusDropdown";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
@@ -198,6 +201,7 @@ function VehicleHeader({
   onStatusChange,
   prebooking,
   primaryPhoto,
+  sale,
   vehicle,
 }) {
   const title = getVehicleTitle(vehicle);
@@ -206,9 +210,11 @@ function VehicleHeader({
   const vehicleOrigin = getVehicleOrigin(vehicle);
   const vehicleOriginLabel = formatHeroOrigin(vehicleOrigin);
   const normalizedVehicleStatus = normalizeVehicleStatus(vehicle.status);
-  const isSold = vehicle.sale_status === "sold";
+  const isSold = isVehicleSold(vehicle, sale);
   const shouldShowReadyAction =
-    canMarkReady && !readyActionHiddenStatuses.has(normalizedVehicleStatus);
+    canMarkReady &&
+    !isSold &&
+    !readyActionHiddenStatuses.has(normalizedVehicleStatus);
 
   return (
     <div className="space-y-3">
@@ -286,7 +292,7 @@ function VehicleHeader({
                       tone="blue"
                     />
                   )}
-                  {canMarkSold && (
+                  {canMarkSold && !isSold && (
                     <CompactActionButton
                       ariaLabel="Mark Sold"
                       icon="dollar"
@@ -309,7 +315,9 @@ function VehicleHeader({
               )}
 
               <div className="mt-2 flex flex-wrap gap-1.5">
-                {canChangeStatus ? (
+                {isSold ? (
+                  <VehicleSoldBadge />
+                ) : canChangeStatus ? (
                   <VehicleStatusDropdown
                     currentStatus={vehicle.status}
                     isUpdating={isStatusUpdating}
@@ -329,7 +337,6 @@ function VehicleHeader({
                     showIcon={false}
                   />
                 )}
-                {isSold && <VehicleSoldBadge />}
                 {vehicleOriginLabel && (
                   <HeroBadge
                     label={vehicleOriginLabel}

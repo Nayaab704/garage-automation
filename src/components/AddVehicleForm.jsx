@@ -23,6 +23,11 @@ import {
   getVehicleColorHexForName,
   normalizeVehicleColorHex,
 } from "../lib/vehicleColorDisplay";
+import {
+  fetchNextVehicleStockNumber,
+  isVehicleStockNumberConflict,
+  normalizeVehicleStockNumber,
+} from "../lib/vehicleStockNumber";
 import { vehicleOriginOptions } from "../lib/vehicleOrigin";
 import {
   buildPrebookingPayload,
@@ -203,12 +208,16 @@ function buildInitialFormData(initialValues = {}) {
   };
 }
 
-function buildVehiclePayload(formData) {
+function buildVehiclePayload(formData, stockNumber = "") {
   const colorHex =
     normalizeVehicleColorHex(formData.color_hex) ||
     getVehicleColorHexForName(formData.color);
+  const normalizedStockNumber = normalizeVehicleStockNumber(stockNumber);
 
   return {
+    ...(normalizedStockNumber
+      ? { stock_number: normalizedStockNumber }
+      : {}),
     vin: emptyToNull(normalizeVin(formData.vin)),
     year: numberOrNull(formData.year),
     make: emptyToNull(formData.make),
@@ -394,6 +403,7 @@ function AddVehicleForm({
   const [photoInputKey, setPhotoInputKey] = useState(0);
   const [vehicleCatalogEntries, setVehicleCatalogEntries] = useState([]);
   const [isCatalogLoading, setIsCatalogLoading] = useState(false);
+  const [nextStockNumber, setNextStockNumber] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -435,6 +445,32 @@ function AddVehicleForm({
     }
 
     loadVehicleCatalogEntries();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadNextStockNumber() {
+      const { data, error } = await fetchNextVehicleStockNumber(supabase);
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (error) {
+        console.warn("Could not preview the next stock number:", error);
+        setNextStockNumber("");
+        return;
+      }
+
+      setNextStockNumber(data);
+    }
+
+    loadNextStockNumber();
 
     return () => {
       isMounted = false;
@@ -566,7 +602,7 @@ function AddVehicleForm({
     setSuccessMessage("");
 
     try {
-      const vehiclePayload = buildVehiclePayload(formData);
+      const vehiclePayload = buildVehiclePayload(formData, nextStockNumber);
       const { data, error } = await supabase
         .from("vehicles")
         .insert([vehiclePayload])
@@ -575,9 +611,24 @@ function AddVehicleForm({
 
       if (error) {
         console.error("Failed to create vehicle", error);
-        setErrorMessage(
-          "Could not create vehicle. Please check the details and try again."
-        );
+        if (isVehicleStockNumberConflict(error)) {
+          const submittedStockNumber = vehiclePayload.stock_number ?? "";
+          const previewResponse = await fetchNextVehicleStockNumber(supabase);
+          setNextStockNumber(previewResponse.data);
+          setErrorMessage(
+            previewResponse.data
+              ? `${
+                  submittedStockNumber
+                    ? `Stock number ${submittedStockNumber}`
+                    : "The next stock number"
+                } was just used. The preview is now ${previewResponse.data}; review it and try again.`
+              : "The stock number preview changed. Refresh Intake and try again."
+          );
+        } else {
+          setErrorMessage(
+            "Could not create vehicle. Please check the details and try again."
+          );
+        }
       } else {
         let savedVehicle = data;
         let savedPrebooking = null;
@@ -689,8 +740,24 @@ function AddVehicleForm({
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
                 Complete the vehicle information before creating the record.
               </p>
-              <p className="mt-2 inline-flex rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-500 ring-1 ring-inset ring-slate-200">
-                Stock number will be generated automatically.
+              <p
+                aria-live="polite"
+                className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${
+                  nextStockNumber
+                    ? "bg-blue-50 text-blue-800 ring-blue-200"
+                    : "bg-slate-50 text-slate-500 ring-slate-200"
+                }`}
+              >
+                {nextStockNumber ? (
+                  <>
+                    Next Stock Number:{" "}
+                    <span className="ml-1 font-mono font-black">
+                      {nextStockNumber}
+                    </span>
+                  </>
+                ) : (
+                  "Stock number will be generated automatically."
+                )}
               </p>
             </div>
           </div>

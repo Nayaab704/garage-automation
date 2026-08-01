@@ -51,9 +51,10 @@ function VehicleSaleSummary({
   className = "",
   compact = false,
   sale,
+  showBadge = true,
 }) {
   if (!sale && !canViewDetails) {
-    return <VehicleSoldBadge className={className} />;
+    return showBadge ? <VehicleSoldBadge className={className} /> : null;
   }
 
   const price = formatCurrency(getSalePrice(sale));
@@ -64,12 +65,16 @@ function VehicleSaleSummary({
     ? [price, date, buyer, paymentMethod].filter(Boolean)
     : [];
 
+  if (!showBadge && detailItems.length === 0) {
+    return null;
+  }
+
   if (compact) {
     return (
       <span
         className={`inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 ${className}`}
       >
-        <VehicleSoldBadge />
+        {showBadge && <VehicleSoldBadge />}
         {detailItems.length > 0 && (
           <span className="min-w-0 truncate tabular-nums">
             {detailItems.slice(0, 2).join(" · ")}
@@ -86,7 +91,7 @@ function VehicleSaleSummary({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <VehicleSoldBadge />
+            {showBadge && <VehicleSoldBadge />}
             {canViewDetails && price && (
               <span className="text-sm font-black tabular-nums text-slate-950">
                 {price}
