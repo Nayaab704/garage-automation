@@ -21,6 +21,10 @@ import {
 } from "../lib/vehicleStatus";
 import { getWorkOrderStatusLabel } from "../lib/workOrderStatus";
 import useActiveTabScroll from "../hooks/useActiveTabScroll";
+import {
+  calculateVehicleRepairCosts,
+  getPartFinancialImpact,
+} from "../lib/vehicleFinancials";
 
 const tabs = [
   { key: "work_parts", label: "Work & Parts" },
@@ -252,49 +256,6 @@ function isInHousePartRequest(partRequest) {
   return partRequest?.part_source === "in_house";
 }
 
-function shouldCountInHousePart(partRequest, purchaseOrderItemIds) {
-  if (!isInHousePartRequest(partRequest)) {
-    return false;
-  }
-
-  if (purchaseOrderItemIds.has(partRequest.id)) {
-    return false;
-  }
-
-  const status = String(partRequest?.status ?? "").toLowerCase();
-  return !["cancelled", "canceled", "returned"].includes(status);
-}
-
-function getPurchasedPartsTotal(purchaseOrderItems) {
-  return purchaseOrderItems.reduce(
-    (total, item) => total + numberOrZero(getPartItemTotal(item)),
-    0
-  );
-}
-
-function getInHousePartsTotal(partRequests, purchaseOrderItems) {
-  const purchaseOrderItemPartRequestIds = new Set(
-    purchaseOrderItems
-      .map((item) => item.part_request_id)
-      .filter(Boolean)
-  );
-
-  return partRequests.reduce((total, partRequest) => {
-    if (!shouldCountInHousePart(partRequest, purchaseOrderItemPartRequestIds)) {
-      return total;
-    }
-
-    return total + numberOrZero(getPartDisplayTotal(partRequest, null));
-  }, 0);
-}
-
-function getPartsInvestmentTotal(partRequests, purchaseOrderItems) {
-  return (
-    getPurchasedPartsTotal(purchaseOrderItems) +
-    getInHousePartsTotal(partRequests, purchaseOrderItems)
-  );
-}
-
 function getPurchaseOrderLabel(purchaseOrder) {
   if (!purchaseOrder) {
     return "";
@@ -343,10 +304,6 @@ function getThirdPartyTotal(thirdPartyRepair) {
 
 function getLaborTotal(laborLog) {
   return getLaborLogCost(laborLog);
-}
-
-function getExtraCostAmount(costEntry) {
-  return numberOrZero(costEntry?.amount ?? costEntry?.cost);
 }
 
 function getStatusClassName(status) {
@@ -584,24 +541,26 @@ function NestedItemLabel({ children, tone = "blue" }) {
   );
 }
 
-function DetailField({ label, value }) {
+function DetailField({ label, tone = "default", value }) {
   if (!hasDisplayValue(value)) {
     return null;
   }
+
+  const valueClassName = tone === "negative" ? "text-red-700" : "text-slate-900";
 
   return (
     <div>
       <dt className="text-xs font-black uppercase tracking-wide text-slate-400">
         {label}
       </dt>
-      <dd className="mt-1 text-sm font-bold tabular-nums text-slate-900">
+      <dd className={`mt-1 text-sm font-bold tabular-nums ${valueClassName}`}>
         {value}
       </dd>
     </div>
   );
 }
 
-function buildPartCostRows(partRequest, purchaseOrderItem) {
+function buildPartCostRows(partRequest, purchaseOrder, purchaseOrderItem) {
   const quantity = getPartQuantity(partRequest, purchaseOrderItem);
   const unitCost = getPartUnitCost(partRequest, purchaseOrderItem);
   const subtotal = quantity !== null && unitCost !== null ? quantity * unitCost : null;
@@ -610,7 +569,44 @@ function buildPartCostRows(partRequest, purchaseOrderItem) {
   const returnDeduction =
     numberOrZero(purchaseOrderItem?.returned_amount) +
     numberOrZero(purchaseOrderItem?.returned_shipping_amount);
+  const impact = getPartFinancialImpact({
+    partRequest,
+    purchaseOrder,
+    purchaseOrderItem,
+  });
   const total = getPartDisplayTotal(partRequest, purchaseOrderItem);
+
+  if (impact.isExcluded) {
+    return [
+      unitCost !== null
+        ? { label: "Unit cost", value: formatCurrency(unitCost) }
+        : null,
+      quantity !== null
+        ? { label: "Quantity", value: formatNumber(quantity) }
+        : null,
+      subtotal !== null
+        ? { label: "Subtotal", value: formatCurrency(subtotal) }
+        : null,
+      shipping !== null
+        ? { label: "Shipping", value: formatCurrency(shipping) }
+        : null,
+      tax !== null ? { label: "Tax", value: formatCurrency(tax) } : null,
+      {
+        label: "Original amount",
+        value: formatCurrency(impact.originalAmount),
+      },
+      {
+        label: "Status impact",
+        tone: "negative",
+        value: impact.statusImpact,
+      },
+      {
+        label: "Total",
+        tone: "negative",
+        value: formatCurrency(impact.displayAmount),
+      },
+    ].filter(Boolean);
+  }
 
   return [
     unitCost !== null
@@ -729,10 +725,20 @@ function PartDetailsModal({
     purchaseOrderItem,
     purchaseOrder
   );
-  const currentStatus = getPartCurrentStatus(partRequest, purchaseOrderItem);
+  const impact = getPartFinancialImpact({
+    partRequest,
+    purchaseOrder,
+    purchaseOrderItem,
+  });
+  const currentStatus = impact.isExcluded
+    ? impact.status
+    : getPartCurrentStatus(partRequest, purchaseOrderItem);
   const purchaseOrderLabel = getPurchaseOrderLabel(purchaseOrder);
-  const total = getPartDisplayTotal(partRequest, purchaseOrderItem);
-  const costRows = buildPartCostRows(partRequest, purchaseOrderItem);
+  const costRows = buildPartCostRows(
+    partRequest,
+    purchaseOrder,
+    purchaseOrderItem
+  );
   const activityRows = buildPartActivityRows({
     partRequest,
     profiles,
@@ -797,8 +803,16 @@ function PartDetailsModal({
               />
               <DetailField
                 label="Total"
-                value={total === null ? "" : formatCurrency(total)}
+                tone={impact.isExcluded ? "negative" : "default"}
+                value={formatCurrency(impact.displayAmount)}
               />
+              {impact.isExcluded && (
+                <DetailField
+                  label="Status impact"
+                  tone="negative"
+                  value={impact.statusImpact}
+                />
+              )}
             </dl>
             {(canOpenPurchaseOrder || canMoveToNeedsPo) && (
               <div className="mt-4 flex flex-wrap gap-2">
@@ -843,7 +857,13 @@ function PartDetailsModal({
                     key={row.label}
                   >
                     <dt className="font-semibold text-slate-500">{row.label}</dt>
-                    <dd className="font-black tabular-nums text-slate-900">
+                    <dd
+                      className={`font-black tabular-nums ${
+                        row.tone === "negative"
+                          ? "text-red-700"
+                          : "text-slate-900"
+                      }`}
+                    >
                       {row.value}
                     </dd>
                   </div>
@@ -919,8 +939,14 @@ function PartSummaryRow({
     purchaseOrderItem,
     purchaseOrder
   );
-  const status = getPartCurrentStatus(partRequest, purchaseOrderItem);
-  const total = getPartDisplayTotal(partRequest, purchaseOrderItem);
+  const impact = getPartFinancialImpact({
+    partRequest,
+    purchaseOrder,
+    purchaseOrderItem,
+  });
+  const status = impact.isExcluded
+    ? impact.status
+    : getPartCurrentStatus(partRequest, purchaseOrderItem);
 
   function handleDetailsClick() {
     onViewDetails?.({
@@ -964,8 +990,14 @@ function PartSummaryRow({
         <div className="hidden sm:block">
           <StatusPill status={status} />
         </div>
-        <p className="text-right text-sm font-black tabular-nums text-slate-900">
-          {total === null ? "No cost" : formatCurrency(total)}
+        <p
+          className={`text-right text-sm font-black tabular-nums ${
+            impact.isExcluded ? "text-red-700" : "text-slate-900"
+          }`}
+        >
+          {impact.originalAmount === 0 && !purchaseOrderItem
+            ? "No cost"
+            : formatCurrency(impact.displayAmount)}
         </p>
         <button
           aria-label="View part details"
@@ -1140,16 +1172,16 @@ function WorkPartsTab({
       !thirdPartyRepair.repair_job_id ||
       !repairJobIds.has(thirdPartyRepair.repair_job_id)
   );
-  const purchasedPartsTotal = getPurchasedPartsTotal(purchaseOrderItems);
-  const inHousePartsTotal = getInHousePartsTotal(
+  const repairCosts = calculateVehicleRepairCosts({
     partRequests,
-    purchaseOrderItems
-  );
+    purchaseOrderItems,
+    purchaseOrders,
+    thirdPartyRepairs,
+  });
+  const purchasedPartsTotal = repairCosts.purchasedPartsCost;
+  const inHousePartsTotal = repairCosts.inHousePartsCost;
   const partsTotal = purchasedPartsTotal + inHousePartsTotal;
-  const thirdPartyTotal = thirdPartyRepairs.reduce(
-    (total, thirdPartyRepair) => total + getThirdPartyTotal(thirdPartyRepair),
-    0
-  );
+  const thirdPartyTotal = repairCosts.thirdPartyCost;
   const shouldShowTotals =
     purchaseOrderItems.length > 0 ||
     inHousePartsTotal > 0 ||
@@ -1284,6 +1316,7 @@ function FinancialTab({
   partRequests,
   profiles,
   purchaseOrderItems,
+  purchaseOrders,
   repairJobs,
   thirdPartyRepairs,
 }) {
@@ -1292,25 +1325,22 @@ function FinancialTab({
     (laborLog) => laborLog.technician_id === currentProfile?.id
   );
   const visibleLaborLogs = canViewAdminFinancial ? laborLogs : userLaborLogs;
-  const partsTotal = getPartsInvestmentTotal(partRequests, purchaseOrderItems);
-  const thirdPartyTotal = thirdPartyRepairs.reduce(
-    (total, thirdPartyRepair) => total + getThirdPartyTotal(thirdPartyRepair),
-    0
-  );
-  const laborTotal = visibleLaborLogs.reduce(
-    (total, laborLog) => total + getLaborTotal(laborLog),
-    0
-  );
+  const repairCosts = calculateVehicleRepairCosts({
+    costEntries,
+    laborLogs: visibleLaborLogs,
+    partRequests,
+    purchaseOrderItems,
+    purchaseOrders,
+    thirdPartyRepairs,
+  });
+  const partsTotal = repairCosts.partsCost;
+  const thirdPartyTotal = repairCosts.thirdPartyCost;
+  const laborTotal = repairCosts.laborCost;
   const laborHoursTotal = visibleLaborLogs.reduce(
     (total, laborLog) => total + numberOrZero(laborLog.hours),
     0
   );
-  const extraCostsTotal = costEntries.reduce(
-    (total, costEntry) => total + getExtraCostAmount(costEntry),
-    0
-  );
-  const totalInvestment =
-    partsTotal + thirdPartyTotal + laborTotal + extraCostsTotal;
+  const extraCostsTotal = repairCosts.extraCost;
 
   if (!canViewAdminFinancial && currentProfile?.role !== "technician") {
     return (
@@ -1328,8 +1358,8 @@ function FinancialTab({
           <MetricCard label="Extra Costs" value={formatCurrency(extraCostsTotal)} />
           <MetricCard
             className="col-span-2 sm:col-span-1"
-            label="Total Investment"
-            value={formatCurrency(totalInvestment)}
+            label="Total Repair Cost"
+            value={formatCurrency(repairCosts.totalRepairCost)}
           />
         </div>
       ) : (
@@ -1686,7 +1716,7 @@ async function fetchVehicleFileData(
           .in("sale_id", saleIds);
   const investmentSummaryResponse = canViewAdminFinancial
     ? await supabase
-        .from("vehicle_investment_summary")
+        .from("vehicle_financial_summary")
         .select("*")
         .eq("vehicle_id", vehicleId)
         .maybeSingle()
@@ -2080,6 +2110,7 @@ function VehicleFilePage({
                 partRequests={data.partRequests}
                 profiles={data.profiles}
                 purchaseOrderItems={data.purchaseOrderItems}
+                purchaseOrders={data.purchaseOrders}
                 repairJobs={data.repairJobs}
                 thirdPartyRepairs={data.thirdPartyRepairs}
               />

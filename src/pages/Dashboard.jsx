@@ -4,7 +4,6 @@ import {
   getPartQueueCounts,
   isPartPendingReview,
 } from "../lib/partWorkflowUtils";
-import { getPurchaseOrderReturnDeduction } from "../lib/partReturns";
 import { hasPermission, isAdminOrManagerRole } from "../lib/permissions";
 import {
   getRepairQueueCounts,
@@ -170,29 +169,17 @@ function isActiveVehicle(vehicle, soldVehicleIds = new Set()) {
   return !isSoldVehicle(vehicle, soldVehicleIds) && status !== "archived";
 }
 
-function mergeVehiclesWithSummaries(
-  vehicles,
-  summaries,
-  returnDeductionsByVehicleId = {}
-) {
+function mergeVehiclesWithSummaries(vehicles, summaries) {
   const summariesByStockNumber = new Map(
     summaries.map((summary) => [summary.stock_number, summary])
   );
 
   return vehicles.map((vehicle) => {
     const summary = summariesByStockNumber.get(vehicle.stock_number) ?? {};
-    const returnDeduction = numberOrZero(
-      returnDeductionsByVehicleId[vehicle.id]
-    );
-    const totalInvested = Math.max(
-      numberOrZero(summary.total_invested) - returnDeduction,
-      0
-    );
-
     return {
       ...vehicle,
-      estimated_profit: numberOrZero(summary.estimated_profit) + returnDeduction,
-      total_invested: totalInvested,
+      estimated_profit: numberOrZero(summary.estimated_profit),
+      total_invested: numberOrZero(summary.total_invested),
     };
   });
 }
@@ -220,23 +207,6 @@ function enrichDashboardParts({
       })
     ),
   }));
-}
-
-function getReturnDeductionsByVehicleId(purchaseOrderItems, purchaseOrdersById) {
-  return purchaseOrderItems.reduce((deductionsByVehicleId, item) => {
-    const vehicleId = purchaseOrdersById[item.purchase_order_id]?.vehicle_id;
-
-    if (!vehicleId) {
-      return deductionsByVehicleId;
-    }
-
-    return {
-      ...deductionsByVehicleId,
-      [vehicleId]:
-        numberOrZero(deductionsByVehicleId[vehicleId]) +
-        getPurchaseOrderReturnDeduction([item]),
-    };
-  }, {});
 }
 
 function enrichDashboardRepairJobs({ partRequests, repairJobs }) {
@@ -569,7 +539,7 @@ async function fetchDashboardData({
 } = {}) {
   const investmentSummariesQuery = canViewAdminFinancial
     ? supabase
-        .from("vehicle_investment_summary")
+        .from("vehicle_financial_summary")
         .select("stock_number, make, model, total_invested, estimated_profit")
         .order("stock_number", { ascending: true })
     : { data: [], error: null };
@@ -697,11 +667,6 @@ async function fetchDashboardData({
     partRequests,
     repairJobs: repairJobsResponse.data ?? [],
   });
-  const returnDeductionsByVehicleId = getReturnDeductionsByVehicleId(
-    purchaseOrderItems,
-    purchaseOrdersById
-  );
-
   return {
     data: {
       activityLogs: activityLogsResponse.error
@@ -717,7 +682,6 @@ async function fetchDashboardData({
       repairJobs,
       sales: salesResponse.data ?? [],
       thirdPartyRepairs: thirdPartyRepairsResponse.data ?? [],
-      returnDeductionsByVehicleId,
       vehicles: vehiclesResponse.data ?? [],
       warranties: warrantiesResponse.error
         ? []
@@ -1451,8 +1415,6 @@ function Dashboard({
   const [profiles, setProfiles] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [repairJobs, setRepairJobs] = useState([]);
-  const [returnDeductionsByVehicleId, setReturnDeductionsByVehicleId] =
-    useState({});
   const [sales, setSales] = useState([]);
   const [thirdPartyRepairs, setThirdPartyRepairs] = useState([]);
   const [vehicles, setVehicles] = useState([]);
@@ -1502,7 +1464,6 @@ function Dashboard({
           setProfiles([]);
           setPurchaseOrders([]);
           setRepairJobs([]);
-          setReturnDeductionsByVehicleId({});
           setSales([]);
           setThirdPartyRepairs([]);
           setVehicles([]);
@@ -1519,7 +1480,6 @@ function Dashboard({
         setProfiles(data.profiles);
         setPurchaseOrders(data.purchaseOrders);
         setRepairJobs(data.repairJobs);
-        setReturnDeductionsByVehicleId(data.returnDeductionsByVehicleId);
         setSales(data.sales);
         setThirdPartyRepairs(data.thirdPartyRepairs);
         setVehicles(data.vehicles);
@@ -1537,7 +1497,6 @@ function Dashboard({
           setProfiles([]);
           setPurchaseOrders([]);
           setRepairJobs([]);
-          setReturnDeductionsByVehicleId({});
           setSales([]);
           setThirdPartyRepairs([]);
           setVehicles([]);
@@ -1604,8 +1563,7 @@ function Dashboard({
   }, [monthlySalesSummary]);
   const activeInvestmentRows = mergeVehiclesWithSummaries(
     vehicles,
-    investmentSummaries,
-    returnDeductionsByVehicleId
+    investmentSummaries
   ).filter((vehicle) => isActiveVehicle(vehicle, soldVehicleIds));
   const activeInventoryInvestment = activeInvestmentRows.reduce(
     (total, vehicle) => total + numberOrZero(vehicle.total_invested),

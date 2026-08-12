@@ -1,5 +1,4 @@
 import { supabase } from "./supabaseClient";
-import { getPurchaseOrderReturnDeduction } from "./partReturns";
 import {
   getTodayDateValue,
   getWarrantyEndDate,
@@ -404,24 +403,16 @@ export async function fetchWarrantyRegisterData({
     warrantiesResponse,
     prebookingsResponse,
     investmentResponse,
-    purchaseOrdersResponse,
-    purchaseOrderItemsResponse,
   ] = await Promise.all([
     fetchAllRows("vehicles"),
     fetchAllRows("sales", { orderColumn: "created_at" }),
     fetchAllRows("warranties", { orderColumn: "created_at" }),
     fetchAppliedPrebookings(),
     includeInvestment
-      ? fetchAllRows("vehicle_investment_summary", {
+      ? fetchAllRows("vehicle_financial_summary", {
           ascending: true,
           orderColumn: "stock_number",
         })
-      : Promise.resolve({ data: [], error: null }),
-    includeInvestment
-      ? fetchAllRows("purchase_orders")
-      : Promise.resolve({ data: [], error: null }),
-    includeInvestment
-      ? fetchAllRows("purchase_order_items")
       : Promise.resolve({ data: [], error: null }),
   ]);
   const error =
@@ -433,36 +424,10 @@ export async function fetchWarrantyRegisterData({
     return { data: null, error, warning: null };
   }
 
-  const purchaseOrdersById = new Map(
-    (purchaseOrdersResponse.data ?? []).map((purchaseOrder) => [
-      purchaseOrder.id,
-      purchaseOrder,
-    ])
-  );
-  const returnDeductionsByVehicleId = (
-    purchaseOrderItemsResponse.data ?? []
-  ).reduce((deductions, item) => {
-    const vehicleId = purchaseOrdersById.get(item.purchase_order_id)?.vehicle_id;
-
-    if (!vehicleId) {
-      return deductions;
-    }
-
-    deductions[vehicleId] =
-      numberOrZero(deductions[vehicleId]) +
-      getPurchaseOrderReturnDeduction([item]);
-    return deductions;
-  }, {});
   const warnings = [];
 
   if (investmentResponse.error) {
     warnings.push("Total investment could not be loaded and will be left blank.");
-  }
-
-  if (purchaseOrdersResponse.error || purchaseOrderItemsResponse.error) {
-    warnings.push(
-      "Returned-part deductions could not be loaded; investment totals may be overstated."
-    );
   }
 
   if (prebookingsResponse.error) {
@@ -479,7 +444,6 @@ export async function fetchWarrantyRegisterData({
       prebookings: prebookingsResponse.error
         ? []
         : prebookingsResponse.data,
-      returnDeductionsByVehicleId,
       sales: salesResponse.data,
       vehicles: vehiclesResponse.data,
       warranties: warrantiesResponse.data,

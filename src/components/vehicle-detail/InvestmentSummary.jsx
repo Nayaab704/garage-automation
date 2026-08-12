@@ -1,6 +1,7 @@
 import { useState } from "react";
 import AppIcon from "../ui/AppIcon";
 import { isAdminOrManagerRole } from "../../lib/permissions";
+import { calculateVehicleFinancialSummary } from "../../lib/vehicleFinancials";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -23,30 +24,60 @@ function formatCurrency(value) {
   return currencyFormatter.format(numberValue);
 }
 
-function InvestmentCard({ label, tone = "default", value }) {
+function InvestmentCard({ className = "", label, tone = "default", value }) {
   const valueClassName = {
     default: "text-slate-950",
     negative: "text-red-700",
     positive: "text-emerald-700",
   }[tone];
+  const cardClassName = {
+    default: "border-slate-100 bg-slate-50",
+    negative: "border-red-100 bg-red-50/70",
+    positive: "border-emerald-100 bg-emerald-50/70",
+  }[tone];
 
   return (
-    <div className="rounded-2xl bg-slate-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+    <div
+      className={`min-w-0 rounded-xl border p-3 ${cardClassName} ${className}`}
+    >
+      <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
         {label}
       </p>
-      <p className={`mt-2 text-xl font-black tabular-nums ${valueClassName}`}>
+      <p
+        className={`mt-1 overflow-hidden text-ellipsis whitespace-nowrap text-base font-black leading-tight tracking-tight tabular-nums sm:text-lg ${valueClassName}`}
+      >
         {value}
       </p>
     </div>
   );
 }
 
-function InvestmentSummary({ currentProfile, investmentSummary, vehicle }) {
+function InvestmentSummary({
+  costEntries,
+  currentProfile,
+  laborLogs,
+  partRequests,
+  purchaseOrderItems,
+  purchaseOrders,
+  thirdPartyRepairs,
+  vehicle,
+}) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const estimatedProfit = investmentSummary?.estimated_profit;
-  const estimatedProfitNumber = Number(estimatedProfit ?? 0);
-  const profitTone = estimatedProfitNumber < 0 ? "negative" : "positive";
+  const financialSummary = calculateVehicleFinancialSummary({
+    costEntries,
+    laborLogs,
+    partRequests,
+    purchaseOrderItems,
+    purchaseOrders,
+    thirdPartyRepairs,
+    vehicle,
+  });
+  const profitTone =
+    financialSummary.estimatedProfit > 0
+      ? "positive"
+      : financialSummary.estimatedProfit < 0
+        ? "negative"
+        : "default";
   const canViewFinancialDetails = isAdminOrManagerRole(currentProfile?.role);
 
   if (!canViewFinancialDetails) {
@@ -81,21 +112,36 @@ function InvestmentSummary({ currentProfile, investmentSummary, vehicle }) {
       </button>
 
       {isExpanded && (
-        <div className="grid gap-3 border-t border-slate-100 p-4 md:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2 border-t border-slate-100 p-3 sm:gap-3 sm:p-4">
           <InvestmentCard
             label="Purchase Price"
-            value={formatCurrency(
-              investmentSummary?.purchase_price ?? vehicle.purchase_price,
-            )}
+            value={formatCurrency(financialSummary.purchasePrice)}
+          />
+          <InvestmentCard
+            label="Total Repair Cost"
+            value={formatCurrency(financialSummary.totalRepairCost)}
           />
           <InvestmentCard
             label="Total Invested"
-            value={formatCurrency(investmentSummary?.total_invested)}
+            value={formatCurrency(financialSummary.totalInvested)}
           />
           <InvestmentCard
+            label="Target Sale Price"
+            value={
+              financialSummary.targetSalePrice === null
+                ? "Not set"
+                : formatCurrency(financialSummary.targetSalePrice)
+            }
+          />
+          <InvestmentCard
+            className="col-span-2"
             label="Estimated Profit"
             tone={profitTone}
-            value={formatCurrency(investmentSummary?.estimated_profit)}
+            value={
+              financialSummary.estimatedProfit === null
+                ? "Not available"
+                : formatCurrency(financialSummary.estimatedProfit)
+            }
           />
         </div>
       )}

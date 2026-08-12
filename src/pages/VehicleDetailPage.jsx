@@ -19,10 +19,6 @@ import VehicleHeader from "../components/vehicle-detail/VehicleHeader";
 import VehiclePrebookingSection from "../components/vehicle-detail/VehiclePrebookingSection";
 import VehiclePhotosSection from "../components/vehicle-detail/VehiclePhotosSection";
 import { logVehicleActivity } from "../lib/activityLogger";
-import {
-  applyReturnDeductionToInvestmentSummary,
-  getPurchaseOrderReturnDeduction,
-} from "../lib/partReturns";
 import { hasPermission, isAdminOrManagerRole } from "../lib/permissions";
 import { markPurchaseOrderReceived } from "../lib/purchaseOrderReceiving";
 import { cleanupRepairPhotosForReadySale } from "../lib/repairPhotoCleanup";
@@ -50,7 +46,7 @@ import {
 
 async function fetchInvestmentSummary(vehicleId, stockNumber) {
   const byVehicleId = await supabase
-    .from("vehicle_investment_summary")
+    .from("vehicle_financial_summary")
     .select("*")
     .eq("vehicle_id", vehicleId)
     .maybeSingle();
@@ -63,63 +59,12 @@ async function fetchInvestmentSummary(vehicleId, stockNumber) {
     byVehicleId.data || !stockNumber
       ? byVehicleId
       : await supabase
-          .from("vehicle_investment_summary")
+          .from("vehicle_financial_summary")
           .select("*")
           .eq("stock_number", stockNumber)
           .maybeSingle();
 
-  if (summaryResponse.error || !summaryResponse.data) {
-    return summaryResponse;
-  }
-
-  const returnDeductionResponse = await fetchVehicleReturnDeduction(vehicleId);
-
-  if (returnDeductionResponse.error) {
-    return { data: null, error: returnDeductionResponse.error };
-  }
-
-  return {
-    data: applyReturnDeductionToInvestmentSummary(
-      summaryResponse.data,
-      returnDeductionResponse.data
-    ),
-    error: null,
-  };
-}
-
-async function fetchVehicleReturnDeduction(vehicleId) {
-  const purchaseOrdersResponse = await supabase
-    .from("purchase_orders")
-    .select("id")
-    .eq("vehicle_id", vehicleId);
-
-  if (purchaseOrdersResponse.error) {
-    return { data: 0, error: purchaseOrdersResponse.error };
-  }
-
-  const purchaseOrderIds = (purchaseOrdersResponse.data ?? [])
-    .map((purchaseOrder) => purchaseOrder.id)
-    .filter(Boolean);
-
-  if (purchaseOrderIds.length === 0) {
-    return { data: 0, error: null };
-  }
-
-  const itemsResponse = await supabase
-    .from("purchase_order_items")
-    .select(
-      "id, quantity, unit_cost, shipping_cost, tax, status, return_status, returned_amount, returned_shipping_amount"
-    )
-    .in("purchase_order_id", purchaseOrderIds);
-
-  if (itemsResponse.error) {
-    return { data: 0, error: itemsResponse.error };
-  }
-
-  return {
-    data: getPurchaseOrderReturnDeduction(itemsResponse.data ?? []),
-    error: null,
-  };
+  return summaryResponse;
 }
 
 const finalCheckColumns =
@@ -1600,8 +1545,14 @@ function VehicleDetailPage({
           )}
 
           <InvestmentSummary
+            costEntries={costEntries}
             currentProfile={currentProfile}
             investmentSummary={investmentSummary}
+            laborLogs={laborLogs}
+            partRequests={partRequests}
+            purchaseOrderItems={purchaseOrderItems}
+            purchaseOrders={purchaseOrders}
+            thirdPartyRepairs={thirdPartyRepairs}
             vehicle={vehicle}
           />
 
