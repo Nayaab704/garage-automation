@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import FormActions from "../ui/FormActions";
 import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
@@ -10,6 +10,14 @@ import {
   formatHourlyRate,
   getProfileHourlyRate,
 } from "../../lib/laborCost";
+import {
+  fetchSelectableLaborProfileById,
+  fetchSelectableLaborProfiles,
+  formatLaborProfileName,
+  isLaborProfileSelectable,
+  NO_ACTIVE_TEAM_MEMBERS_MESSAGE,
+} from "../../lib/laborProfiles";
+import { isAdminOrManagerRole } from "../../lib/permissions";
 import { supabase } from "../../lib/supabaseClient";
 
 const emptyForm = {
@@ -44,17 +52,6 @@ function getRepairJobTitle(repairJob) {
   );
 }
 
-function getTechnicianName(profile) {
-  return (
-    getFirstValue(profile, ["full_name", "name", "display_name", "email"]) ??
-    "Unnamed Technician"
-  );
-}
-
-function isAdminRole(role) {
-  return role === "admin" || role === "owner";
-}
-
 function parsePositiveNumber(value, label) {
   const numberValue = Number(value);
 
@@ -80,19 +77,57 @@ function AddLaborLogForm({
   onClose,
   onActivityLogged,
   onLaborLogAdded,
-  profiles = [],
   repairJobs = [],
   vehicleId,
 }) {
+  const canPickTechnician = isAdminOrManagerRole(currentProfile?.role);
   const [formData, setFormData] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingProfiles, setIsLoadingProfiles] = useState(canPickTechnician);
   const [errorMessage, setErrorMessage] = useState("");
+  const [profileLoadError, setProfileLoadError] = useState("");
+  const [selectableProfiles, setSelectableProfiles] = useState([]);
   const [successMessage, setSuccessMessage] = useState("");
-  const canPickTechnician = isAdminRole(currentProfile?.role);
   const selectedTechnician = canPickTechnician
-    ? profiles.find((profile) => profile.id === formData.technician_id)
-    : currentProfile;
+    ? selectableProfiles.find(
+        (profile) => profile.id === formData.technician_id
+      )
+    : isLaborProfileSelectable(currentProfile)
+      ? currentProfile
+      : null;
   const selectedHourlyRate = getProfileHourlyRate(selectedTechnician);
+
+  useEffect(() => {
+    if (!canPickTechnician) {
+      return undefined;
+    }
+
+    let isCurrent = true;
+
+    fetchSelectableLaborProfiles(supabase)
+      .then((profiles) => {
+        if (isCurrent) {
+          setSelectableProfiles(profiles);
+        }
+      })
+      .catch((error) => {
+        console.error("Could not load active team members:", error);
+
+        if (isCurrent) {
+          setSelectableProfiles([]);
+          setProfileLoadError("Could not load active team members.");
+        }
+      })
+      .finally(() => {
+        if (isCurrent) {
+          setIsLoadingProfiles(false);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [canPickTechnician]);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -104,7 +139,7 @@ function AddLaborLogForm({
         ? {
             hourly_rate: String(
               getProfileHourlyRate(
-                profiles.find((profile) => profile.id === value)
+                selectableProfiles.find((profile) => profile.id === value)
               )
             ),
           }
@@ -121,7 +156,9 @@ function AddLaborLogForm({
     }
 
     if (!selectedTechnician?.id) {
-      return { error: "Technician is required." };
+      return {
+        error: "Select an active team member before adding labor.",
+      };
     }
 
     if (hours.error) {
@@ -156,15 +193,37 @@ function AddLaborLogForm({
         return;
       }
 
+      const verifiedTechnician = await fetchSelectableLaborProfileById(
+        supabase,
+        selectedTechnician.id
+      );
+
+      if (!verifiedTechnician) {
+        setErrorMessage(
+          "This team member is inactive or has been removed. Select an active team member."
+        );
+        return;
+      }
+
+      const hourlyRate = parseNonnegativeNumber(
+        getProfileHourlyRate(verifiedTechnician),
+        "Hourly rate"
+      );
+
+      if (hourlyRate.error) {
+        setErrorMessage(hourlyRate.error);
+        return;
+      }
+
       const laborLog = {
         vehicle_id: vehicleId,
         repair_job_id: formData.repair_job_id,
-        technician_id: selectedTechnician.id,
+        technician_id: verifiedTechnician.id,
         hours: validation.values.hours,
-        hourly_rate: validation.values.hourlyRate,
+        hourly_rate: hourlyRate.value,
         labor_cost: calculateLaborCost(
           validation.values.hours,
-          validation.values.hourlyRate
+          hourlyRate.value
         ),
         notes: emptyToNull(formData.notes),
       };
@@ -185,9 +244,7 @@ function AddLaborLogForm({
                 (repairJob) => repairJob.id === laborLog.repair_job_id
               ) ?? {}
             ),
-            technician: getTechnicianName(
-              selectedTechnician ?? {}
-            ),
+            technician: formatLaborProfileName(verifiedTechnician),
             hours: laborLog.hours,
             hourly_rate: laborLog.hourly_rate,
             labor_cost: laborLog.labor_cost,
@@ -262,19 +319,36 @@ function AddLaborLogForm({
                 </span>
                 <select
                   className={formControlClassNames.select}
+                  disabled={isLoadingProfiles || selectableProfiles.length === 0}
                   id="labor-technician"
                   name="technician_id"
                   onChange={handleChange}
                   required
                   value={formData.technician_id}
                 >
-                  <option value="">Select a technician</option>
-                  {profiles.map((profile) => (
+                  <option value="">
+                    {isLoadingProfiles
+                      ? "Loading active team members..."
+                      : "Select a technician"}
+                  </option>
+                  {selectableProfiles.map((profile) => (
                     <option key={profile.id} value={profile.id}>
-                      {getTechnicianName(profile)}
+                      {formatLaborProfileName(profile)}
                     </option>
                   ))}
                 </select>
+                {!isLoadingProfiles &&
+                  !profileLoadError &&
+                  selectableProfiles.length === 0 && (
+                    <span className="mt-2 block text-sm font-semibold text-amber-700">
+                      {NO_ACTIVE_TEAM_MEMBERS_MESSAGE}
+                    </span>
+                  )}
+                {profileLoadError && (
+                  <span className="mt-2 block text-sm font-semibold text-red-700">
+                    {profileLoadError}
+                  </span>
+                )}
               </label>
             )}
           </div>

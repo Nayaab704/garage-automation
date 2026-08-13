@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import FormActions from "../ui/FormActions";
 import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
@@ -10,6 +10,14 @@ import {
   formatHourlyRate,
   getProfileHourlyRate,
 } from "../../lib/laborCost";
+import {
+  fetchSelectableLaborProfileById,
+  fetchSelectableLaborProfiles,
+  formatLaborProfileName,
+  isLaborProfileSelectable,
+  NO_ACTIVE_TEAM_MEMBERS_MESSAGE,
+} from "../../lib/laborProfiles";
+import { isAdminOrManagerRole } from "../../lib/permissions";
 import { supabase } from "../../lib/supabaseClient";
 
 const emptyForm = {
@@ -23,16 +31,8 @@ function emptyToNull(value) {
   return trimmedValue === "" ? null : trimmedValue;
 }
 
-function getTechnicianName(profile) {
-  return profile?.full_name || profile?.email || "Technician";
-}
-
 function getWorkOrderTitle(workOrder) {
   return workOrder?.title || workOrder?.name || "Work Order";
-}
-
-function isAdminRole(role) {
-  return role === "admin" || role === "owner";
 }
 
 function AddWorkOrderLaborForm({
@@ -40,15 +40,17 @@ function AddWorkOrderLaborForm({
   onActivityLogged,
   onClose,
   onLaborAdded,
-  profiles = [],
   vehicleId,
   workOrder,
 }) {
+  const canPickTechnician = isAdminOrManagerRole(currentProfile?.role);
   const [formData, setFormData] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingProfiles, setIsLoadingProfiles] = useState(canPickTechnician);
   const [errorMessage, setErrorMessage] = useState("");
+  const [profileLoadError, setProfileLoadError] = useState("");
+  const [selectableProfiles, setSelectableProfiles] = useState([]);
   const [successMessage, setSuccessMessage] = useState("");
-  const canPickTechnician = isAdminRole(currentProfile?.role);
   const selectedTechnician = getSelectedTechnician();
   const previewHours = Number(formData.hours || 0);
   const selectedHourlyRate = getProfileHourlyRate(selectedTechnician);
@@ -58,6 +60,38 @@ function AddWorkOrderLaborForm({
     selectedHourlyRate === 0 &&
     Number.isFinite(previewHours) &&
     previewHours > 0;
+
+  useEffect(() => {
+    if (!canPickTechnician) {
+      return undefined;
+    }
+
+    let isCurrent = true;
+
+    fetchSelectableLaborProfiles(supabase)
+      .then((profiles) => {
+        if (isCurrent) {
+          setSelectableProfiles(profiles);
+        }
+      })
+      .catch((error) => {
+        console.error("Could not load active team members:", error);
+
+        if (isCurrent) {
+          setSelectableProfiles([]);
+          setProfileLoadError("Could not load active team members.");
+        }
+      })
+      .finally(() => {
+        if (isCurrent) {
+          setIsLoadingProfiles(false);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [canPickTechnician]);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -70,10 +104,12 @@ function AddWorkOrderLaborForm({
 
   function getSelectedTechnician() {
     if (canPickTechnician && formData.technician_id) {
-      return profiles.find((profile) => profile.id === formData.technician_id);
+      return selectableProfiles.find(
+        (profile) => profile.id === formData.technician_id
+      );
     }
 
-    return currentProfile;
+    return isLaborProfileSelectable(currentProfile) ? currentProfile : null;
   }
 
   async function handleSubmit(event) {
@@ -84,16 +120,13 @@ function AddWorkOrderLaborForm({
     }
 
     const hours = Number(formData.hours || 0);
-    const hourlyRate = getProfileHourlyRate(selectedTechnician);
-    const laborCost = calculateLaborCost(hours, hourlyRate);
-
     if (!vehicleId || !workOrder?.id) {
       setErrorMessage("Unable to add labor without a work order.");
       return;
     }
 
     if (!selectedTechnician?.id) {
-      setErrorMessage("A technician profile is required.");
+      setErrorMessage("Select an active team member before adding labor.");
       return;
     }
 
@@ -102,20 +135,35 @@ function AddWorkOrderLaborForm({
       return;
     }
 
-    if (!Number.isFinite(hourlyRate) || hourlyRate < 0) {
-      setErrorMessage("Hourly rate must be 0 or greater.");
-      return;
-    }
-
     setIsSubmitting(true);
     setErrorMessage("");
     setSuccessMessage("");
 
     try {
+      const verifiedTechnician = await fetchSelectableLaborProfileById(
+        supabase,
+        selectedTechnician.id
+      );
+
+      if (!verifiedTechnician) {
+        setErrorMessage(
+          "This team member is inactive or has been removed. Select an active team member."
+        );
+        return;
+      }
+
+      const hourlyRate = getProfileHourlyRate(verifiedTechnician);
+
+      if (!Number.isFinite(hourlyRate) || hourlyRate < 0) {
+        setErrorMessage("Hourly rate must be 0 or greater.");
+        return;
+      }
+
+      const laborCost = calculateLaborCost(hours, hourlyRate);
       const laborLog = {
         vehicle_id: vehicleId,
         repair_job_id: workOrder.id,
-        technician_id: selectedTechnician.id,
+        technician_id: verifiedTechnician.id,
         hours,
         hourly_rate: hourlyRate,
         labor_cost: laborCost,
@@ -141,7 +189,7 @@ function AddWorkOrderLaborForm({
         action: "Labor log added",
         details: {
           repair_job: getWorkOrderTitle(workOrder),
-          technician: getTechnicianName(selectedTechnician),
+          technician: formatLaborProfileName(verifiedTechnician),
           hours: laborLog.hours,
           hourly_rate: laborLog.hourly_rate,
           labor_cost: laborLog.labor_cost,
@@ -171,18 +219,37 @@ function AddWorkOrderLaborForm({
               <span className={formControlClassNames.label}>Technician</span>
               <select
                 className={formControlClassNames.select}
+                disabled={isLoadingProfiles || selectableProfiles.length === 0}
                 id="work-order-labor-technician"
                 name="technician_id"
                 onChange={handleChange}
                 value={formData.technician_id}
               >
-                <option value="">Use my profile rate</option>
-                {profiles.map((profile) => (
+                <option value="">
+                  {isLoadingProfiles
+                    ? "Loading active team members..."
+                    : isLaborProfileSelectable(currentProfile)
+                      ? `Use my profile (${formatLaborProfileName(currentProfile)})`
+                      : "Select a team member"}
+                </option>
+                {selectableProfiles.map((profile) => (
                   <option key={profile.id} value={profile.id}>
-                    {getTechnicianName(profile)}
+                    {formatLaborProfileName(profile)}
                   </option>
                 ))}
               </select>
+              {!isLoadingProfiles &&
+                !profileLoadError &&
+                selectableProfiles.length === 0 && (
+                  <span className="mt-2 block text-sm font-semibold text-amber-700">
+                    {NO_ACTIVE_TEAM_MEMBERS_MESSAGE}
+                  </span>
+                )}
+              {profileLoadError && (
+                <span className="mt-2 block text-sm font-semibold text-red-700">
+                  {profileLoadError}
+                </span>
+              )}
             </label>
           )}
 

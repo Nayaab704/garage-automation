@@ -4,6 +4,7 @@ import {
   formatCurrency,
   getLaborLogCost,
 } from "../../lib/laborCost";
+import { formatLaborProfileName } from "../../lib/laborProfiles";
 import { supabase } from "../../lib/supabaseClient";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
@@ -44,7 +45,7 @@ function formatNumber(value) {
 
 function getProfileName(profiles, profileId) {
   const profile = profiles.find((profileRecord) => profileRecord.id === profileId);
-  return profile?.full_name || profile?.email || "Removed user";
+  return profile ? formatLaborProfileName(profile) : "Removed user";
 }
 
 function isAdminRole(role) {

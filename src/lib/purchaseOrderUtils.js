@@ -14,6 +14,7 @@ export const PURCHASE_ORDER_TABS = [
 ];
 
 export const purchaseOrderStatusLabels = {
+  canceled: "Cancelled",
   cancelled: "Cancelled",
   draft: "Draft",
   open: "Ordered",
@@ -23,7 +24,7 @@ export const purchaseOrderStatusLabels = {
   returned: "Returned",
 };
 
-const closedStatuses = ["received", "cancelled"];
+const closedStatuses = ["received", "cancelled", "canceled"];
 
 function normalizeSearch(value) {
   return normalizeSearchText(value);
@@ -204,7 +205,7 @@ export function getPurchaseOrderBadge(status) {
     };
   }
 
-  if (status === "cancelled") {
+  if (["cancelled", "canceled"].includes(status)) {
     return {
       className: "bg-red-50 text-red-700 ring-red-200",
       label: "Cancelled",
@@ -247,7 +248,7 @@ export function purchaseOrderMatchesTab(purchaseOrder, tabKey) {
   }
 
   if (tabKey === "cancelled") {
-    return purchaseOrder?.status === "cancelled";
+    return ["cancelled", "canceled"].includes(purchaseOrder?.status);
   }
 
   return true;
@@ -285,6 +286,8 @@ export function getPurchaseOrderSearchText(purchaseOrder) {
     purchaseOrder?.orderedBy?.email,
     purchaseOrder?.receivedBy?.full_name,
     purchaseOrder?.receivedBy?.email,
+    purchaseOrder?.cancelledBy?.full_name,
+    purchaseOrder?.cancelledBy?.email,
     purchaseOrder?.vehicleVin,
     purchaseOrder?.vehicle_vin,
     ...(purchaseOrder?.vehicleVins ?? []),
@@ -305,6 +308,8 @@ export function getPurchaseOrderSearchText(purchaseOrder) {
       item.return_notes,
       item.returnedBy?.full_name,
       item.returnedBy?.email,
+      item.cancelledBy?.full_name,
+      item.cancelledBy?.email,
       item.vehicleVin,
       item.vehicle_vin,
       item.vehicleSearchText,

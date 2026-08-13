@@ -89,7 +89,9 @@ export async function fetchRepairsQueue({ canViewTeamRates = false } = {}) {
   const profileColumns = canViewTeamRates
     ? "id, full_name, email, role, phone, hourly_rate"
     : "id, full_name, email, role";
-  const profileSource = canViewTeamRates ? "profiles" : "profile_display_names";
+  const profileSource = canViewTeamRates
+    ? "profiles"
+    : "profile_history_display_names";
   const repairJobsResponse = await supabase
     .from("repair_jobs")
     .select(repairJobColumns)

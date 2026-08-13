@@ -761,7 +761,6 @@ function WorkOrderCard({
             setOpenSection("labor");
             setIsLaborFormOpen(false);
           }}
-          profiles={profiles}
           vehicleId={vehicleId}
           workOrder={workOrder}
         />

@@ -2,6 +2,7 @@ import { useState } from "react";
 import AddLaborLogForm from "./AddLaborLogForm";
 import { logVehicleActivity } from "../../lib/activityLogger";
 import { getLaborLogCost } from "../../lib/laborCost";
+import { formatLaborProfileName } from "../../lib/laborProfiles";
 import { supabase } from "../../lib/supabaseClient";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -65,10 +66,7 @@ function getRepairJobTitle(repairJob) {
 }
 
 function getTechnicianName(profile) {
-  return (
-    getFirstValue(profile, ["full_name", "name", "display_name", "email"]) ??
-    "Technician"
-  );
+  return profile?.id ? formatLaborProfileName(profile) : "Technician";
 }
 
 function getRecordById(records, id) {
@@ -277,7 +275,6 @@ function LaborLogsSection({
           onClose={() => setIsFormOpen(false)}
           onActivityLogged={onActivityLogged}
           onLaborLogAdded={onLaborLogAdded}
-          profiles={profiles}
           repairJobs={repairJobs}
           vehicleId={vehicleId}
         />

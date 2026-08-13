@@ -433,7 +433,6 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
   const [expandedJobIds, setExpandedJobIds] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [jobs, setJobs] = useState([]);
-  const [profiles, setProfiles] = useState([]);
   const [searchTerm, setSearchTerm] = useState(getInitialRepairsSearch);
   const [selectedServiceCategoryFilterId, setSelectedServiceCategoryFilterId] =
     useState("");
@@ -535,7 +534,6 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
       }
 
       setJobs((data?.jobs ?? []).map(normalizeRepairJobRecord));
-      setProfiles(data?.profiles ?? []);
       setServiceCategories(data?.serviceCategories ?? []);
       setVendors(data?.vendors ?? []);
     } catch (error) {
@@ -569,7 +567,6 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
         }
 
         setJobs((data?.jobs ?? []).map(normalizeRepairJobRecord));
-        setProfiles(data?.profiles ?? []);
         setServiceCategories(data?.serviceCategories ?? []);
         setVendors(data?.vendors ?? []);
       } catch (error) {
@@ -928,7 +925,6 @@ function RepairsPage({ currentProfile, onSelectVehicle }) {
           onActivityLogged={noopActivityRefresh}
           onClose={() => setActiveLaborJob(null)}
           onLaborAdded={handleLaborAdded}
-          profiles={profiles}
           vehicleId={activeLaborJob.vehicle_id}
           workOrder={activeLaborJob}
         />

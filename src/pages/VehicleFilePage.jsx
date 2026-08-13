@@ -8,6 +8,7 @@ import VehicleStatusBadge from "../components/VehicleStatusBadge";
 import SaleWarrantySection from "../components/vehicle-detail/SaleWarrantySection";
 import SellVehicleForm from "../components/vehicle-detail/SellVehicleForm";
 import { logVehicleActivity } from "../lib/activityLogger";
+import { isCancelledStatus } from "../lib/cancellation";
 import { getLaborLogCost, formatHourlyRate } from "../lib/laborCost";
 import { hasPermission, isAdminOrManagerRole } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
@@ -638,6 +639,23 @@ function buildPartActivityRows({
   purchaseOrder,
   purchaseOrderItem,
 }) {
+  const cancelledRecords = [
+    purchaseOrderItem,
+    partRequest,
+    purchaseOrder,
+  ].filter((record) => isCancelledStatus(record?.status));
+  const cancelledRecord =
+    cancelledRecords.find(
+      (record) => record?.cancelled_by || record?.cancelled_at
+    ) ?? cancelledRecords[0];
+  const cancelledActivity = cancelledRecord
+    ? buildActivityLabel(
+        "Cancelled",
+        getProfileName(profiles, cancelledRecord.cancelled_by),
+        cancelledRecord.cancelled_at
+      )
+    : null;
+
   return [
     hasDisplayValue(partRequest?.created_by) || hasDisplayValue(partRequest?.created_at)
       ? buildActivityLabel(
@@ -681,15 +699,7 @@ function buildPartActivityRows({
           purchaseOrderItem.returned_at
         )
       : null,
-    purchaseOrder &&
-    (hasDisplayValue(purchaseOrder.cancelled_by) ||
-      hasDisplayValue(purchaseOrder.cancelled_at))
-      ? buildActivityLabel(
-          "Cancelled",
-          getProfileName(profiles, purchaseOrder.cancelled_by),
-          purchaseOrder.cancelled_at
-        )
-      : null,
+    cancelledActivity,
   ].filter(Boolean);
 }
 
@@ -1664,7 +1674,7 @@ async function fetchVehicleFileData(
       .eq("vehicle_id", vehicleId)
       .order("created_at", { ascending: false }),
     supabase
-      .from("profile_display_names")
+      .from("profile_history_display_names")
       .select("id, full_name, email, role"),
     costEntriesQuery,
     supabase

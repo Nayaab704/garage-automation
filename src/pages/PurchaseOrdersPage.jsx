@@ -11,6 +11,10 @@ import DocumentsList from "../components/vehicle-detail/DocumentsList";
 import StatusDropdown from "../components/vehicle-detail/StatusDropdown";
 import { logVehicleActivity } from "../lib/activityLogger";
 import {
+  getCancellationAuditValues,
+  isCancelledStatus,
+} from "../lib/cancellation";
+import {
   getActiveFilterCount,
   getOptionById,
   getPurchaseOrderVehicleFilterOptions,
@@ -51,13 +55,13 @@ import useActiveTabScroll from "../hooks/useActiveTabScroll";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 
 const purchaseOrderColumns =
-  "id, vehicle_id, vendor_id, status, ordered_by, ordered_at, received_by, received_at, notes, created_at";
+  "id, vehicle_id, vendor_id, status, ordered_by, ordered_at, received_by, received_at, cancelled_by, cancelled_at, notes, created_at";
 
 const purchaseOrderItemColumns =
-  `id, purchase_order_id, part_request_id, description, quantity, unit_cost, shipping_cost, tax, status, notes, created_at, ${purchaseOrderItemReturnColumns}`;
+  `id, purchase_order_id, part_request_id, description, quantity, unit_cost, shipping_cost, tax, status, cancelled_by, cancelled_at, notes, created_at, ${purchaseOrderItemReturnColumns}`;
 
 const partRequestColumns =
-  "id, vehicle_id, repair_job_id, part_name, quantity, status, part_source, approval_status, selected_vendor_id, selected_quote_id, quoted_unit_cost, quoted_total_cost";
+  "id, vehicle_id, repair_job_id, part_name, quantity, status, part_source, approval_status, cancelled_by, cancelled_at, selected_vendor_id, selected_quote_id, quoted_unit_cost, quoted_total_cost";
 
 const vehicleDocumentColumns =
   "id, vehicle_id, repair_job_id, third_party_repair_id, purchase_order_id, document_type, file_url, file_path, file_name, file_mime_type, file_size_bytes, notes, uploaded_by, created_at";
@@ -154,6 +158,23 @@ function formatDate(value) {
     day: "numeric",
     month: "short",
     year: "numeric",
+  });
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
   });
 }
 
@@ -366,18 +387,39 @@ function getReturnedAttributionParts(returnedItem) {
 }
 
 function getCancelledAttributionParts(purchaseOrder) {
-  if (purchaseOrder.status !== "cancelled") {
+  if (!isCancelledStatus(purchaseOrder.status)) {
     return [];
   }
 
-  const cancelledParts = getActionAttributionParts(
-    "Cancelled",
+  const cancelledName = getActionFirstName(
     purchaseOrder.cancelledBy,
-    purchaseOrder.cancelled_by,
-    purchaseOrder.cancelled_at
+    purchaseOrder.cancelled_by
   );
+  const cancelledDate = formatDateTime(purchaseOrder.cancelled_at);
 
-  return cancelledParts.length > 0 ? cancelledParts : ["Cancelled"];
+  return [
+    cancelledName ? `Cancelled by ${cancelledName}` : "Cancelled",
+    cancelledDate,
+  ].filter(Boolean);
+}
+
+function getCancelledTrackingText(record) {
+  if (!isCancelledStatus(record?.status)) {
+    return "";
+  }
+
+  const cancelledName = getActionFirstName(
+    record.cancelledBy,
+    record.cancelled_by
+  );
+  const cancelledLabel = cancelledName
+    ? `Cancelled by ${cancelledName}`
+    : "Cancelled";
+
+  return joinTrackingParts([
+    cancelledLabel,
+    formatDateTime(record.cancelled_at),
+  ]);
 }
 
 function getPurchaseOrderFooterParts(purchaseOrder) {
@@ -480,8 +522,12 @@ async function fetchPurchaseOrdersData() {
     ...purchaseOrders.flatMap((purchaseOrder) => [
       purchaseOrder.ordered_by,
       purchaseOrder.received_by,
+      purchaseOrder.cancelled_by,
     ]),
-    ...purchaseOrderItems.map((item) => item.returned_by),
+    ...purchaseOrderItems.flatMap((item) => [
+      item.returned_by,
+      item.cancelled_by,
+    ]),
   ]);
   const profilesResponse =
     profileIds.length > 0
@@ -512,6 +558,25 @@ async function fetchPurchaseOrdersData() {
   }
 
   const partRequests = partRequestsResponse.data ?? [];
+  const missingPartCancellationProfileIds = uniqueValues(
+    partRequests.map((partRequest) => partRequest.cancelled_by)
+  ).filter((profileId) => !profileIds.includes(profileId));
+
+  if (missingPartCancellationProfileIds.length > 0) {
+    const cancellationProfilesResponse = await supabase
+      .from("profile_display_names")
+      .select("id, full_name, email")
+      .in("id", missingPartCancellationProfileIds);
+
+    if (cancellationProfilesResponse.error) {
+      return { error: cancellationProfilesResponse.error };
+    }
+
+    profilesResponse.data = [
+      ...(profilesResponse.data ?? []),
+      ...(cancellationProfilesResponse.data ?? []),
+    ];
+  }
   const repairJobIds = uniqueValues(
     partRequests.map((partRequest) => partRequest.repair_job_id)
   );
@@ -1022,8 +1087,11 @@ function PurchaseOrderCard({
               <div className="space-y-3">
                 {purchaseOrder.items.map((item) => {
                   const isReturned = isPurchaseOrderItemReturned(item);
+                  const isCancelled = isCancelledStatus(item.status);
                   const returnDeduction = getReturnDeduction(item);
                   const returnTrackingText = getReturnedTrackingText(item);
+                  const cancellationTrackingText =
+                    getCancelledTrackingText(item);
 
                   return (
                     <div
@@ -1059,6 +1127,11 @@ function PurchaseOrderCard({
                           {isReturned && (
                             <p className="mt-1 text-xs font-semibold text-slate-500">
                               {returnTrackingText}
+                            </p>
+                          )}
+                          {isCancelled && (
+                            <p className="mt-1 text-xs font-semibold text-slate-500">
+                              {cancellationTrackingText}
                             </p>
                           )}
                           <p className="mt-1 text-sm font-black tabular-nums text-slate-700">
@@ -1202,6 +1275,8 @@ function PurchaseOrdersPage({
             partRequest: partRequest
               ? {
                   ...partRequest,
+                  cancelledBy:
+                    profilesById[partRequest.cancelled_by] ?? null,
                   vehicle: partRequestVehicle,
                   vehicleContext: partRequestVehicleContext,
                   vehicleSearchText: getVehicleSearchText(partRequestVehicleContext),
@@ -1223,6 +1298,7 @@ function PurchaseOrdersPage({
                   selectedQuote,
                 }
               : null,
+            cancelledBy: profilesById[item.cancelled_by] ?? null,
             returnedBy: profilesById[item.returned_by] ?? null,
           };
         }
@@ -1744,8 +1820,17 @@ function PurchaseOrdersPage({
     }
 
     const previousStatus = purchaseOrder.status;
-    const shouldCancelItems = newStatus === "cancelled";
+    const shouldCancelItems =
+      isCancelledStatus(newStatus) && !isCancelledStatus(previousStatus);
     const shouldMarkReceived = newStatus === "received";
+    const cancellationTimestamp = new Date().toISOString();
+    const purchaseOrderCancellationValues = shouldCancelItems
+      ? getCancellationAuditValues(
+          purchaseOrder,
+          currentProfile?.id,
+          cancellationTimestamp
+        )
+      : {};
     const failureMessage = shouldMarkReceived
       ? "Could not mark this purchase order as received. Please try again."
       : "Could not update purchase order. Please try again.";
@@ -1758,13 +1843,12 @@ function PurchaseOrdersPage({
         ? currentProfile.id
         : purchaseOrder.received_by ?? null;
     const cancelledAt =
-      shouldCancelItems && !purchaseOrder.cancelled_at
-        ? new Date().toISOString()
-        : purchaseOrder.cancelled_at;
+      purchaseOrderCancellationValues.cancelled_at ??
+      purchaseOrder.cancelled_at;
     const cancelledBy =
-      shouldCancelItems && currentProfile?.id
-        ? currentProfile.id
-        : purchaseOrder.cancelled_by ?? null;
+      purchaseOrderCancellationValues.cancelled_by ??
+      purchaseOrder.cancelled_by ??
+      null;
 
     setStatusErrorMessage("");
     setStatusSuccessMessage("");
@@ -1791,7 +1875,10 @@ function PurchaseOrdersPage({
     );
 
     try {
-      const purchaseOrderUpdate = { status: newStatus };
+      const purchaseOrderUpdate = {
+        status: newStatus,
+        ...purchaseOrderCancellationValues,
+      };
 
       if (shouldMarkReceived && !purchaseOrder.received_at) {
         purchaseOrderUpdate.received_at = receivedAt;
@@ -1817,7 +1904,9 @@ function PurchaseOrdersPage({
 
       if ((shouldMarkReceived || shouldCancelItems) && linkedItems.length > 0) {
         const activeLinkedItems = linkedItems.filter(
-          (item) => !isPurchaseOrderItemReturned(item)
+          (item) =>
+            !isPurchaseOrderItemReturned(item) &&
+            (!shouldCancelItems || !isCancelledStatus(item.status))
         );
         const itemIds = activeLinkedItems.map((item) => item.id).filter(Boolean);
         const partRequestIds = uniqueValues(
@@ -1826,9 +1915,18 @@ function PurchaseOrdersPage({
         const nextItemStatus = shouldMarkReceived ? "received" : "cancelled";
 
         if (itemIds.length > 0) {
+          const itemCancellationValues = shouldCancelItems
+            ? {
+                cancelled_at: cancellationTimestamp,
+                cancelled_by: currentProfile?.id ?? null,
+              }
+            : {};
           const itemResponse = await supabase
             .from("purchase_order_items")
-            .update({ status: nextItemStatus })
+            .update({
+              status: nextItemStatus,
+              ...itemCancellationValues,
+            })
             .in("id", itemIds);
 
           if (itemResponse.error) {
@@ -1839,10 +1937,58 @@ function PurchaseOrdersPage({
 
           nextPurchaseOrderItems = purchaseOrderItems.map((item) =>
             itemIds.includes(item.id)
-              ? { ...item, status: nextItemStatus }
+              ? {
+                  ...item,
+                  ...itemCancellationValues,
+                  status: nextItemStatus,
+                }
               : item
           );
           setPurchaseOrderItems(nextPurchaseOrderItems);
+        }
+
+        if (shouldCancelItems && partRequestIds.length > 0) {
+          const partRequestIdsToCancel = partRequestIds.filter(
+            (partRequestId) =>
+              !isCancelledStatus(partRequestsById[partRequestId]?.status)
+          );
+
+          if (partRequestIdsToCancel.length > 0) {
+            const partRequestCancellationValues = {
+              cancelled_at: cancellationTimestamp,
+              cancelled_by: currentProfile?.id ?? null,
+            };
+            const partRequestResponse = await supabase
+              .from("part_requests")
+              .update({
+                status: "cancelled",
+                ...partRequestCancellationValues,
+              })
+              .in("id", partRequestIdsToCancel);
+
+            if (partRequestResponse.error) {
+              console.error(
+                "Could not update linked part requests after cancelling purchase order:",
+                partRequestResponse.error
+              );
+              setStatusErrorMessage(failureMessage);
+              return false;
+            }
+
+            nextPartRequestsById = { ...partRequestsById };
+
+            for (const partRequestId of partRequestIdsToCancel) {
+              if (nextPartRequestsById[partRequestId]) {
+                nextPartRequestsById[partRequestId] = {
+                  ...nextPartRequestsById[partRequestId],
+                  ...partRequestCancellationValues,
+                  status: "cancelled",
+                };
+              }
+            }
+
+            setPartRequestsById(nextPartRequestsById);
+          }
         }
 
         if (shouldMarkReceived && partRequestIds.length > 0) {
@@ -1937,9 +2083,23 @@ function PurchaseOrdersPage({
     }
 
     const previousStatus = item.status;
+    const shouldCancelItem =
+      isCancelledStatus(newStatus) && !isCancelledStatus(previousStatus);
+    const cancellationTimestamp = new Date().toISOString();
+    const itemCancellationValues = shouldCancelItem
+      ? getCancellationAuditValues(
+          item,
+          currentProfile?.id,
+          cancellationTimestamp
+        )
+      : {};
     const nextPurchaseOrderItems = purchaseOrderItems.map((currentItem) =>
       currentItem.id === item.id
-        ? { ...currentItem, status: newStatus }
+        ? {
+            ...currentItem,
+            ...itemCancellationValues,
+            status: newStatus,
+          }
         : currentItem
     );
 
@@ -1947,11 +2107,20 @@ function PurchaseOrdersPage({
     setStatusSuccessMessage("");
     setUpdatingItemId(item.id);
     setPurchaseOrderItems(nextPurchaseOrderItems);
+    if (shouldCancelItem && currentProfile?.id) {
+      setProfilesById((currentProfilesById) => ({
+        ...currentProfilesById,
+        [currentProfile.id]: currentProfile,
+      }));
+    }
 
     try {
       const { error } = await supabase
         .from("purchase_order_items")
-        .update({ status: newStatus })
+        .update({
+          status: newStatus,
+          ...itemCancellationValues,
+        })
         .eq("id", item.id);
 
       if (error) {
@@ -1959,7 +2128,39 @@ function PurchaseOrdersPage({
         throw error;
       }
 
-      if (newStatus === "received" && item.part_request_id) {
+      if (shouldCancelItem && item.part_request_id) {
+        const linkedPartRequest = partRequestsById[item.part_request_id];
+        const partRequestCancellationValues = getCancellationAuditValues(
+          linkedPartRequest,
+          currentProfile?.id,
+          cancellationTimestamp
+        );
+        const partRequestResponse = await supabase
+          .from("part_requests")
+          .update({
+            status: "cancelled",
+            ...partRequestCancellationValues,
+          })
+          .eq("id", item.part_request_id);
+
+        if (partRequestResponse.error) {
+          console.error(
+            "Could not update linked part request after cancelling item:",
+            partRequestResponse.error
+          );
+          setStatusErrorMessage("Could not update item status. Please try again.");
+          return;
+        }
+
+        setPartRequestsById((currentPartRequestsById) => ({
+          ...currentPartRequestsById,
+          [item.part_request_id]: {
+            ...currentPartRequestsById[item.part_request_id],
+            ...partRequestCancellationValues,
+            status: "cancelled",
+          },
+        }));
+      } else if (newStatus === "received" && item.part_request_id) {
         const partRequestResponse = await supabase
           .from("part_requests")
           .update({ status: "received" })
@@ -2012,7 +2213,12 @@ function PurchaseOrdersPage({
       setPurchaseOrderItems((currentItems) =>
         currentItems.map((currentItem) =>
           currentItem.id === item.id
-            ? { ...currentItem, status: previousStatus }
+            ? {
+                ...currentItem,
+                cancelled_at: item.cancelled_at,
+                cancelled_by: item.cancelled_by,
+                status: previousStatus,
+              }
             : currentItem
         )
       );

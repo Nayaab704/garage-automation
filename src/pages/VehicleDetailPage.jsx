@@ -144,7 +144,9 @@ async function fetchVehicleDetails(
   const profileColumns = canViewTeamRates
     ? "id, full_name, email, role, phone, hourly_rate"
     : "id, full_name, email, role";
-  const profileSource = canViewTeamRates ? "profiles" : "profile_display_names";
+  const profileSource = canViewTeamRates
+    ? "profiles"
+    : "profile_history_display_names";
   const costEntriesQuery = canViewAdminFinancial
     ? supabase.from("cost_entries").select("*").eq("vehicle_id", vehicleId)
     : { data: [], error: null };
