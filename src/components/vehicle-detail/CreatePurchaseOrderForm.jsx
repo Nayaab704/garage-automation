@@ -1,9 +1,14 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import FormActions from "../ui/FormActions";
 import FormMessage from "../ui/FormMessage";
 import ModalShell from "../ui/ModalShell";
 import { formControlClassNames } from "../ui/uiStyles";
 import { logVehicleActivity } from "../../lib/activityLogger";
+import {
+  DEFAULT_PO_SHIPPING_COST_FALLBACK,
+  fetchDefaultPoShippingCost,
+  PO_SHIPPING_QUICK_OPTIONS,
+} from "../../lib/appSettings";
 import { isPartNeedsPo } from "../../lib/partWorkflowUtils";
 import { supabase } from "../../lib/supabaseClient";
 import { markQuotePurchased } from "../../lib/vendorPriceMemory";
@@ -18,16 +23,13 @@ const emptyForm = {
   description: "",
   quantity: "1",
   unit_cost: "",
-  shipping_cost: "100",
+  shipping_cost: String(DEFAULT_PO_SHIPPING_COST_FALLBACK),
   tax: "",
   notes: "",
 };
 
 const partRequestResultColumns =
   "id, vehicle_id, repair_job_id, part_name, quantity, status, notes, part_source, approval_status, approved_by, approved_at, unit_cost, selected_vendor_id, selected_quote_id, quoted_unit_cost, quoted_total_cost, created_by, created_at";
-
-const DEFAULT_SHIPPING_COST = 100;
-const SHIPPING_QUICK_OPTIONS = [0, 50, DEFAULT_SHIPPING_COST, 150];
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
@@ -140,7 +142,11 @@ function canCreatePurchaseOrderForPart(partRequest) {
   return isPartNeedsPo(partRequest);
 }
 
-function getInitialFormData(initialPartRequest, initialVendorId = "") {
+function getInitialFormData(
+  initialPartRequest,
+  initialVendorId = "",
+  defaultShippingCost = DEFAULT_PO_SHIPPING_COST_FALLBACK
+) {
   const unitCost = getPartRequestUnitCost(initialPartRequest);
   const vendorId = valueToString(
     initialVendorId || getPartRequestVendorId(initialPartRequest)
@@ -149,6 +155,7 @@ function getInitialFormData(initialPartRequest, initialVendorId = "") {
   if (!initialPartRequest?.id) {
     return {
       ...emptyForm,
+      shipping_cost: String(defaultShippingCost),
       vendor_id: vendorId,
     };
   }
@@ -158,6 +165,7 @@ function getInitialFormData(initialPartRequest, initialVendorId = "") {
     description: getPartRequestName(initialPartRequest),
     part_request_id: initialPartRequest.id,
     quantity: valueToString(initialPartRequest.quantity || 1),
+    shipping_cost: String(defaultShippingCost),
     unit_cost: valueToString(unitCost),
     vendor_id: vendorId,
   };
@@ -181,7 +189,9 @@ function getShippingSelection(value) {
 
   const numberValue = Number(trimmedValue);
 
-  return SHIPPING_QUICK_OPTIONS.includes(numberValue) ? numberValue : "custom";
+  return PO_SHIPPING_QUICK_OPTIONS.includes(numberValue)
+    ? numberValue
+    : "custom";
 }
 
 function parseUnitCost(value) {
@@ -291,6 +301,10 @@ function CreatePurchaseOrderForm({
     getShippingSelection(initialFormData.shipping_cost)
   );
   const shippingInputRef = useRef(null);
+  const shippingCostTouchedRef = useRef(false);
+  const [defaultShippingCost, setDefaultShippingCost] = useState(
+    DEFAULT_PO_SHIPPING_COST_FALLBACK
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -342,6 +356,41 @@ function CreatePurchaseOrderForm({
   const selectedPriceVendorName = getPartRequestVendorName(selectedPriceSourcePart);
   const costSummary = useMemo(() => getCostSummary(formData), [formData]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadDefaultShippingCost() {
+      const { data, error } = await fetchDefaultPoShippingCost();
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (error) {
+        console.warn(
+          "Could not load the default PO shipping cost. Using $0.",
+          error
+        );
+      }
+
+      setDefaultShippingCost(data);
+
+      if (!shippingCostTouchedRef.current) {
+        setFormData((currentFormData) => ({
+          ...currentFormData,
+          shipping_cost: String(data),
+        }));
+        setSelectedShippingOption(getShippingSelection(data));
+      }
+    }
+
+    loadDefaultShippingCost();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   function handleChange(event) {
     const { name, value } = event.target;
 
@@ -351,11 +400,13 @@ function CreatePurchaseOrderForm({
     }));
 
     if (name === "shipping_cost") {
+      shippingCostTouchedRef.current = true;
       setSelectedShippingOption(getShippingSelection(value));
     }
   }
 
   function handleShippingQuickSelect(value) {
+    shippingCostTouchedRef.current = true;
     setSelectedShippingOption(value);
     setFormData((currentFormData) => ({
       ...currentFormData,
@@ -364,6 +415,7 @@ function CreatePurchaseOrderForm({
   }
 
   function handleCustomShippingSelect() {
+    shippingCostTouchedRef.current = true;
     setSelectedShippingOption("custom");
     window.requestAnimationFrame(() => {
       shippingInputRef.current?.focus();
@@ -622,8 +674,15 @@ function CreatePurchaseOrderForm({
       }
       const partRequestStatusUpdated = !partRequestResponse.error;
 
-      setFormData(initialFormData);
-      setSelectedShippingOption(getShippingSelection(initialFormData.shipping_cost));
+      const resetFormData = {
+        ...initialFormData,
+        shipping_cost: String(defaultShippingCost),
+      };
+      shippingCostTouchedRef.current = false;
+      setFormData(resetFormData);
+      setSelectedShippingOption(
+        getShippingSelection(resetFormData.shipping_cost)
+      );
       setSuccessMessage("Purchase order created successfully.");
       setWarningMessage([statusWarning, priceMemoryWarning].filter(Boolean).join(" "));
       await logVehicleActivity({
@@ -814,7 +873,7 @@ function CreatePurchaseOrderForm({
           <div>
             <span className={formControlClassNames.label}>Shipping</span>
             <div className="mt-2 flex flex-wrap gap-2">
-              {SHIPPING_QUICK_OPTIONS.map((option) => {
+              {PO_SHIPPING_QUICK_OPTIONS.map((option) => {
                 const isSelected = selectedShippingOption === option;
 
                 return (
@@ -830,7 +889,7 @@ function CreatePurchaseOrderForm({
                     type="button"
                   >
                     ${option}
-                    {option === DEFAULT_SHIPPING_COST ? " Default" : ""}
+                    {option === defaultShippingCost ? " Default" : ""}
                   </button>
                 );
               })}
@@ -845,6 +904,9 @@ function CreatePurchaseOrderForm({
                 type="button"
               >
                 Custom
+                {!PO_SHIPPING_QUICK_OPTIONS.includes(defaultShippingCost)
+                  ? " Default"
+                  : ""}
               </button>
             </div>
 

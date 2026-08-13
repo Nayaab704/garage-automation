@@ -7,6 +7,7 @@ import { formatHourlyRate, numberOrZero } from "../lib/laborCost";
 import { hasPermission } from "../lib/permissions";
 import { supabase } from "../lib/supabaseClient";
 import { buttonClassNames } from "../components/ui/uiStyles";
+import PurchaseOrderDefaultsCard from "../components/settings/PurchaseOrderDefaultsCard";
 
 const profileSelectFields =
   "id, auth_user_id, full_name, email, role, phone, hourly_rate, is_active, removed_at, created_at";
@@ -807,6 +808,8 @@ function TeamManagementPage({ currentProfile }) {
           </div>
         </div>
       </div>
+
+      <PurchaseOrderDefaultsCard currentProfile={currentProfile} />
 
       {errorMessage && (
         <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
