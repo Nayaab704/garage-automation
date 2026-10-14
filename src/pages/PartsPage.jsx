@@ -132,6 +132,7 @@ function PartsPage({
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [partQueue, setPartQueue] = useState([]);
+  const [relatedDataWarning, setRelatedDataWarning] = useState("");
   const [priceHistoryPart, setPriceHistoryPart] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedServiceCategoryFilterId, setSelectedServiceCategoryFilterId] =
@@ -230,9 +231,10 @@ function PartsPage({
     }
 
     setErrorMessage("");
+    setRelatedDataWarning("");
 
     try {
-      const { data, error } = await fetchPartsQueue();
+      const { data, error, warning } = await fetchPartsQueue();
 
       if (error) {
         console.error("Could not load parts queue:", error);
@@ -244,6 +246,7 @@ function PartsPage({
       setServiceCategories(data.serviceCategories ?? []);
       setVehicleSearchIndex(data.vehicleSearchIndex ?? []);
       setVendors(data.vendors);
+      setRelatedDataWarning(warning ?? "");
     } catch (error) {
       console.error("Could not load parts queue:", error);
       setErrorMessage("Unable to load the parts queue.");
@@ -260,9 +263,10 @@ function PartsPage({
     async function loadInitialParts() {
       setIsLoading(true);
       setErrorMessage("");
+      setRelatedDataWarning("");
 
       try {
-        const { data, error } = await fetchPartsQueue();
+        const { data, error, warning } = await fetchPartsQueue();
 
         if (!isMounted) {
           return;
@@ -278,6 +282,7 @@ function PartsPage({
         setServiceCategories(data.serviceCategories ?? []);
         setVehicleSearchIndex(data.vehicleSearchIndex ?? []);
         setVendors(data.vendors);
+        setRelatedDataWarning(warning ?? "");
       } catch (error) {
         if (isMounted) {
           console.error("Could not load parts queue:", error);
@@ -741,6 +746,12 @@ function PartsPage({
       {!isLoading && errorMessage && (
         <section className="rounded-3xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800">
           {errorMessage}
+        </section>
+      )}
+
+      {!isLoading && !errorMessage && relatedDataWarning && (
+        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+          {relatedDataWarning}
         </section>
       )}
 

@@ -9,6 +9,12 @@ import {
   getVehicleContext,
   getVehicleSearchText,
 } from "./searchText";
+import {
+  getChunkedQueryRows,
+  getQueryRows,
+  loadRelatedDatasets,
+  partsQueueRelatedDataWarning,
+} from "./partsQueueLoading";
 import { getVendorQuoteDisplayName } from "./vendorPriceMemory";
 import { supabase } from "./supabaseClient";
 
@@ -133,7 +139,7 @@ export async function fetchPartsQueue() {
     .order("created_at", { ascending: false });
 
   if (partRequestsResponse.error) {
-    return { data: null, error: partRequestsResponse.error };
+    return { data: null, error: partRequestsResponse.error, warning: "" };
   }
 
   const partRequests = partRequestsResponse.data ?? [];
@@ -146,127 +152,168 @@ export async function fetchPartsQueue() {
     partRequests.map((part) => part.selected_quote_id)
   );
 
-  const [
-    vehiclesResponse,
-    repairJobsResponse,
-    profilesResponse,
-    vendorsResponse,
-    purchaseOrderItemsResponse,
-    serviceCategoriesResponse,
-    linkedVendorQuotesResponse,
-    selectedVendorQuotesResponse,
-  ] = await Promise.all([
-    supabase
-      .from("vehicles")
-      .select("id, stock_number, vin, year, make, model, trim, color, color_hex, status"),
-    repairJobIds.length > 0
-      ? supabase
-          .from("repair_jobs")
-          .select(
-            "id, vehicle_id, service_category_id, title, category, priority, status, created_at"
-          )
-          .in("id", repairJobIds)
-      : { data: [], error: null },
-    profileIds.length > 0
-      ? supabase
-          .from("profile_display_names")
-          .select("id, full_name, email, role")
-          .in("id", profileIds)
-      : { data: [], error: null },
-    supabase.from("vendors").select("id, name, phone, email, vendor_type").order("name", {
-      ascending: true,
-    }),
-    partRequestIds.length > 0
-      ? supabase
-          .from("purchase_order_items")
-          .select(purchaseOrderItemColumns)
-          .in("part_request_id", partRequestIds)
-      : { data: [], error: null },
-    supabase
-      .from("service_categories")
-      .select("id, slug, name, description, sort_order, is_active")
-      .order("sort_order", { ascending: true }),
-    partRequestIds.length > 0
-      ? supabase
-          .from("vendor_part_quotes")
-          .select(vendorPartQuoteColumns)
-          .in("part_request_id", partRequestIds)
-          .order("quoted_at", { ascending: false })
-      : { data: [], error: null },
-    selectedQuoteIds.length > 0
-      ? supabase
-          .from("vendor_part_quotes")
-          .select(vendorPartQuoteColumns)
-          .in("id", selectedQuoteIds)
-      : { data: [], error: null },
+  const initialRelatedLoad = await loadRelatedDatasets([
+    {
+      key: "vehicles",
+      label: "vehicles",
+      load: () =>
+        getQueryRows(
+          supabase
+            .from("vehicles")
+            .select(
+              "id, stock_number, vin, year, make, model, trim, color, color_hex, status"
+            )
+        ),
+    },
+    {
+      key: "repairJobs",
+      label: "repair_jobs",
+      load: () =>
+        getChunkedQueryRows(repairJobIds, (ids) =>
+          supabase
+            .from("repair_jobs")
+            .select(
+              "id, vehicle_id, service_category_id, title, category, priority, status, created_at"
+            )
+            .in("id", ids)
+        ),
+    },
+    {
+      key: "profiles",
+      label: "profiles",
+      load: () =>
+        getChunkedQueryRows(profileIds, (ids) =>
+          supabase
+            .from("profile_display_names")
+            .select("id, full_name, email, role")
+            .in("id", ids)
+        ),
+    },
+    {
+      key: "vendors",
+      label: "vendors",
+      load: () =>
+        getQueryRows(
+          supabase
+            .from("vendors")
+            .select("id, name, phone, email, vendor_type")
+            .order("name", { ascending: true })
+        ),
+    },
+    {
+      key: "purchaseOrderItems",
+      label: "purchase_order_items",
+      load: () =>
+        getChunkedQueryRows(partRequestIds, (ids) =>
+          supabase
+            .from("purchase_order_items")
+            .select(purchaseOrderItemColumns)
+            .in("part_request_id", ids)
+        ),
+    },
+    {
+      key: "serviceCategories",
+      label: "service_categories",
+      load: () =>
+        getQueryRows(
+          supabase
+            .from("service_categories")
+            .select("id, slug, name, description, sort_order, is_active")
+            .order("sort_order", { ascending: true })
+        ),
+    },
+    {
+      key: "linkedVendorQuotes",
+      label: "vendor_part_quotes by part_request_id",
+      load: () =>
+        getChunkedQueryRows(partRequestIds, (ids) =>
+          supabase
+            .from("vendor_part_quotes")
+            .select(vendorPartQuoteColumns)
+            .in("part_request_id", ids)
+            .order("quoted_at", { ascending: false })
+        ),
+    },
+    {
+      key: "selectedVendorQuotes",
+      label: "vendor_part_quotes by selected quote id",
+      load: () =>
+        getChunkedQueryRows(selectedQuoteIds, (ids) =>
+          supabase
+            .from("vendor_part_quotes")
+            .select(vendorPartQuoteColumns)
+            .in("id", ids)
+        ),
+    },
   ]);
-
-  const firstRequiredError =
-    vehiclesResponse.error ??
-    repairJobsResponse.error ??
-    profilesResponse.error ??
-    vendorsResponse.error ??
-    purchaseOrderItemsResponse.error ??
-    serviceCategoriesResponse.error;
-
-  if (firstRequiredError) {
-    return { data: null, error: firstRequiredError };
-  }
-
-  if (linkedVendorQuotesResponse.error ?? selectedVendorQuotesResponse.error) {
-    console.warn(
-      "Parts queue loaded without vendor quote context:",
-      linkedVendorQuotesResponse.error ?? selectedVendorQuotesResponse.error
-    );
-  }
-
-  const purchaseOrderItems = purchaseOrderItemsResponse.data ?? [];
+  let hadRelatedFailures = initialRelatedLoad.hadFailures;
+  const {
+    linkedVendorQuotes,
+    profiles,
+    purchaseOrderItems,
+    repairJobs,
+    selectedVendorQuotes,
+    serviceCategories,
+    vehicles,
+    vendors,
+  } = initialRelatedLoad.data;
   const purchaseOrderIds = uniqueValues(
     purchaseOrderItems.map((item) => item.purchase_order_id)
   );
-
-  const purchaseOrdersResponse =
-    purchaseOrderIds.length > 0
-      ? await supabase
-          .from("purchase_orders")
-          .select(purchaseOrderColumns)
-          .in("id", purchaseOrderIds)
-      : { data: [], error: null };
-
-  if (purchaseOrdersResponse.error) {
-    return { data: null, error: purchaseOrdersResponse.error };
-  }
-
-  const vendors = vendorsResponse.data ?? [];
+  const purchaseOrdersLoad = await loadRelatedDatasets([
+    {
+      key: "purchaseOrders",
+      label: "purchase_orders",
+      load: () =>
+        getChunkedQueryRows(purchaseOrderIds, (ids) =>
+          supabase
+            .from("purchase_orders")
+            .select(purchaseOrderColumns)
+            .in("id", ids)
+        ),
+    },
+  ]);
+  hadRelatedFailures ||= purchaseOrdersLoad.hadFailures;
+  const purchaseOrders = purchaseOrdersLoad.data.purchaseOrders;
   const vendorsById = Object.fromEntries(
     vendors.map((vendor) => [vendor.id, vendor])
   );
   let vehiclesById = Object.fromEntries(
-    (vehiclesResponse.data ?? []).map((vehicle) => [vehicle.id, vehicle])
+    vehicles.map((vehicle) => [vehicle.id, vehicle])
   );
   const repairJobsById = Object.fromEntries(
-    (repairJobsResponse.data ?? []).map((repairJob) => [repairJob.id, repairJob])
+    repairJobs.map((repairJob) => [repairJob.id, repairJob])
   );
   const missingRepairJobVehicleIds = uniqueValues(
-    (repairJobsResponse.data ?? [])
-      .map((repairJob) => repairJob.vehicle_id)
+    [
+      ...partRequests.map((part) => part.vehicle_id),
+      ...repairJobs.map((repairJob) => repairJob.vehicle_id),
+    ]
       .filter((vehicleId) => vehicleId && !vehiclesById[vehicleId])
   );
 
   if (missingRepairJobVehicleIds.length > 0) {
-    const missingVehiclesResponse = await supabase
-      .from("vehicles")
-      .select("id, stock_number, vin, year, make, model, trim, color, color_hex, status")
-      .in("id", missingRepairJobVehicleIds);
-
-    if (missingVehiclesResponse.error) {
-      return { data: null, error: missingVehiclesResponse.error };
-    }
+    const missingVehiclesLoad = await loadRelatedDatasets([
+      {
+        key: "missingVehicles",
+        label: "vehicles by related id",
+        load: () =>
+          getChunkedQueryRows(missingRepairJobVehicleIds, (ids) =>
+            supabase
+              .from("vehicles")
+              .select(
+                "id, stock_number, vin, year, make, model, trim, color, color_hex, status"
+              )
+              .in("id", ids)
+          ),
+      },
+    ]);
+    hadRelatedFailures ||= missingVehiclesLoad.hadFailures;
 
     vehiclesById = {
       ...vehiclesById,
       ...Object.fromEntries(
-        (missingVehiclesResponse.data ?? []).map((vehicle) => [
+        missingVehiclesLoad.data.missingVehicles.map((vehicle) => [
           vehicle.id,
           vehicle,
         ])
@@ -274,13 +321,10 @@ export async function fetchPartsQueue() {
     };
   }
   const serviceCategoriesById = Object.fromEntries(
-    (serviceCategoriesResponse.data ?? []).map((category) => [
-      category.id,
-      category,
-    ])
+    serviceCategories.map((category) => [category.id, category])
   );
   const purchaseOrdersById = Object.fromEntries(
-    (purchaseOrdersResponse.data ?? []).map((purchaseOrder) => [
+    purchaseOrders.map((purchaseOrder) => [
       purchaseOrder.id,
       purchaseOrder,
     ])
@@ -291,12 +335,8 @@ export async function fetchPartsQueue() {
   );
   const quoteRecordsById = new Map();
   const quoteRecords = [
-    ...(linkedVendorQuotesResponse.error
-      ? []
-      : linkedVendorQuotesResponse.data ?? []),
-    ...(selectedVendorQuotesResponse.error
-      ? []
-      : selectedVendorQuotesResponse.data ?? []),
+    ...linkedVendorQuotes,
+    ...selectedVendorQuotes,
   ].map((quote) => ({
     ...quote,
     display_vendor_name: getVendorQuoteDisplayName(quote),
@@ -308,32 +348,35 @@ export async function fetchPartsQueue() {
 
   const allQuoteRecords = [...quoteRecordsById.values()];
   const knownProfileIds = new Set(
-    (profilesResponse.data ?? []).map((profile) => profile.id)
+    profiles.map((profile) => profile.id)
   );
   const additionalProfileIds = uniqueValues([
     ...purchaseOrderItems.map((item) => item.returned_by),
-    ...(purchaseOrdersResponse.data ?? []).flatMap((purchaseOrder) => [
+    ...purchaseOrders.flatMap((purchaseOrder) => [
       purchaseOrder.ordered_by,
       purchaseOrder.received_by,
     ]),
     ...allQuoteRecords.map((quote) => quote.created_by),
   ]).filter((profileId) => !knownProfileIds.has(profileId));
-  const additionalProfilesResponse =
-    additionalProfileIds.length > 0
-      ? await supabase
-          .from("profile_display_names")
-          .select("id, full_name, email, role")
-          .in("id", additionalProfileIds)
-      : { data: [], error: null };
-
-  if (additionalProfilesResponse.error) {
-    return { data: null, error: additionalProfilesResponse.error };
-  }
+  const additionalProfilesLoad = await loadRelatedDatasets([
+    {
+      key: "additionalProfiles",
+      label: "profiles for purchase orders, returns, and quotes",
+      load: () =>
+        getChunkedQueryRows(additionalProfileIds, (ids) =>
+          supabase
+            .from("profile_display_names")
+            .select("id, full_name, email, role")
+            .in("id", ids)
+        ),
+    },
+  ]);
+  hadRelatedFailures ||= additionalProfilesLoad.hadFailures;
 
   const profilesById = Object.fromEntries(
     [
-      ...(profilesResponse.data ?? []),
-      ...(additionalProfilesResponse.data ?? []),
+      ...profiles,
+      ...additionalProfilesLoad.data.additionalProfiles,
     ].map((profile) => [profile.id, profile])
   );
   const quoteRecordsWithProfiles = allQuoteRecords.map((quote) => ({
@@ -368,11 +411,14 @@ export async function fetchPartsQueue() {
     data: {
       counts: getPartQueueCounts(parts),
       parts,
-      serviceCategories: serviceCategoriesResponse.data ?? [],
-      vehicleSearchIndex: buildVehicleSearchIndex(vehiclesResponse.data ?? []),
+      serviceCategories,
+      vehicleSearchIndex: buildVehicleSearchIndex(
+        Object.values(vehiclesById)
+      ),
       vendors,
     },
     error: null,
+    warning: hadRelatedFailures ? partsQueueRelatedDataWarning : "",
   };
 }
 
